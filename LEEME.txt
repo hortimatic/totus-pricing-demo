@@ -1,0 +1,15 @@
+TOTUS PRICING V4
+
+Usuario: oscar
+Contraseña: demo1234
+
+Cambios principales:
+- Usa como fondo la imagen aportada por el usuario, suavizada para no entorpecer la lectura.
+- Inputs monetarios admiten coma o punto decimal.
+- Escribir no vuelve a renderizar la página: el cursor no salta fuera del campo.
+- Cálculo comercial: beneficio = precio final cobrado - coste real.
+- Coste real = coste sin impuestos + IVA 21% + RE 5,2% + portes/otros costes.
+- Convertir una consulta en producto exige: nombre, SKU, marca, familia, proveedor, coste y PVP.
+- Si no se completan mínimos, la operación solo puede guardarse como consulta histórica.
+- Proveedores y competencia incluyen campos avanzados opcionales.
+- Buscador global por producto, SKU, marca, familia, usuario y consulta.
