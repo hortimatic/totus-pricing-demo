@@ -74,9 +74,54 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    return route.fulfill(out({Key:u.pathname}));
  }
  if(u.pathname.startsWith('/rest/v1/rpc/')){
-   const fn=u.pathname.split('/').pop();
-   if(fn==='ops_finalize_document') return route.fulfill(out({id:'qa-doc',display_number:'QA-0001',status:'emitida',total_amount:121}));
-   if(fn==='ops_convert_proforma') return route.fulfill(out('qa-invoice'));
+   const fn=u.pathname.split('/').pop();let body={};try{body=req.postDataJSON()}catch{}
+   if(fn==='ops_save_closing'){
+     const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
+     const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
+     const cash=closing+Number(p.cash_withdrawals||0)+Number(p.cash_expenses_declared||0)-opening;
+     let row=fixtures.ops_daily_closings.find(x=>x.id===id);
+     const data={id,store_id:p.store_id,business_date:p.business_date,opening_cash:opening,cash_sales:cash,card_sales:Number(p.card_sales||0),bizum_sales:Number(p.bizum_sales||0),online_sales:Number(p.online_sales||0),other_income:Number(p.other_income||0),cash_withdrawals:Number(p.cash_withdrawals||0),cash_expenses_declared:Number(p.cash_expenses_declared||0),expected_cash:closing,actual_cash:closing,difference:0,notes:p.notes||'',status:p.status||'cerrado',source:'manual',legacy_cash_method:false,include_in_income:true};
+     if(row)Object.assign(row,data);else fixtures.ops_daily_closings.push(data);
+     fixtures.ops_daily_closing_drawers=fixtures.ops_daily_closing_drawers.filter(x=>x.closing_id!==id);
+     fixtures.ops_daily_closing_drawers.push(...drawers.map(x=>({id:crypto.randomUUID(),closing_id:id,drawer_id:x.drawer_id,opening_cash:Number(x.opening_cash||0),closing_cash:Number(x.closing_cash||0),notes:x.notes||''})));
+     return route.fulfill(out(id));
+   }
+   if(fn==='ops_save_expense'){
+     const p=body.p_expense||{},lines=body.p_lines||[];let id=p.id||crypto.randomUUID();
+     let row=fixtures.ops_expenses.find(x=>x.id===id);
+     let base=0,vat=0,re=0,wh=0;
+     const made=lines.map((l,i)=>{const b=Number(l.base_amount||0),vr=Number(l.vat_rate||0),rr=Number(l.re_rate||0),wr=Number(l.withholding_rate||0);base+=b;vat+=b*vr/100;re+=b*rr/100;wh+=b*wr/100;return{...l,id:crypto.randomUUID(),expense_id:id,sort_order:l.sort_order||((i+1)*10),vat_amount:b*vr/100,re_base:rr?b:0,re_amount:b*rr/100,withholding_base:wr?b:0,withholding_amount:b*wr/100,irpf_imputable:l.deductible_irpf===false||l.fixed_asset?0:b+b*vr/100+b*rr/100}});
+     const accounting=base+vat+re;
+     const data={id,store_id:p.store_id||null,expense_date:p.expense_date,supplier_name:p.supplier_name,supplier_tax_id:p.supplier_tax_id||'',invoice_number:p.invoice_number||'',description:p.description||'',payment_method:p.payment_method||'transferencia',paid_status:p.paid_status||'pagado',paid_date:p.paid_date||null,base_amount:base,vat_amount:vat,re_amount:re,withholding_amount:wh,gross_expense:accounting,accounting_amount:accounting,amount_paid:p.amount_paid??(accounting-wh),deductible_irpf:!p.management_only,deductible_pct:p.management_only?0:100,notes:p.notes||'',document_kind:p.document_kind||'factura',source:'manual',fiscal_reviewed:!!p.fiscal_reviewed,management_only:!!p.management_only,document_id:row?.document_id||null};
+     if(row)Object.assign(row,data);else fixtures.ops_expenses.push(data);
+     fixtures.ops_expense_lines=fixtures.ops_expense_lines.filter(x=>x.expense_id!==id);fixtures.ops_expense_lines.push(...made);
+     return route.fulfill(out(id));
+   }
+   if(fn==='ops_save_document_draft'){
+     const p=body.p_document||{},lines=body.p_lines||[];let id=p.id||crypto.randomUUID();
+     let row=fixtures.ops_sales_invoices.find(x=>x.id===id);let base=0,vat=0,total=0;
+     const made=lines.map((l,i)=>{const q=Number(l.quantity||0),u=Number(l.unit_price_base||0),d=Number(l.discount_pct||0),v=Number(l.vat_rate||0),b=q*u*(1-d/100),va=b*v/100;return{id:crypto.randomUUID(),invoice_id:id,sort_order:l.sort_order||((i+1)*10),description:l.description,quantity:q,unit_price_base:u,discount_pct:d,vat_rate:v,base_amount:b,vat_amount:va,total_amount:b+va}});
+     made.forEach(x=>{base+=x.base_amount;vat+=x.vat_amount;total+=x.total_amount});
+     const data={...p,id,status:'borrador',number:row?.number||null,display_number:row?.display_number||null,base_amount:base,vat_amount:vat,total_amount:total,external_number_text:row?.external_number_text||null,generated_document_id:row?.generated_document_id||null,converted_invoice_id:row?.converted_invoice_id||null,design_snapshot:row?.design_snapshot||{},template_snapshot:row?.template_snapshot||{},record_hash:row?.record_hash||null,previous_hash:row?.previous_hash||null};
+     if(row)Object.assign(row,data);else fixtures.ops_sales_invoices.push(data);
+     fixtures.ops_sales_invoice_lines=fixtures.ops_sales_invoice_lines.filter(x=>x.invoice_id!==id);fixtures.ops_sales_invoice_lines.push(...made);
+     return route.fulfill(out(id));
+   }
+   if(fn==='ops_finalize_document'){
+     const id=body.p_document_id,row=fixtures.ops_sales_invoices.find(x=>x.id===id);if(!row)return route.fulfill(out({message:'not found'},404));
+     const ser=fixtures.ops_invoice_series.find(x=>x.id===row.series_id);const num=ser?.next_number||1;if(ser)ser.next_number=num+1;
+     Object.assign(row,{number:num,display_number:(ser?.prefix||'QA-')+String(num).padStart(ser?.padding||4,'0'),status:'emitida',record_hash:'qa-hash-'+id,design_snapshot:fixtures.ops_document_templates[0]||{},template_snapshot:fixtures.ops_document_templates[0]||{}});
+     return route.fulfill(out(row));
+   }
+   if(fn==='ops_register_external_document'){
+     const id=body.p_document_id,num=Number(body.p_number),row=fixtures.ops_sales_invoices.find(x=>x.id===id),ser=fixtures.ops_invoice_series.find(x=>x.id===row?.series_id);if(row)Object.assign(row,{number:num,display_number:(ser?.prefix||'QA-')+String(num).padStart(ser?.padding||4,'0'),external_number_text:String(num),status:'emitida',record_hash:'qa-ext-'+id});
+     if(ser)ser.next_number=Math.max(ser.next_number,num+1);return route.fulfill(out(row||{}));
+   }
+   if(fn==='ops_convert_proforma'){
+     const src=fixtures.ops_sales_invoices.find(x=>x.id===body.p_proforma_id),id=crypto.randomUUID();if(!src)return route.fulfill(out({message:'not found'},404));
+     const inv={...src,id,series_id:body.p_invoice_series_id,document_type:'factura',invoice_kind:'invoice',status:'borrador',number:null,display_number:null,converted_invoice_id:null,source_proforma_document_id:src.id};fixtures.ops_sales_invoices.push(inv);
+     fixtures.ops_sales_invoice_lines.push(...fixtures.ops_sales_invoice_lines.filter(x=>x.invoice_id===src.id).map(x=>({...x,id:crypto.randomUUID(),invoice_id:id})));src.status='convertida';src.converted_invoice_id=id;return route.fulfill(out(id));
+   }
    return route.fulfill(out({}));
  }
  if(u.pathname.startsWith('/rest/v1/')){
@@ -137,6 +182,11 @@ await field('Caja head · queda en caja').fill('120');
 await field('Salida de caja').fill('50');
 await page.waitForTimeout(100);
 assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo efectivo de cierre incorrecto');
+await page.getByRole('button',{name:'Guardar cierre',exact:true}).click();
+await page.waitForTimeout(200);
+assert(fixtures.ops_daily_closings.length===1,'El cierre no se guardó');
+assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre guardado tiene efectivo incorrecto');
+assert(fixtures.ops_daily_closing_drawers.length===2,'No se guardaron las dos cajas de Hortimatic');
 
 // Gastos: internal-only quick helpers.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
@@ -145,6 +195,19 @@ assert(await page.locator('#ops_management_only').isChecked(),'Almacén debe que
 assert(await field('Proveedor / servicio').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
 await page.getByRole('button',{name:'Horas extra',exact:true}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Horas extra debe quedar fuera de fiscalidad');
+await page.evaluate(()=>opsNewExpense());
+await field('Proveedor / servicio').fill('Proveedor QA');
+await field('NIF / CIF proveedor').fill('B12345678');
+await field('Nº factura proveedor').fill('PROV-QA-001');
+await field('Base').fill('100');
+await page.waitForTimeout(180);
+await page.locator('#ops_exp_file').setInputFiles({name:'factura-proveedor-qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nFACTURA QA\n%%EOF')});
+await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
+await page.waitForTimeout(250);
+assert(fixtures.ops_expenses.some(x=>x.invoice_number==='PROV-QA-001'),'El gasto con factura no se guardó');
+const savedExpense=fixtures.ops_expenses.find(x=>x.invoice_number==='PROV-QA-001');
+assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta');
+assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===savedExpense.id),'El documento del gasto no quedó archivado');
 
 // Facturación: invoice/proforma separation, line calculator and PDF preview.
 await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');
@@ -165,6 +228,19 @@ const pdfDownload=page.waitForEvent('download');
 await page.getByRole('button',{name:'Vista previa PDF',exact:true}).click();
 const pdf=await pdfDownload;
 assert((await pdf.suggestedFilename()).endsWith('.pdf'),'Vista previa no descargó PDF');
+await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
+await page.waitForTimeout(250);
+const savedProforma=fixtures.ops_sales_invoices.find(x=>x.document_type==='proforma'&&x.customer_name==='Cliente QA');
+assert(savedProforma,'La proforma no se guardó');
+assert(fixtures.ops_sales_invoice_lines.some(x=>x.invoice_id===savedProforma.id),'La proforma no guardó sus líneas');
+assert(Math.abs(Number(savedProforma.total_amount)-217.8)<0.01,'Total persistido de proforma incorrecto');
+await page.getByRole('button',{name:'Proformas',exact:true}).click();
+const row=page.locator('tr').filter({hasText:'Cliente QA'}).first();
+await row.getByRole('button',{name:'Emitir',exact:true}).click();
+await page.waitForTimeout(250);
+assert(savedProforma.status==='emitida','La proforma no se emitió');
+assert(savedProforma.display_number,'La proforma emitida no recibió numeración');
+
 
 // Documentos: UI completo subir -> recargar -> descargar.
 await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');
@@ -177,6 +253,8 @@ await page.locator('td').filter({hasText:'qa.pdf'}).first().waitFor({timeout:100
 dl=page.waitForEvent('download');
 await page.getByRole('button',{name:'Descargar',exact:true}).first().click();
 assert((await (await dl).suggestedFilename())==='qa.pdf','Descarga documental no devolvió el archivo esperado');
+assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
+
 
 // Fiscalidad: counters and simulator.
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');
