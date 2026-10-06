@@ -102,9 +102,18 @@ window.opsInfo=function(key){
  const item=OPS_HELP[key]||OPS_HELP[String(key).split('.')[0]]||['Información','Sin información adicional disponible.'];
  openOpsModal(item[0],`<div class="ops-help-copy">${h(item[1])}</div>`);
 };
+function askReason(title,message,actionLabel='Confirmar'){
+ return new Promise(resolve=>{
+  const modal=openOpsModal(title,`<div class="ops-help-copy">${h(message)}</div><div class="ops-form" style="margin-top:14px"><div class="span4"><label>Motivo obligatorio</label><textarea id="ops_reason_text" rows="3" placeholder="Explica por qué se realiza esta acción"></textarea></div></div><div class="ops-preview-actions"><button type="button" class="danger" id="ops_reason_ok">${h(actionLabel)}</button><button type="button" class="ghost" id="ops_reason_cancel">Cancelar</button></div>`);
+  const done=v=>{closeOpsModal();resolve(v)};
+  modal.querySelector('#ops_reason_cancel').onclick=()=>done(null);
+  modal.querySelector('#ops_reason_ok').onclick=()=>{const v=modal.querySelector('#ops_reason_text').value.trim();if(!v){modal.querySelector('#ops_reason_text').focus();return}done(v)};
+  setTimeout(()=>modal.querySelector('#ops_reason_text')?.focus(),0);
+ });
+}
 function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}')">i</button>`}
 
-O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal};
+O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal,askReason};
 
 async function load(force=false){
   if(O.loading)return;
