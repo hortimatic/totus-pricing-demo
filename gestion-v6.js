@@ -70,7 +70,11 @@ const OPS_HELP={
  documentos:['Documentos','Archivo digital de justificantes. Puedes filtrar, revisar, descargar y preparar ZIP. Los documentos ligados a facturación quedan protegidos.'],
  fiscal:['Fiscalidad','Previsión de IRPF, retenciones y RETA. Es una herramienta de control y planificación; no sustituye la liquidación de la gestoría.'],
  informes:['Informes','Exporta gastos, ingresos, diarios, resumen fiscal y paquete de gestoría con la estructura documental acordada.'],
- config:['Configuración','Solo parámetros generales de empresa, fiscalidad y almacenamiento. Los elementos propios de facturación se gestionan dentro de Facturación.'],
+ config:['Configuración','Solo parámetros generales de empresa, fiscalidad, RETA y almacenamiento. Facturación, plantillas, logo, clientes y series se gestionan dentro de Facturación para evitar duplicidades.'],
+ 'config.empresa':['Datos generales de empresa','Nombre, NIF/CIF, dirección, email y teléfono usados en informes y documentos. La imagen corporativa no se configura aquí.'],
+ 'config.fiscal':['Parámetros fiscales globales','Controlan las previsiones internas de IRPF, IVA y difícil justificación. Los valores oficiales presentados por la gestoría prevalecen sobre cualquier estimación.'],
+ 'config.reta':['Referencias RETA','Valores usados para orientar la proyección de cuota y tramo. No sustituyen la regularización oficial de Seguridad Social.'],
+ 'config.storage':['Almacenamiento documental','Define el espacio total reservado y el tamaño máximo de cada archivo. El uso actual se muestra en tiempo real.'],
  'facturas.series':['Series de numeración','Cada serie pertenece a un año, establecimiento y tipo de documento. Al emitir, Totus asigna el siguiente número y evita retrocesos o cruces de año/tienda.'],
  'facturas.includeIncome':['Sumar a ingresos','Actívalo únicamente cuando esa venta no esté ya incluida en los cierres diarios. Evita duplicar ingresos en informes y previsiones.'],
  'facturas.external':['Documento externo','Úsalo cuando la factura ya se emitió fuera de Totus. Debes indicar el número utilizado y adjuntar el original; Totus lo registra sin renumerarlo.'],
@@ -695,21 +699,28 @@ window.opsZipReportDocs=async function(){
 };
 window.opsSaveSettings=async function(){
  if(!adminOnly())return;
- const get=id=>document.getElementById(id);
+ const get=id=>document.getElementById(id),email=(get('ops_set_email')?.value||'').trim();
  const row={
-  business_name:get('ops_set_name').value.trim(),business_address:get('ops_set_address').value.trim(),business_email:get('ops_set_email').value.trim(),business_phone:get('ops_set_phone').value.trim(),tax_id:get('ops_set_tax').value.trim(),
+  business_name:(get('ops_set_name')?.value||'').trim(),business_address:(get('ops_set_address')?.value||'').trim(),business_email:email,business_phone:(get('ops_set_phone')?.value||'').trim(),tax_id:(get('ops_set_tax')?.value||'').trim(),
   fiscal_regime:get('ops_set_regime')?.value||O.settings.fiscal_regime,estimation_method:get('ops_set_estimation')?.value||O.settings.estimation_method,
-  irpf_prepayment_rate:n(get('ops_set_irpf')?.value||O.settings.irpf_prepayment_rate),difficult_expense_enabled:get('ops_set_diff_enabled')?.checked??O.settings.difficult_expense_enabled,
-  difficult_expense_pct:n(get('ops_set_diff_pct')?.value||O.settings.difficult_expense_pct),difficult_expense_annual_cap:n(get('ops_set_diff_cap')?.value||O.settings.difficult_expense_annual_cap),
-  default_sales_vat_rate:n(get('ops_set_vat')?.value||O.settings.default_sales_vat_rate),reta_generic_deduction_pct:n(get('ops_set_reta_ded')?.value||O.settings.reta_generic_deduction_pct),
-  reta_total_rate:n(get('ops_set_reta_rate')?.value||O.settings.reta_total_rate),actual_reta_monthly:n(get('ops_set_reta').value)||null,previous_year_net_income:n(get('ops_set_prevnet').value)||null,
-  target_operating_margin_pct:n(get('ops_set_target_margin')?.value||O.settings.target_operating_margin_pct||15),
-  storage_limit_bytes:Math.round(n(get('ops_set_storage_mb')?.value||0)*1048576)||O.settings.storage_limit_bytes,
-  document_max_bytes:Math.round(n(get('ops_set_doc_mb')?.value||0)*1048576)||O.settings.document_max_bytes,
+  irpf_prepayment_rate:n(get('ops_set_irpf')?.value),difficult_expense_enabled:!!get('ops_set_diff_enabled')?.checked,
+  difficult_expense_pct:n(get('ops_set_diff_pct')?.value),difficult_expense_annual_cap:n(get('ops_set_diff_cap')?.value),
+  default_sales_vat_rate:n(get('ops_set_vat')?.value),reta_generic_deduction_pct:n(get('ops_set_reta_ded')?.value),
+  reta_total_rate:n(get('ops_set_reta_rate')?.value),actual_reta_monthly:n(get('ops_set_reta')?.value)||null,previous_year_net_income:n(get('ops_set_prevnet')?.value)||null,
+  target_operating_margin_pct:n(get('ops_set_target_margin')?.value),
+  storage_limit_bytes:Math.round(n(get('ops_set_storage_mb')?.value)*1048576),
+  document_max_bytes:Math.round(n(get('ops_set_doc_mb')?.value)*1048576),
   fiscal_notes:get('ops_set_fiscal_notes')?.value||'',current_year:O.year
  };
+ if(!row.business_name||!row.tax_id)return alert('Nombre/titular y NIF/CIF son obligatorios.');
+ if(email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return alert('El email de empresa no tiene un formato válido.');
+ const pctFields=[['Pago fraccionado IRPF',row.irpf_prepayment_rate],['IVA ventas',row.default_sales_vat_rate],['Difícil justificación',row.difficult_expense_pct],['Deducción RETA',row.reta_generic_deduction_pct],['Tipo RETA',row.reta_total_rate],['Margen objetivo',row.target_operating_margin_pct]];
+ if(pctFields.some(([,v])=>v<0||v>100))return alert('Los porcentajes deben estar entre 0 y 100.');
+ if(row.difficult_expense_annual_cap<0)return alert('El tope anual no puede ser negativo.');
+ if(row.storage_limit_bytes<=0||row.document_max_bytes<=0)return alert('Los límites de almacenamiento deben ser mayores que cero.');
+ if(row.document_max_bytes>row.storage_limit_bytes)return alert('El tamaño máximo por documento no puede superar el límite total de almacenamiento.');
  const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}
- await audit('config','actualizar',null,{campos:Object.keys(row)});await load(true);render();
+ await audit('config','actualizar',null,{campos:Object.keys(row)});await load(true);render();alert('Configuración guardada.');
 };
 
 window.opsTab=function(tab){O.tab=tab;if(tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();if(tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}render();window.scrollTo({top:0,behavior:'smooth'})};
