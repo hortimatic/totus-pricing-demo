@@ -280,23 +280,39 @@ await page.waitForTimeout(100);
 assert((await page.locator('#q_out_real').innerText()).includes('4,04'),'Cálculo de coste real incorrecto');
 assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálculo de venta final incorrecto');
 
-// Cajas: flujo rápido + avanzado y persistencia.
+// Cajas: tiendas/cajas reales + todos los canales de cobro.
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');await auditCurrentUi('Cajas');
-await field('Total vendido').fill('433,31');
+assert(await field('Caja vape · apertura').count()===1,'Hortimatic debe mostrar Caja vape');
+assert(await field('Caja head · apertura').count()===1,'Hortimatic debe mostrar Caja head');
+await field('Caja vape · apertura').fill('100');
+await field('Caja vape · queda en caja').fill('130');
+await field('Caja head · apertura').fill('100');
+await field('Caja head · queda en caja').fill('120');
+await field('Salida / retirada de caja').fill('50');
 await field('Tarjeta').fill('333,31');
-await field('Salida en metálico').fill('50');
+await field('Bizum').fill('25');
+await field('Pedidos online').fill('40');
+await field('Otras entradas').fill('10');
 await page.waitForTimeout(100);
-assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo de efectivo rápido incorrecto');
+assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo de venta en efectivo incorrecto');
+assert((await page.locator('#ops_close_total').innerText()).includes('508,31'),'Total del día no suma efectivo + tarjeta + Bizum + online + otras');
 await page.getByRole('button',{name:'Cerrar día',exact:true}).click();
 await page.waitForTimeout(200);
-assert(fixtures.ops_daily_closings.length===1,'El cierre rápido no se guardó');
-assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre rápido guardó efectivo incorrecto');
-assert(Number(fixtures.ops_daily_closings[0].reported_total_sales)===433.31,'El cierre no guardó total vendido declarado');
-assert(fixtures.ops_daily_closings[0].entry_mode==='quick','El cierre no quedó en modo rápido');
-await page.getByRole('button',{name:'Abrir',exact:true}).first().click();
-await field('Modo').selectOption('physical');await page.waitForTimeout(100);
-assert(await field('Caja vape · caja final').count()===1,'Modo avanzado no muestra cajas físicas');
+assert(fixtures.ops_daily_closings.length===1,'El cierre no se guardó');
+assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre guardó efectivo incorrecto');
+assert(Number(fixtures.ops_daily_closings[0].card_sales)===333.31,'Tarjeta no se guardó');
+assert(Number(fixtures.ops_daily_closings[0].bizum_sales)===25,'Bizum no se guardó');
+assert(Number(fixtures.ops_daily_closings[0].online_sales)===40,'Online no se guardó');
+assert(fixtures.ops_daily_closing_drawers.length===2,'Hortimatic debe guardar sus dos cajas físicas');
+
+// NewOldSmok debe tener una sola caja.
 await page.evaluate(()=>opsNewClosing());
+await field('Establecimiento').selectOption(ids.n);
+await page.waitForTimeout(100);
+assert(await field('Caja vape · apertura').count()===1,'NewOldSmok debe mostrar su Caja vape');
+assert(await field('Caja head · apertura').count()===0,'NewOldSmok no debe mostrar Caja head');
+await field('Establecimiento').selectOption(ids.h);
+await page.waitForTimeout(100);
 
 // Gastos: atajos internos, maestros, deducibilidad, factura adjunta y selección masiva.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');await auditCurrentUi('Gastos');
