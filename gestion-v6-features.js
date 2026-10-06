@@ -93,6 +93,14 @@ function fiscalProjection(y=O.year,q=O.quarter,planned=0){
 function retaProjection(){
  const cutoff=(O.year===new Date().getFullYear())?today():`${O.year}-12-31`,from=`${O.year}-01-01`;const net=Math.max(0,incomeTotal(from,cutoff)-deductibleExpenseTotal(from,cutoff,'all'));const days=Math.max(1,Math.round((new Date(cutoff)-new Date(from))/86400000)+1),annual=net/(days/365),monthly=annual/12*(1-N(O.settings?.reta_generic_deduction_pct||7)/100);const b=O.retaBrackets.find(x=>(x.min_net_monthly==null||monthly>N(x.min_net_monthly)||(x.min_inclusive&&monthly===N(x.min_net_monthly)))&&(x.max_net_monthly==null||monthly<N(x.max_net_monthly)||(x.max_inclusive&&monthly===N(x.max_net_monthly))));const rate=N(O.settings?.reta_total_rate||31.5)/100;return{monthly,annual,bracket:b,minQuota:b?N(b.min_base)*rate:0,maxQuota:b?N(b.max_base)*rate:0};
 }
+function spendingSignal(){
+ const from=`${O.year}-01-01`,to=(O.year===new Date().getFullYear())?today():`${O.year}-12-31`;
+ const income=incomeTotal(from,to,'all'),real=realExpense(from,to,'all'),result=income-real,targetPct=N(O.settings?.target_operating_margin_pct||15),target=income*targetPct/100,headroom=result-target;
+ let state='balanced',title='Gasto equilibrado',text='El resultado está cerca del margen objetivo configurado.';
+ if(headroom<0){state='tight';title='Conviene contener gasto';text='El resultado está por debajo del margen objetivo. Prioriza gasto necesario y evita adelantar compras no imprescindibles.'}
+ else if(income>0&&headroom>income*.05){state='room';title='Hay margen para gasto necesario';text='Hay colchón sobre el margen objetivo. Si tienes compras reales, necesarias y deducibles pendientes, puedes simular adelantarlas antes del cierre.'}
+ return{income,real,result,targetPct,target,headroom,state,title,text};
+}
 function importedStatusHtml(){
  const confirmed=E.historicalIncome.filter(x=>x.verified_by_gestor).length,provisional=E.historicalIncome.filter(x=>!x.verified_by_gestor).length;
  const pendingExpenses=O.expenses.filter(x=>x.source==='importacion_excel'&&!x.fiscal_reviewed&&!x.management_only).length;
@@ -412,20 +420,12 @@ window.opsUploadTemplateLogo=async function(id){
  }catch(e){alert('No se pudo subir el logo: '+e.message)}
 };
 function configHtml(){
- const st=O.settings||{},used=N(E.storageUsage?.total_bytes),limit=N(st.storage_limit_bytes||1073741824),pct=limit?used/limit*100:0;
+ const st=O.settings||{},used=N(E.storageUsage?.total_bytes),limit=N(st.storage_limit_bytes||1073741824),pct=limit?used/limit*100:0,dis=admin()?'':'disabled';
  return `<div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Empresa</div><div class="ops-title-line"><h3>Datos generales y fiscales</h3>${infoButton('config','Ayuda de configuración')}</div><div class="small">Datos comunes de la empresa. Plantillas, logo y series se gestionan exclusivamente en Facturación.</div></div><button class="primary" onclick="opsSaveSettings()" ${admin()?'':'disabled'}>Guardar cambios</button></div>
-   <div class="ops-form">
-    <div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${H(st.business_name||'')}" ${admin()?'':'disabled'}></div>
-    <div><label>NIF/CIF</label><input id="ops_set_tax" value="${H(st.tax_id||'')}" ${admin()?'':'disabled'}></div>
-    <div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${H(st.business_address||'')}" ${admin()?'':'disabled'}></div>
-    <div><label>Email</label><input id="ops_set_email" value="${H(st.business_email||'')}" ${admin()?'':'disabled'}></div>
-    <div><label>Teléfono</label><input id="ops_set_phone" value="${H(st.business_phone||'')}" ${admin()?'':'disabled'}></div>
-    <div><label>Cuota RETA actual</label><input id="ops_set_reta" inputmode="decimal" value="${H(st.actual_reta_monthly??'')}" ${admin()?'':'disabled'}></div>
-    <div><label>Rendimiento año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${H(st.previous_year_net_income??'')}" ${admin()?'':'disabled'}></div>
-   </div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Capacidad</div><h3>Almacenamiento documental</h3></div><span class="badge ${pct>=95?'badb':pct>=80?'warnb':'ok'}">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="ops-metric-line"><span>Uso total</span><b>${(used/1048576).toFixed(1).replace('.',',')} MB / ${Math.round(limit/1048576)} MB</b></div><div class="ops-metric-line"><span>Documentos</span><b>${N(E.storageUsage?.documents_count)} · ${(N(E.storageUsage?.documents_bytes)/1048576).toFixed(1).replace('.',',')} MB</b></div><div class="ops-metric-line"><span>Recursos de marca</span><b>${N(E.storageUsage?.assets_count)} · ${Math.round(N(E.storageUsage?.assets_bytes)/1024)} KB</b></div><div class="small">El estudio de capacidad 2026 se recalculará con los documentos definitivos antes de importarlos.</div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Empresa</div><h3>Datos generales</h3></div><button class="primary" onclick="opsSaveSettings()" ${dis}>Guardar cambios</button></div><div class="ops-form"><div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${H(st.business_name||'')}" ${dis}></div><div><label>NIF/CIF</label><input id="ops_set_tax" value="${H(st.tax_id||'')}" ${dis}></div><div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${H(st.business_address||'')}" ${dis}></div><div><label>Email</label><input id="ops_set_email" value="${H(st.business_email||'')}" ${dis}></div><div><label>Teléfono</label><input id="ops_set_phone" value="${H(st.business_phone||'')}" ${dis}></div></div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Fiscalidad</div><h3>Parámetros visibles de cálculo</h3></div></div><div class="ops-form"><div><label>Régimen</label><input id="ops_set_regime" value="${H(st.fiscal_regime||'')}" ${dis}></div><div><label>Método estimación</label><input id="ops_set_estimation" value="${H(st.estimation_method||'')}" ${dis}></div><div><label>Pago fraccionado IRPF %</label><input id="ops_set_irpf" inputmode="decimal" value="${H(st.irpf_prepayment_rate??20)}" ${dis}></div><div><label>IVA ventas %</label><input id="ops_set_vat" inputmode="decimal" value="${H(st.default_sales_vat_rate??21)}" ${dis}></div><div class="checkline"><input id="ops_set_diff_enabled" type="checkbox" ${st.difficult_expense_enabled!==false?'checked':''} ${dis}><label for="ops_set_diff_enabled">Difícil justificación</label></div><div><label>Difícil justificación %</label><input id="ops_set_diff_pct" inputmode="decimal" value="${H(st.difficult_expense_pct??5)}" ${dis}></div><div><label>Tope anual</label><input id="ops_set_diff_cap" inputmode="decimal" value="${H(st.difficult_expense_annual_cap??2000)}" ${dis}></div><div><label>Margen operativo objetivo %</label><input id="ops_set_target_margin" inputmode="decimal" value="${H(st.target_operating_margin_pct??15)}" ${dis}></div><div class="span4"><label>Notas fiscales</label><textarea id="ops_set_fiscal_notes" ${dis}>${H(st.fiscal_notes||'')}</textarea></div></div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA</div><h3>Referencias de cotización</h3></div></div><div class="ops-form"><div><label>Cuota actual mensual</label><input id="ops_set_reta" inputmode="decimal" value="${H(st.actual_reta_monthly??'')}" ${dis}></div><div><label>Rendimiento año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${H(st.previous_year_net_income??'')}" ${dis}></div><div><label>Deducción genérica %</label><input id="ops_set_reta_ded" inputmode="decimal" value="${H(st.reta_generic_deduction_pct??7)}" ${dis}></div><div><label>Tipo total estimado %</label><input id="ops_set_reta_rate" inputmode="decimal" value="${H(st.reta_total_rate??31.5)}" ${dis}></div></div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Capacidad</div><h3>Almacenamiento</h3></div><span class="badge ${pct>=95?'badb':pct>=80?'warnb':'ok'}">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="ops-form"><div><label>Límite total MB</label><input id="ops_set_storage_mb" inputmode="numeric" value="${Math.round(limit/1048576)}" ${dis}></div><div><label>Máximo documento MB</label><input id="ops_set_doc_mb" inputmode="numeric" value="${Math.round(N(st.document_max_bytes||20971520)/1048576)}" ${dis}></div></div><div class="ops-metric-line"><span>Uso actual</span><b>${(used/1048576).toFixed(1).replace('.',',')} MB</b></div><div class="small">Plantillas, logo, clientes y series siguen exclusivamente en Facturación.</div></div>
  </div>`;
 }
 window.opsSelectTemplateConfig=id=>{E.templateId=id;render()};
@@ -528,46 +528,33 @@ window.opsDeleteDocument=async function(id){
  }catch(e){alert('No se pudo eliminar el documento: '+e.message)}
 };
 function fiscalProjectionHtml(){
- const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection();
+ const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection(),g=spendingSignal(),actual=N(O.settings?.actual_reta_monthly||0);
+ const retaDelta=r.bracket?actual-r.minQuota:0,people=O.personnel||[],activeFamily=people.filter(x=>x.active&&x.person_type==='family_collaborator');
  return `${importedStatusHtml()}
- <div class="ops-note" style="margin-top:14px"><b>Régimen fiscal configurado:</b> recargo de equivalencia / estimación directa simplificada. Esta pantalla es de control interno y previsión; las presentaciones oficiales se contrastan con gestoría.</div>
+ <div class="ops-note" style="margin-top:14px"><b>Régimen configurado:</b> ${H(O.settings?.fiscal_regime||'recargo_equivalencia')} · ${H(O.settings?.estimation_method||'directa_simplificada')}. Control interno y previsión; las declaraciones oficiales se contrastan con gestoría.</div>
  <div class="ops-kpis" style="margin-top:14px">
-  <div class="ops-kpi"><small>Ingresos acumulados</small><strong>${euro(f.income)}</strong><div class="sub">01/01 → T${O.quarter}</div></div>
-  <div class="ops-kpi"><small>Gastos deducibles</small><strong>${euro(f.raw)}</strong><div class="sub">Antes de difícil justificación</div></div>
-  <div class="ops-kpi"><small>Difícil justificación ${infoButton('fiscal.diff','Qué es la difícil justificación')}</small><strong>${euro(f.diff)}</strong><div class="sub">${N(O.settings?.difficult_expense_pct||5)} % · máximo ${euro(O.settings?.difficult_expense_annual_cap||2000)}</div></div>
+  <div class="ops-kpi"><small>Ingresos acumulados</small><strong>${euro(f.income)}</strong></div>
+  <div class="ops-kpi"><small>Gastos deducibles validados</small><strong>${euro(f.raw)}</strong></div>
   <div class="ops-kpi ${f.net>=0?'good':'bad'}"><small>Rendimiento neto</small><strong>${euro(f.net)}</strong></div>
-  <div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div>
+  <div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong></div>
+  <div class="ops-kpi ${g.state==='tight'?'bad':g.state==='room'?'good':'warn'}"><small>${H(g.title)}</small><strong>${euro(g.result)}</strong><div class="sub">Objetivo ${g.targetPct.toFixed(1).replace('.',',')} % = ${euro(g.target)}</div></div>
  </div>
  <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelo 130</div><div class="ops-title-line"><h3>Contador IRPF T${O.quarter}</h3>${infoButton('fiscal.130','Cómo se calcula el modelo 130')}</div></div></div>
-   <div class="ops-metric-line"><span>01 · Ingresos acumulados</span><b>${euro(f.income)}</b></div>
-   <div class="ops-metric-line"><span>02 · Gastos deducibles + difícil justificación</span><b>${euro(f.raw+f.diff)}</b></div>
-   <div class="ops-metric-line"><span>03 · Rendimiento neto</span><b>${euro(f.net)}</b></div>
-   <div class="ops-metric-line"><span>04 · ${N(O.settings?.irpf_prepayment_rate||20)} %</span><b>${euro(f.gross)}</b></div>
-   <div class="ops-metric-line"><span>05 · 130 anteriores</span><b>− ${euro(f.prev)}</b></div>
-   <div class="ops-metric-line"><span>06 · Retenciones soportadas</span><b>− ${euro(f.ret)}</b></div>
-   <div class="ops-metric-line"><span><b>Estimación pendiente</b></span><b>${euro(f.payable)}</b></div>
-   <div class="ops-note warn" style="margin-top:10px">No es una liquidación oficial. Sirve para reservar caja y detectar desviaciones antes de enviar datos a gestoría.</div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Simulador</div><div class="ops-title-line"><h3>¿Qué pasa si gasto más?</h3>${infoButton('fiscal.simulator','Cómo usar el simulador')}</div></div></div>
-   <label>Gasto deducible adicional</label><input inputmode="decimal" value="${H(O.plannedSpend||'')}" oninput="opsPlannedSpend(this.value)" placeholder="0,00">
-   <div class="ops-metric-line"><span>130 con simulación</span><b>${euro(f.payable)}</b></div>
-   <div class="ops-metric-line"><span>Reserva con simulación</span><b>${euro(f.reserve)}</b></div>
-   <div class="ops-note">No guarda ningún gasto ni altera tus datos. Borra el importe para volver al escenario real.</div>
-  </div>
- </div>
- <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Retenciones</div><h3>Otros modelos</h3></div></div>
-   <div class="ops-metric-line"><span>Modelo 111 T${O.quarter}</span><b>${euro(f.m111)}</b></div>
-   <div class="ops-metric-line"><span>Modelo 115 T${O.quarter}</span><b>${euro(f.m115)}</b></div>
-   <div class="ops-metric-line"><span>Reserva total orientativa</span><b>${euro(f.reserve)}</b></div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA ${O.year}</div><div class="ops-title-line"><h3>Tramo orientativo</h3>${infoButton('fiscal.reta','Cómo se estima el tramo RETA')}</div></div></div>
-   <div class="ops-metric-line"><span>Rendimiento neto mensual proyectado</span><b>${euro(r.monthly)}</b></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Gestión</div><h3>¿Gastar más o menos?</h3></div></div><div class="ops-note ${g.state==='tight'?'bad':g.state==='room'?'ok':'warn'}"><b>${H(g.title)}</b><br>${H(g.text)}</div><div class="ops-metric-line"><span>Resultado real acumulado</span><b>${euro(g.result)}</b></div><div class="ops-metric-line"><span>Margen objetivo</span><b>${euro(g.target)}</b></div><div class="ops-metric-line"><span>Colchón sobre objetivo</span><b>${euro(g.headroom)}</b></div><div class="small">No recomienda gastar por gastar: solo ayuda a decidir sobre compras necesarias, inversión o gastos reales que ya tengas previstos.</div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA ${O.year}</div><div class="ops-title-line"><h3>Cuota según rendimiento</h3>${infoButton('fiscal.reta','Cómo se estima el tramo RETA')}</div></div></div>
+   <div class="ops-metric-line"><span>Rendimiento mensual proyectado</span><b>${euro(r.monthly)}</b></div>
    <div class="ops-metric-line"><span>Base permitida</span><b>${r.bracket?euro(r.bracket.min_base)+' – '+euro(r.bracket.max_base):'—'}</b></div>
-   <div class="ops-metric-line"><span>Cuota orientativa</span><b>${r.bracket?euro(r.minQuota)+' – '+euro(r.maxQuota):'—'}</b></div>
-   <div class="ops-metric-line"><span>Cuota actual registrada</span><b>${euro(O.settings?.actual_reta_monthly||0)}</b></div>
+   <div class="ops-metric-line"><span>Cuota orientativa del tramo</span><b>${r.bracket?euro(r.minQuota)+' – '+euro(r.maxQuota):'—'}</b></div>
+   <div class="ops-metric-line"><span>Cuota actual</span><b>${euro(actual)}</b></div>
+   <div class="ops-note ${!r.bracket?'warn':retaDelta<0?'warn':'ok'}">${!r.bracket?'No se ha podido ubicar el rendimiento en un tramo.':retaDelta<0?`La cuota actual está aproximadamente ${euro(Math.abs(retaDelta))}/mes por debajo de la referencia mínima del tramo. Conviene revisarlo antes de una regularización.`:`La cuota actual está dentro o por encima de la referencia mínima del tramo proyectado.`}</div>
   </div>
+ </div>
+ <div class="ops-grid">
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelo 130</div><h3>Previsión IRPF T${O.quarter}</h3></div></div><div class="ops-metric-line"><span>Ingresos</span><b>${euro(f.income)}</b></div><div class="ops-metric-line"><span>Gastos + difícil justificación</span><b>${euro(f.raw+f.diff)}</b></div><div class="ops-metric-line"><span>Rendimiento</span><b>${euro(f.net)}</b></div><div class="ops-metric-line"><span>130 pendiente estimado</span><b>${euro(f.payable)}</b></div><div class="ops-metric-line"><span>111</span><b>${euro(f.m111)}</b></div><div class="ops-metric-line"><span>115</span><b>${euro(f.m115)}</b></div></div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Simulador</div><h3>Gasto real previsto</h3></div></div><label>Gasto deducible adicional</label><input inputmode="decimal" value="${H(O.plannedSpend||'')}" oninput="opsPlannedSpend(this.value)" placeholder="0,00"><div class="ops-metric-line"><span>130 con simulación</span><b>${euro(f.payable)}</b></div><div class="ops-metric-line"><span>Reserva con simulación</span><b>${euro(f.reserve)}</b></div><div class="small">No guarda nada. Sirve para probar una compra/gasto real antes de registrarlo.</div></div>
+ </div>
+ <div class="ops-grid">
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Personal</div><h3>Costes laborales y colaboradores</h3></div></div><div class="ops-metric-line"><span>Empleados históricos registrados</span><b>${people.filter(x=>x.person_type==='employee').length}</b></div><div class="ops-metric-line"><span>Colaboradora familiar activa</span><b>${activeFamily.length?H(activeFamily.map(x=>x.full_name).join(', ')):'—'}</b></div><div class="small">Nóminas y Seguridad Social empresa se mantienen separadas del RETA titular y de la colaboradora familiar. La aportación a colaboradora solo se contabiliza cuando se registra realmente como gasto.</div></div>
  </div>`;
 }
 function managerExpenseRows(from,to){
