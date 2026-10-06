@@ -170,7 +170,7 @@ await field('Nº documento').fill('QA-2026-001');
 await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
 assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Selector documental no cargó archivo');
 await page.getByRole('button',{name:'Subir',exact:true}).click();
-await page.getByText('qa.pdf',{exact:true}).waitFor({timeout:10000});
+await page.locator('td').filter({hasText:'qa.pdf'}).first().waitFor({timeout:10000});
 dl=page.waitForEvent('download');
 await page.getByRole('button',{name:'Descargar',exact:true}).first().click();
 assert((await (await dl).suggestedFilename())==='qa.pdf','Descarga documental no devolvió el archivo esperado');
