@@ -3,7 +3,7 @@
 Fecha: 2026-10-06
 Rama probada: `desarrollo-v6`
 Commit UI QA de referencia: `2feb390a56344d757c753a1e5837f4cabf055431`
-HEAD documentado: `67546a4fd1e94352b74ab8f3cc414f711838ecb2`
+HEAD documentado: pendiente de QA final tras limpieza estructural
 Producción: `main` NO modificada.
 
 ## Navegación
@@ -111,9 +111,10 @@ RLS probado por roles:
 - Gerente
 - Encargado
 
-Aviso externo pendiente de configuración del proyecto Supabase:
-- Leaked Password Protection está desactivado en Auth.
-No es un fallo del código de Totus; debe activarse desde la configuración de Auth antes de considerar cerrada la revisión de seguridad de producción.
+Supabase Security Advisor:
+- 0 avisos de funciones SECURITY DEFINER expuestas tras mover la frontera privilegiada al esquema `private`.
+- El único aviso restante es `Leaked Password Protection`.
+- La organización está en plan Free y Supabase documenta esa protección como disponible únicamente en Pro o superior; no es corregible por SQL/código en el plan actual.
 
 ## Endurecimiento de permisos de facturación · 2026-10-06
 
@@ -123,7 +124,7 @@ Se detectó y corrigió una discrepancia real entre el modelo de roles y RLS:
 - `ops_sales_invoices` INSERT/UPDATE: `private.is_manager()`
 - `ops_sales_invoice_lines` INSERT/UPDATE/DELETE: `private.is_manager()`
 - RPC internas de emitir, registrar documento externo y convertir proforma: `private.is_manager()`
-- migración versionada: `migrations/2026-10-06_invoice_role_permissions_v6.sql`
+- migración canónica: `migrations/2026-10-06_totus_central_management_hardening_v6.sql`
 
 Pruebas:
 - RLS real con Davinia / rol gerente: creación de borrador permitida dentro de transacción con ROLLBACK
@@ -198,3 +199,16 @@ Avisos Supabase:
 
 ## Nota
 La rama `main` sigue siendo la versión de producción anterior. No mezclar/promover esta rama hasta aprobación expresa.
+
+
+## Limpieza estructural · 2026-10-06
+- eliminadas sobrescrituras runtime `priorRender`, `priorGo`, `priorTab`, `baseManagement`
+- 0 funciones duplicadas entre núcleo y módulo de Gestión
+- eliminado `gestion-v6-ext.js`; sustituido por `gestion-v6-features.js`
+- eliminados `gestion-v6-ext.css` y `facturacion-v7.css`; estilos consolidados en `gestion-v6.css`
+- `gestion-v6.js` reducido aproximadamente de 84 KB a 42 KB al retirar implementaciones antiguas de facturación, fiscalidad, documentos e informes
+- migraciones de endurecimiento fragmentadas sustituidas por una única migración canónica
+- GitHub Actions ya no se ejecuta en cada commit
+- informes contrastados de nuevo con los originales de gestoría y diarios 2026
+- gastos nuevos exportan concepto + fila separada `IVA SOPORTADO (RECARGO - REAGYP)` cuando corresponde
+- diarios recuperan formato `Día | Gastos | Precio | Tarjeta | Salida de caja`
