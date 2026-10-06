@@ -158,7 +158,6 @@ function managementHtml(){
  }
  return `<div class="ops-wrap">${headerHtml()}${body}</div>`;
 }
-window.opsManagementHtml=managementHtml;
 
 function newClosingDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
