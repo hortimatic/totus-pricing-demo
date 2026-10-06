@@ -38,18 +38,31 @@ async function selectAll(table,orderCol=null,asc=false){
  return out;
 }
 
+function normalizeTemplate(t){
+ const styles={brand:'modern',clean:'minimal',compact:'classic',modern:'modern',minimal:'minimal',classic:'classic'};
+ return {...t,
+  style_code:styles[t.style_code||t.style]||'modern',
+  is_default:t.is_default??t.default_invoice??false,
+  payment_terms:t.payment_terms??t.payment_terms_default??'',
+  notes_default:t.notes_default??'',
+  logo_position:t.logo_position||'left',
+  show_company_email:t.show_company_email!==false,
+  show_company_phone:t.show_company_phone!==false
+ };
+}
+function dbTemplateStyle(code){return ({modern:'brand',minimal:'clean',classic:'compact'})[code]||'brand'}
 async function load(force=false){
  if(B.loading)return;
  if(B.loaded&&!force)return;
  B.loading=true;B.error='';
  try{
   const [templates,proSeries,proformas,proLines]=await Promise.all([
-   selectAll('ops_invoice_templates','name',true),
+   selectAll('ops_document_templates','name',true),
    selectAll('ops_proforma_series','year',false),
    selectAll('ops_proformas','issue_date',false),
    selectAll('ops_proforma_lines','sort_order',true)
   ]);
-  B.templates=templates.filter(x=>x.active!==false);
+  B.templates=templates.filter(x=>x.active!==false).map(normalizeTemplate);
   B.proSeries=proSeries.filter(x=>x.active!==false);
   B.proformas=proformas;
   B.proLines=proLines;
@@ -68,7 +81,7 @@ function activeTemplate(id){
  };
 }
 function invoiceSeries(kind='invoice',storeId=null){
- return O.series.filter(s=>s.year===O.year&&s.active!==false&&(s.series_kind||'invoice')===kind&&(!storeId||!s.store_id||s.store_id===storeId));
+ return O.series.filter(s=>s.year===O.year&&s.active!==false&&(s.document_type||'factura')==='factura'&&(s.series_kind||'invoice')===kind&&(!storeId||!s.store_id||s.store_id===storeId));
 }
 function proformaSeries(storeId=null){
  return B.proSeries.filter(s=>s.year===O.year&&s.active!==false&&(!storeId||!s.store_id||s.store_id===storeId));
@@ -85,7 +98,7 @@ function newInvoiceDraft(){
 }
 function newProDraft(){
  const storeId=defaultStore(),ser=proformaSeries(storeId)[0];
- const tpl=(B.templates.find(x=>x.is_default)||B.templates[0])?.id||O.settings?.default_invoice_template_id||'';
+ const tpl=(B.templates.find(x=>x.default_proforma)||B.templates.find(x=>x.is_default)||B.templates[0])?.id||O.settings?.default_invoice_template_id||'';
  return {id:null,storeId,seriesId:ser?.id||'',templateId:tpl,date:today(),validUntil:addDays(today(),30),customer:'',taxId:'',address:'',email:'',concept:'',payment:'transferencia',notes:O.settings?.invoice_notes_default||''};
 }
 function storeName(id){return O.stores.find(x=>x.id===id)?.name||'General'}
@@ -230,7 +243,7 @@ async function saveInvoice(){
  B.saving=true;
  try{
   const row={series_id:d.seriesId,store_id:d.storeId||null,template_id:d.templateId||null,issue_date:d.date,due_date:d.dueDate||null,
-   invoice_kind:d.kind,origin:d.origin,status:'borrador',customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),
+   document_type:'factura',invoice_kind:d.kind,origin:d.origin,status:'borrador',customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),
    customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept.trim(),payment_method:d.payment,
    paid_status:d.paidStatus||'pendiente',paid_date:d.paidDate||null,include_in_income:!!d.includeIncome,notes:d.notes||'',created_by:authSession.user.id};
   let id=d.id;
@@ -369,11 +382,11 @@ window.billSelectTemplate=id=>{B.templateId=id;render()};
 window.billTemplateLive=()=>{const t={...activeTemplate(B.templateId),primary_color:document.getElementById('tpl_primary')?.value||'#19D3C5',secondary_color:document.getElementById('tpl_secondary')?.value||'#101B27',style_code:document.getElementById('tpl_style')?.value||'modern',footer_text:document.getElementById('tpl_footer')?.value||''};const w=document.getElementById('tpl_preview_wrap');if(w)w.innerHTML=templatePreview(t)};
 window.billSaveTemplate=async function(){
  if(!roleManager())return;const id=B.templateId,t=activeTemplate(id);
- const row={name:document.getElementById('tpl_name').value.trim(),style_code:document.getElementById('tpl_style').value,primary_color:document.getElementById('tpl_primary').value,secondary_color:document.getElementById('tpl_secondary').value,logo_position:document.getElementById('tpl_logo_pos').value,is_default:document.getElementById('tpl_default').checked,footer_text:document.getElementById('tpl_footer').value,payment_terms:document.getElementById('tpl_terms').value,notes_default:document.getElementById('tpl_notes').value};
+ const row={name:document.getElementById('tpl_name').value.trim(),style:dbTemplateStyle(document.getElementById('tpl_style').value),primary_color:document.getElementById('tpl_primary').value,secondary_color:document.getElementById('tpl_secondary').value,logo_position:document.getElementById('tpl_logo_pos').value,default_invoice:document.getElementById('tpl_default').checked,footer_text:document.getElementById('tpl_footer').value,payment_terms_default:document.getElementById('tpl_terms').value,notes_default:document.getElementById('tpl_notes').value};
  try{
-  if(row.is_default)await sb.from('ops_invoice_templates').update({is_default:false}).neq('id',id);
-  const {error}=await sb.from('ops_invoice_templates').update(row).eq('id',id);if(error)throw error;
-  if(row.is_default)await sb.from('ops_business_settings').update({default_invoice_template_id:id,invoice_footer_text:row.footer_text,invoice_payment_terms:row.payment_terms,invoice_notes_default:row.notes_default}).eq('id',1);
+  if(row.default_invoice)await sb.from('ops_document_templates').update({default_invoice:false}).neq('id',id);
+  const {error}=await sb.from('ops_document_templates').update(row).eq('id',id);if(error)throw error;
+  if(row.default_invoice)await sb.from('ops_business_settings').update({default_invoice_template_id:id,invoice_footer_text:row.footer_text,invoice_payment_terms:row.payment_terms_default,invoice_notes_default:row.notes_default}).eq('id',1);
   await window.opsLoadData(true);await load(true);render();
  }catch(e){alert('No se pudo guardar la plantilla: '+e.message)}
 };
@@ -384,14 +397,14 @@ window.billUploadLogo=async function(){
  try{
   const ext=(file.name.split('.').pop()||'png').toLowerCase(),path=`invoice-templates/${id}/logo.${ext}`;
   const {error}=await sb.storage.from('business-assets').upload(path,file,{upsert:true,contentType:file.type});if(error)throw error;
-  const {error:ue}=await sb.from('ops_invoice_templates').update({logo_path:path,show_logo:true}).eq('id',id);if(ue)throw ue;
+  const {error:ue}=await sb.from('ops_document_templates').update({logo_path:path,logo_name:file.name,logo_mime:file.type,logo_size_bytes:file.size,show_logo:true}).eq('id',id);if(ue)throw ue;
   await load(true);render();
  }catch(e){alert('No se pudo subir el logo: '+e.message)}
 };
 
 /* ---------------- SERIES ---------------- */
 function seriesHtml(){
- const inv=O.series.filter(s=>s.year===O.year),pro=B.proSeries.filter(s=>s.year===O.year);
+ const inv=O.series.filter(s=>s.year===O.year&&(s.document_type||'factura')==='factura'),pro=B.proSeries.filter(s=>s.year===O.year);
  return `<div class="ops-grid">
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Facturas</div><h3>Series ${O.year}</h3></div>${roleManager()?'<button class="secondary" onclick="billNewSeries(\'invoice\')">Añadir</button>':''}</div>${seriesTable(inv,'invoice')}</div>
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Proformas</div><h3>Series ${O.year}</h3></div>${roleManager()?'<button class="secondary" onclick="billNewSeries(\'proforma\')">Añadir</button>':''}</div>${seriesTable(pro,'proforma')}</div>
@@ -412,7 +425,7 @@ async function billSaveSeries(type,id,row){
  try{
   const table=type==='proforma'?'ops_proforma_series':'ops_invoice_series';
   const payload={store_id:row.store_id||null,year:row.year||O.year,code:row.code,prefix:row.prefix,next_number:row.next_number||1,padding:row.padding||4,active:true};
-  if(type!=='proforma')payload.series_kind=row.series_kind||'invoice';
+  if(type!=='proforma'){payload.series_kind=row.series_kind||'invoice';payload.document_type='factura';}
   let error;if(id)({error}=await sb.from(table).update(payload).eq('id',id));else({error}=await sb.from(table).insert(payload));if(error)throw error;
   await window.opsLoadData(true);await load(true);render();
  }catch(e){alert('No se pudo guardar la serie: '+e.message)}
