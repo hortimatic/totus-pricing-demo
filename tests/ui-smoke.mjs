@@ -283,16 +283,18 @@ const savedExpense=fixtures.ops_expenses.find(x=>x.invoice_number==='PROV-QA-001
 assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta. docs='+JSON.stringify(fixtures.ops_documents)+' dialogs='+dialogs.join(' | ')+' uploads='+storageUploads);
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===savedExpense.id),'El documento del gasto no quedó archivado');
 
-// Facturación: invoice/proforma separation, line calculator and PDF preview.
+// Facturación: navegación, plantilla/logo único, cálculo y vista previa modal.
 await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');await auditCurrentUi('Facturación');
 await page.getByRole('heading',{name:'Factura',exact:true}).waitFor();
 await page.getByRole('button',{name:'Rectificativas',exact:true}).click();
 await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
-const designDetails=page.getByText('Personalizar plantilla y logo',{exact:true});
-await designDetails.waitFor();
-await designDetails.click();
+
+// Plantillas y logo viven únicamente en Facturación.
+await page.locator('.billing-nav').getByRole('button',{name:'Plantillas y marca',exact:true}).click();
+await page.getByRole('heading',{name:'Plantillas y marca',exact:true}).waitFor();
+await auditCurrentUi('Facturación · Plantillas y marca');
 await page.locator('#ops_tpl_logo').setInputFiles({name:'logo-facturacion-qa.png',mimeType:'image/png',buffer:Buffer.from('PNG-QA-INVOICE')});
 const storageBeforeLogo=storageUploads;
 await page.getByRole('button',{name:'Subir / cambiar logo',exact:true}).click();
@@ -300,7 +302,25 @@ await page.waitForTimeout(200);
 assert(storageUploads===storageBeforeLogo+1,'La subida de logo desde Facturación no llegó a Storage');
 assert(fixtures.ops_document_templates[0].logo_name==='logo-facturacion-qa.png','El logo no quedó asociado a la plantilla');
 assert(fixtures.ops_document_templates[0].logo_path,'La plantilla no guardó ruta de logo');
+await field('Título factura').fill('FACTURA QA PERSONALIZADA');
+await page.getByRole('button',{name:'Guardar plantilla',exact:true}).click();
+await page.waitForTimeout(180);
+assert(fixtures.ops_document_templates[0].invoice_title==='FACTURA QA PERSONALIZADA','Guardar plantilla no persistió el título');
+const templatesBeforeDuplicate=fixtures.ops_document_templates.length;
+await page.getByRole('button',{name:'Duplicar plantilla',exact:true}).click();
+await page.waitForTimeout(180);
+assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Duplicar plantilla no creó una copia');
+const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
+assert(!duplicatedTemplate.logo_path&&Number(duplicatedTemplate.logo_size_bytes||0)===0,'La plantilla duplicada heredó indebidamente el archivo de logo');
+
+// Series también están dentro de Facturación.
+await page.locator('.billing-nav').getByRole('button',{name:'Series',exact:true}).click();
+await page.getByRole('heading',{name:'Series 2026',exact:true}).waitFor();
+await auditCurrentUi('Facturación · Series');
+await page.locator('.billing-nav').getByRole('button',{name:'Documentos',exact:true}).click();
+await page.getByRole('button',{name:'Proformas',exact:true}).click();
 await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
+
 await field('Cliente / razón social').fill('Cliente QA');
 await field('Descripción').fill('Servicio QA');
 await field('Cant.').fill('2');
@@ -308,11 +328,14 @@ await field('Precio base').fill('100');
 await field('Dto %').fill('10');
 await page.waitForTimeout(200);
 assert((await page.locator('.ops-invoice-total').innerText()).includes('217,80'),'Total de proforma incorrecto');
-let dl;
-const pdfDownload=page.waitForEvent('download');
-await page.getByRole('button',{name:'Vista previa PDF',exact:true}).click();
-const pdf=await pdfDownload;
-assert((await pdf.suggestedFilename()).endsWith('.pdf'),'Vista previa no descargó PDF');
+
+await page.getByRole('button',{name:'Vista previa',exact:true}).click();
+const previewDialog=page.getByRole('dialog');
+await previewDialog.waitFor();
+assert(await previewDialog.locator('iframe.ops-pdf-frame').count()===1,'La vista previa no abrió el PDF dentro de Totus');
+assert(await previewDialog.getByRole('button',{name:'Descargar PDF',exact:true}).count()===1,'La vista previa no ofrece descarga opcional');
+await previewDialog.getByRole('button',{name:'Cerrar',exact:true}).click();
+
 await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
 await page.waitForTimeout(250);
 const savedProforma=fixtures.ops_sales_invoices.find(x=>x.document_type==='proforma'&&x.customer_name==='Cliente QA');
@@ -321,13 +344,14 @@ assert(fixtures.ops_sales_invoice_lines.some(x=>x.invoice_id===savedProforma.id)
 assert(Math.abs(Number(savedProforma.total_amount)-217.8)<0.01,'Total persistido de proforma incorrecto');
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 const row=page.locator('tr').filter({hasText:'Cliente QA'}).first();
-const issuedPdfDownload=page.waitForEvent('download');
 await row.getByRole('button',{name:'Emitir',exact:true}).click();
-const issuedPdf=await issuedPdfDownload;
-assert((await issuedPdf.suggestedFilename()).endsWith('.pdf'),'La emisión no generó su PDF');
-await page.waitForTimeout(250);
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Emitir proforma no abrió la vista final');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+await page.waitForTimeout(150);
 assert(savedProforma.status==='emitida','La proforma no se emitió');
 assert(savedProforma.display_number,'La proforma emitida no recibió numeración');
+
 
 // Proforma: aceptar y convertir a factura borrador.
 let proRow=page.locator('tr').filter({hasText:'Cliente QA'}).first();
@@ -352,10 +376,11 @@ await page.waitForTimeout(180);
 const normalInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Factura QA'&&x.document_type==='factura'&&x.invoice_kind==='invoice');
 assert(normalInvoice&&normalInvoice.status==='borrador','Factura normal no guardada como borrador');
 let invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
-let invoicePdfDl=page.waitForEvent('download');
 await invoiceRow.getByRole('button',{name:'Emitir',exact:true}).click();
-assert((await(await invoicePdfDl).suggestedFilename()).endsWith('.pdf'),'Emisión de factura no generó PDF');
-await page.waitForTimeout(220);
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').getByRole('button',{name:'Descargar PDF',exact:true}).count()===1,'Factura emitida sin descarga opcional en vista previa');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+await page.waitForTimeout(150);
 assert(normalInvoice.status==='emitida'&&normalInvoice.display_number,'Factura normal no emitida/numerada');
 invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
 await invoiceRow.getByRole('button',{name:'Marcar cobrada',exact:true}).click();
@@ -452,7 +477,7 @@ const reportQa=await page.evaluate(()=>{
 assert(reportQa.g[0].join('|')==='Orden|Fecha|Nºfra.rec.|Nºfra.proveedor|Rt|Identificación|Concepto|Base IVA|%|Cuota IVA|Base R. Equiv.|% R.Eq.|Cuota R.Equiv.|Imputable a IRPF|Base retención|% ret.|Cuota retenida','Cabecera de gastos no coincide con gestoría');
 assert(reportQa.g.some(r=>String(r[6]).includes('IVA SOPORTADO(RECARGO - REAGYP)')),'Falta fila separada de IVA/RE en gastos');
 assert(reportQa.g.at(-1)[6]==='TOTAL ACUMULADO','Falta total acumulado en gastos');
-assert(reportQa.s[0][0]==='Descripción'&&reportQa.s[0][5]==='Imputable IRPF','Desglose de conceptos incorrecto');
+assert(reportQa.s[0][0]==='Código'&&reportQa.s[0][1]==='Descripción'&&reportQa.s[0][6]==='Imputable IRPF','Desglose de conceptos/códigos incorrecto');
 assert(reportQa.i[0][0]==='Orden'&&reportQa.i[0][2]==='Nº factura'&&reportQa.i[0][4]==='Identificación del Cliente','Cabecera de ingresos no coincide con gestoría');
 assert(reportQa.i.at(-1)[5]==='TOTAL ACUMULADO','Falta total acumulado en ingresos');
 assert(reportQa.i.slice(1,-1).every(r=>/^\d{2}\/\d{2}\/\d{4}$/.test(String(r[1]))),'Fechas de ingresos no están en DD/MM/AAAA');
@@ -466,12 +491,19 @@ const expensesWb=XLSXNode.readFile(await expensesXlsx.path(),{cellStyles:true});
 assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes('DESGLOSE CONCEPTOS'),'Libro de gastos no contiene sus hojas esperadas');
 const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
 assert(expensesRows[0][0]==='Orden'&&expensesRows[0][6]==='Concepto'&&expensesRows.at(-1)[6]==='TOTAL ACUMULADO','Contenido del XLSX de gastos incorrecto');
+assert(expensesWb.Sheets.GASTOS.A1.s,'El XLSX de gastos no conserva estilo de cabecera');
+assert(expensesWb.Sheets.GASTOS['H'+expensesRows.length].f,'El total de gastos no es una fórmula real de Excel');
+const conceptRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets['DESGLOSE CONCEPTOS'],{header:1,raw:false});
+assert(conceptRows[0][0]==='Código'&&conceptRows.some(r=>String(r[0])==='600'),'Desglose sin códigos contables');
+assert(expensesWb.Sheets['DESGLOSE CONCEPTOS']['A1'].s,'Desglose de conceptos sin formato');
 
 downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(1).click();const incomeXlsx=await downloadPromise;
 const incomeWb=XLSXNode.readFile(await incomeXlsx.path(),{cellStyles:true});
 assert(incomeWb.SheetNames.join('|')==='INGRESOS','Libro de ingresos debe tener una hoja INGRESOS');
 const incomeRows=XLSXNode.utils.sheet_to_json(incomeWb.Sheets.INGRESOS,{header:1,raw:false});
 assert(incomeRows[0][0]==='Orden'&&incomeRows[0][5]==='Concepto'&&incomeRows.at(-1)[5]==='TOTAL ACUMULADO','Contenido del XLSX de ingresos incorrecto');
+assert(incomeWb.Sheets.INGRESOS.A1.s,'El XLSX de ingresos no conserva estilo de cabecera');
+assert(incomeWb.Sheets.INGRESOS['G'+incomeRows.length].f,'El total de ingresos no es una fórmula real de Excel');
 
 for(const idx of [2,3]){
  downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(idx).click();const daily=await downloadPromise;
@@ -480,6 +512,7 @@ for(const idx of [2,3]){
  const firstRows=XLSXNode.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false});
  assert(firstRows[0].join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
+ const totalRow=firstRows.length;assert(wb.Sheets[wb.SheetNames[0]]['C'+totalRow].f,'El total mensual del diario no es una fórmula real');
 }
 
 downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(4).click();const fullXlsx=await downloadPromise;
@@ -497,24 +530,15 @@ const zipNames=Object.keys(zip.files);
 for(const folder of ['01_INGRESOS','02_GASTOS','03_DIARIOS','04_RESUMEN','05_DOCUMENTOS'])assert(zipNames.some(n=>n.includes('/'+folder+'/')),'Paquete gestor sin carpeta '+folder);
 assert(zipNames.some(n=>n.endsWith('/00_LEEME.txt')),'Paquete gestor sin LEEME');
 
-// Administración: separated configuration and template controls.
+// Administración: configuración general sin duplicar elementos de Facturación.
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
 await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');await auditCurrentUi('Configuración');
-await page.getByText('Datos fiscales',{exact:true}).waitFor();
-await field('Color de texto').waitFor();
-await field('Posición logo').waitFor();
-await field('Título factura').waitFor();
-await field('Título proforma').waitFor();
-await field('Título factura').fill('FACTURA QA PERSONALIZADA');
-await page.getByRole('button',{name:'Guardar plantilla',exact:true}).click();
-await page.waitForTimeout(180);
-assert(fixtures.ops_document_templates[0].invoice_title==='FACTURA QA PERSONALIZADA','Guardar plantilla no persistió el título');
-const templatesBeforeDuplicate=fixtures.ops_document_templates.length;
-await page.getByRole('button',{name:'Duplicar plantilla',exact:true}).click();
-await page.waitForTimeout(180);
-assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Duplicar plantilla no creó una copia');
-const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
-assert(!duplicatedTemplate.logo_path&&Number(duplicatedTemplate.logo_size_bytes||0)===0,'La plantilla duplicada heredó indebidamente el archivo de logo');
+await page.getByText('Datos generales y fiscales',{exact:true}).waitFor();
+assert(await page.locator('#ops_tpl_logo').count()===0,'Configuración vuelve a duplicar la subida de logo');
+assert(await page.getByText('Plantillas y marca',{exact:true}).count()===0,'Configuración vuelve a duplicar las plantillas');
+assert(await page.getByText('Series 2026',{exact:true}).count()===0,'Configuración vuelve a duplicar las series');
+await field('Nombre / titular').waitFor();
+await page.getByText('Almacenamiento documental',{exact:true}).waitFor();
 
 // Eliminar gasto manual: doble confirmación y cascada de líneas.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
