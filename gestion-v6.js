@@ -30,14 +30,6 @@ function inRange(date,from,to){ return !!date && date>=from && date<=to; }
 function storeName(id){ return O.stores.find(x=>x.id===id)?.name || 'General'; }
 function category(id){ return O.categories.find(x=>x.id===id); }
 function sum(arr,fn=x=>x){ return arr.reduce((a,x)=>a+(Number(fn(x))||0),0); }
-function fmtInt(v){ return new Intl.NumberFormat('es-ES',{maximumFractionDigits:0}).format(v||0); }
-function b64Safe(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,''); }
-function csvCell(v){ const s=String(v??''); return /[;"\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
-function csvDownload(name,rows){
-  const txt='\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
-  const blob=new Blob([txt],{type:'text/csv;charset=utf-8'});
-  dlBlob(blob,name);
-}
 function dlBlob(blob,name){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);
