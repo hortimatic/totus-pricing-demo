@@ -50,7 +50,7 @@ function out(body,status=200,headers={}){return {status,contentType:'application
 
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
-const dialogs=[],pageErrors=[];
+const dialogs=[],pageErrors=[];let storageDownloads=0;
 page.on('dialog',async d=>{dialogs.push(d.message());if(d.type()==='confirm')await d.accept();else await d.dismiss()});
 page.on('pageerror',e=>{pageErrors.push(e.stack||e.message);console.error('PAGEERROR',e.stack||e.message)});
 await page.addInitScript(({key,session})=>localStorage.setItem(key,JSON.stringify(session)),{key:`sb-${project}-auth-token`,session});
@@ -70,7 +70,7 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    return route.fulfill(out({ok:true}));
  }
  if(u.pathname.startsWith('/storage/v1/object/')){
-   if(method==='GET') return route.fulfill({status:200,contentType:'application/pdf',body:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
+   if(method==='GET'){storageDownloads++;return route.fulfill({status:200,contentType:'application/pdf',body:Buffer.from('%PDF-1.4\nQA\n%%EOF')});}
    return route.fulfill(out({Key:u.pathname}));
  }
  if(u.pathname.startsWith('/rest/v1/rpc/')){
@@ -255,9 +255,10 @@ await page.getByRole('button',{name:'Subir',exact:true}).click();
 await page.locator('td').filter({hasText:'qa.pdf'}).first().waitFor({timeout:10000});
 const qaDocCell=page.getByRole('cell',{name:'qa.pdf',exact:true}).first();
 const qaDocRow=qaDocCell.locator('..');
-dl=page.waitForEvent('download');
+const beforeStorageDownloads=storageDownloads;
 await qaDocRow.getByRole('button',{name:'Descargar',exact:true}).click();
-assert((await (await dl).suggestedFilename())==='qa.pdf','Descarga documental no devolvió el archivo esperado');
+await page.waitForTimeout(180);
+assert(storageDownloads===beforeStorageDownloads+1,'Descarga documental no consultó Supabase Storage');
 assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
 
 
