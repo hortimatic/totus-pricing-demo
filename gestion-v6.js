@@ -5,7 +5,7 @@
 const O=window.TotusGestion={
   loaded:false,loading:false,tab:'resumen',
   year:new Date().getFullYear(),quarter:Math.floor(new Date().getMonth()/3)+1,storeId:'all',
-  settings:null,stores:[],categories:[],documents:[],expenses:[],expenseLines:[],
+  settings:null,stores:[],categories:[],suppliers:[],documents:[],expenses:[],expenseLines:[],
   closings:[],drawers:[],closingDrawers:[],series:[],invoices:[],invoiceLines:[],
   taxPayments:[],retaBrackets:[],fiscalAdjustments:[],incomeAdjustments:[],gestorQuarterSummary:[],reconciliationNotes:[],
   closeDraft:null,expenseDraft:null,expenseDraftLines:[],invoiceDraft:null,invoiceDraftLines:[],
@@ -120,10 +120,11 @@ async function load(force=false){
   if(O.loaded&&!force)return;
   O.loading=true;
   try{
-    const [settings,stores,categories,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments,gestorQuarterSummary,reconciliationNotes]=await Promise.all([
+    const [settings,stores,categories,suppliers,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments,gestorQuarterSummary,reconciliationNotes]=await Promise.all([
       selectAll('ops_business_settings'),
       selectAll('ops_stores','sort_order',true),
       selectAll('ops_expense_categories','sort_order',true),
+      selectAll('ops_suppliers','name',true),
       selectAll('ops_documents','created_at',false),
       selectAll('ops_expenses','expense_date',false),
       selectAll('ops_expense_lines','sort_order',true),
@@ -143,6 +144,7 @@ async function load(force=false){
     O.settings=settings[0]||{};
     O.stores=stores.filter(x=>x.active!==false);
     O.categories=categories.filter(x=>x.active!==false);
+    O.suppliers=suppliers;
     O.documents=documents; O.expenses=expenses; O.expenseLines=expenseLines;
     O.closings=closings; O.drawers=drawers.filter(x=>x.active!==false); O.closingDrawers=closingDrawers;
     O.series=series; O.invoices=invoices; O.invoiceLines=invoiceLines; O.taxPayments=taxPayments;
@@ -306,7 +308,7 @@ function defaultExpenseLine(){
 }
 function newExpenseDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
- return {id:null,storeId:sid,date:isoToday(),supplier:'',taxId:'',invoice:'',documentKind:'factura',payment:'transferencia',paidStatus:'pagado',paidDate:isoToday(),amountPaid:'',notes:'',fiscalReviewed:false,managementOnly:false};
+ return {id:null,storeId:sid,date:isoToday(),supplierId:'',supplier:'',taxId:'',invoice:'',documentKind:'factura',payment:'transferencia',paidStatus:'pagado',paidDate:isoToday(),amountPaid:'',notes:'',fiscalReviewed:false,managementOnly:false};
 }
 function expenseLineCalc(l){
  const base=n(l.base),vatRate=n(l.vat),reRate=n(l.re),wRate=n(l.withholding);
@@ -330,7 +332,7 @@ function expensesHtml(){
  <div class="ops-form">
   <div><label>Fecha</label><input type="date" value="${h(d.date)}" oninput="opsExpenseField('date',this.value)"></div>
   <div><label>Establecimiento</label><select aria-label="Establecimiento del gasto" oninput="opsExpenseField('storeId',this.value)"><option value="">General</option>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
-  <div><label>Proveedor / servicio</label><input value="${h(d.supplier)}" oninput="opsExpenseField('supplier',this.value)"></div>
+  <div class="span2"><label>Proveedor / distribuidor</label><div class="ops-inline-field"><select aria-label="Proveedor del gasto" onchange="opsSelectSupplier(this.value)"><option value="">— Escribir manualmente —</option>${O.suppliers.filter(x=>x.active!==false).map(x=>`<option value="${x.id}" ${d.supplierId===x.id?'selected':''}>${h(x.name)}${x.tax_id?' · '+h(x.tax_id):''}</option>`).join('')}</select><button type="button" class="ghost" onclick="opsOpenSupplierEditor()">+ Nuevo</button><button type="button" class="ghost" onclick="opsOpenSupplierManager()">Gestionar</button></div><input style="margin-top:6px" value="${h(d.supplier)}" placeholder="Nombre del proveedor" oninput="opsExpenseField('supplier',this.value)"></div>
   <div><label>NIF / CIF proveedor</label><input value="${h(d.taxId)}" oninput="opsExpenseField('taxId',this.value)"></div>
   <div><label>Nº factura proveedor</label><input value="${h(d.invoice)}" oninput="opsExpenseField('invoice',this.value)"></div>
   <div><label>Tipo de documento</label><select aria-label="Tipo de documento del gasto" oninput="opsExpenseField('documentKind',this.value)">${[['factura','Factura'],['rectificativa','Rectificativa / abono'],['ticket','Ticket'],['nomina','Nómina'],['seguridad_social','Seguridad Social'],['recibo','Recibo'],['otro','Otro']].map(x=>`<option value="${x[0]}" ${d.documentKind===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
@@ -369,6 +371,41 @@ function expenseLineHtml(l,i){
   <div style="grid-column:1/-1" class="small">${h(cat?.aeat_group||'')} · Base ${eur(x.base)} · IVA ${eur(x.vat)} · RE ${eur(x.re)} · Ret. ${eur(x.withholding)} · <b>Imputable IRPF ${eur(x.imputable)}</b>${treatment==='partial'?` (${pct.toFixed(2).replace('.',',')} %)`:''}</div>
  </div>`;
 }
+window.opsSelectSupplier=function(id){
+ const d=O.expenseDraft||(O.expenseDraft=newExpenseDraft());d.supplierId=id||'';
+ const p=O.suppliers.find(x=>x.id===id);if(!p){render();return}
+ d.supplier=p.name||'';d.taxId=p.tax_id||'';d.payment=p.default_payment_method||'transferencia';d.documentKind=p.default_document_kind||'factura';
+ if(O.expenseDraftLines.length===1){
+  const l=O.expenseDraftLines[0];
+  if(p.default_category_id)l.categoryId=p.default_category_id;
+  l.vat=String(p.default_vat_rate??21).replace('.',',');l.re=String(p.default_re_rate??0).replace('.',',');
+  l.withholding=String(p.default_withholding_rate??0).replace('.',',');l.model=p.default_withholding_model||'';
+  l.deductible=p.default_deductible_irpf!==false;l.deductiblePct=String(p.default_deductible_pct??100).replace('.',',');
+ }
+ render();
+};
+function supplierEditorHtml(p={}){
+ return `<div class="ops-form"><div class="span2"><label>Nombre / razón social</label><input id="ops_sup_name" value="${h(p.name||'')}"></div><div><label>NIF/CIF</label><input id="ops_sup_tax" value="${h(p.tax_id||'')}"></div><div><label>Email</label><input id="ops_sup_email" value="${h(p.email||'')}"></div><div><label>Teléfono</label><input id="ops_sup_phone" value="${h(p.phone||'')}"></div><div class="span2"><label>Dirección</label><input id="ops_sup_address" value="${h(p.address||'')}"></div><div><label>Forma de pago habitual</label><select id="ops_sup_payment">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${(p.default_payment_method||'transferencia')===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label>Categoría habitual</label><select id="ops_sup_category"><option value="">Sin predeterminar</option>${O.categories.map(c=>`<option value="${c.id}" ${p.default_category_id===c.id?'selected':''}>${h(c.manager_code?c.manager_code+' · '+c.name:c.name)}</option>`).join('')}</select></div><div><label>IVA habitual %</label><input id="ops_sup_vat" inputmode="decimal" value="${h(p.default_vat_rate??21)}"></div><div><label>RE habitual %</label><input id="ops_sup_re" inputmode="decimal" value="${h(p.default_re_rate??0)}"></div><div><label>Retención habitual %</label><input id="ops_sup_wh" inputmode="decimal" value="${h(p.default_withholding_rate??0)}"></div><div class="span4"><label>Notas</label><textarea id="ops_sup_notes">${h(p.notes||'')}</textarea></div></div><div class="ops-preview-actions"><button class="primary" id="ops_sup_save">Guardar proveedor</button><button class="ghost" id="ops_sup_cancel">Cancelar</button></div>`;
+}
+window.opsOpenSupplierEditor=function(id=''){
+ const p=O.suppliers.find(x=>x.id===id)||{};
+ const m=openOpsModal(id?'Editar proveedor':'Nuevo proveedor',supplierEditorHtml(p));
+ m.querySelector('#ops_sup_cancel').onclick=closeOpsModal;
+ m.querySelector('#ops_sup_save').onclick=async()=>{
+  const row={name:m.querySelector('#ops_sup_name').value.trim(),tax_id:m.querySelector('#ops_sup_tax').value.trim(),email:m.querySelector('#ops_sup_email').value.trim(),phone:m.querySelector('#ops_sup_phone').value.trim(),address:m.querySelector('#ops_sup_address').value.trim(),default_payment_method:m.querySelector('#ops_sup_payment').value,default_category_id:m.querySelector('#ops_sup_category').value||null,default_vat_rate:n(m.querySelector('#ops_sup_vat').value),default_re_rate:n(m.querySelector('#ops_sup_re').value),default_withholding_rate:n(m.querySelector('#ops_sup_wh').value),notes:m.querySelector('#ops_sup_notes').value,active:true,updated_at:new Date().toISOString()};
+  if(!row.name)return m.querySelector('#ops_sup_name').focus();
+  const res=id?await sb.from('ops_suppliers').update(row).eq('id',id).select().single():await sb.from('ops_suppliers').insert({...row,source:'manual',created_by:authSession?.user?.id||null}).select().single();
+  if(res.error){alert('No se pudo guardar el proveedor: '+res.error.message);return}
+  closeOpsModal();await load(true);O.expenseDraft.supplierId=res.data.id;O.expenseDraft.supplier=res.data.name;O.expenseDraft.taxId=res.data.tax_id||'';render();
+ };
+};
+window.opsOpenSupplierManager=function(){
+ const rows=O.suppliers.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ const m=openOpsModal('Proveedores y distribuidores',`<div class="ops-actions" style="margin-bottom:12px"><button class="primary" onclick="opsCloseModal();opsOpenSupplierEditor()">+ Nuevo proveedor</button></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Proveedor</th><th>NIF/CIF</th><th>Pago</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(p=>`<tr><td><b>${h(p.name)}</b></td><td>${h(p.tax_id||'—')}</td><td>${h(p.default_payment_method||'—')}</td><td>${p.active!==false?'<span class="badge ok">Activo</span>':'<span class="badge warnb">Archivado</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsCloseModal();opsOpenSupplierEditor('${p.id}')">Editar</button><button class="ghost" onclick="opsToggleSupplier('${p.id}',${p.active===false?'true':'false'})">${p.active===false?'Reactivar':'Archivar'}</button>${manager()?`<button class="danger" onclick="opsDeleteSupplier('${p.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`,{wide:true});
+};
+window.opsToggleSupplier=async function(id,active){const {error}=await sb.from('ops_suppliers').update({active,updated_at:new Date().toISOString()}).eq('id',id);if(error)return alert(error.message);await load(true);opsOpenSupplierManager()};
+window.opsDeleteSupplier=async function(id){const p=O.suppliers.find(x=>x.id===id);if(!p)return;const reason=await askReason('Eliminar proveedor',`Se eliminará "${p.name}" del maestro. Los gastos históricos conservarán sus datos; solo perderán el vínculo al maestro.`,'Eliminar proveedor');if(!reason)return;const {error}=await sb.rpc('ops_delete_supplier_controlled',{p_supplier_id:id,p_reason:reason});if(error)return alert(error.message);await load(true);opsOpenSupplierManager()};
+
 window.opsExpenseField=(k,v,rer=false)=>{O.expenseDraft[k]=v;if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}if(rer)render();};
 window.opsExpenseLineField=function(i,k,v,recalc=false){
  const l=O.expenseDraftLines[i]; if(!l)return;l[k]=v;
@@ -406,7 +443,7 @@ window.opsQuickInternal=function(kind){
 window.opsNewExpense=function(){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render()};
 window.opsEditExpense=function(id){
  const e=O.expenses.find(x=>x.id===id);if(!e)return;
- O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed,managementOnly:!!e.management_only};
+ O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplierId:e.supplier_id||'',supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed,managementOnly:!!e.management_only};
  const lines=O.expenseLines.filter(x=>x.expense_id===id);O.expenseDraftLines=lines.length?lines.map(l=>({id:l.id,categoryId:l.category_id||'',description:l.description||'',base:String(l.base_amount??''),vat:String(l.vat_rate??0).replace('.',','),re:String(l.re_rate??0).replace('.',','),withholding:String(l.withholding_rate??0).replace('.',','),model:l.withholding_model||'',deductible:l.deductible_irpf!==false,deductiblePct:String(l.deductible_pct??(l.deductible_irpf!==false?100:0)).replace('.',','),fixed:!!l.fixed_asset})): [defaultExpenseLine()];
  render();window.scrollTo({top:0,behavior:'smooth'});
 };
@@ -477,7 +514,7 @@ window.opsSaveExpense=async function(){
    const file=document.getElementById('ops_exp_file')?.files?.[0];
    validateDocFile(file);
    const totals=draftExpenseTotals();
-   const payload={id:d.id||null,store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
+   const payload={id:d.id||null,store_id:d.storeId||null,supplier_id:d.supplierId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
    const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:Math.min(100,Math.max(0,n(l.deductiblePct??100))),fixed_asset:!!l.fixed,notes:''}));
    const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
    if(file){
