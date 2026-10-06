@@ -458,18 +458,21 @@ window.opsSaveTemplate=async function(id){
  if(error)return alert('No se pudo guardar la plantilla: '+error.message);
  await featureLoad(true);render();
 };
-window.opsDuplicateTemplate=async function(id){
+window.opsDuplicateTemplate=function(id){
  if(!manager())return;
  const src=E.templates.find(t=>t.id===id);if(!src)return;
- const name=prompt('Nombre de la nueva plantilla:',(src.name||'Plantilla')+' copia');if(!name)return;
- const row={...src};
- ['id','created_at','updated_at'].forEach(k=>delete row[k]);
- row.code='TPL-'+Date.now().toString(36).toUpperCase();
- row.name=name.trim();row.default_invoice=false;row.default_proforma=false;row.active=true;
- row.logo_path=null;row.logo_name=null;row.logo_mime=null;row.logo_size_bytes=0;
- const {data,error}=await sb.from('ops_document_templates').insert(row).select('id').single();
- if(error)return alert('No se pudo duplicar: '+error.message);
- await featureLoad(true);E.templateId=data.id;render();
+ const proposed=(src.name||'Plantilla')+' copia';
+ const modal=openOpsModal('Duplicar plantilla',`<div class="ops-form"><div class="span4"><label>Nombre de la nueva plantilla</label><input id="ops_tpl_copy_name" aria-label="Nombre de la nueva plantilla" value="${H(proposed)}"></div></div><div class="ops-preview-actions"><button class="primary" id="ops_tpl_copy_ok">Crear copia</button><button class="ghost" id="ops_tpl_copy_cancel">Cancelar</button></div>`);
+ modal.querySelector('#ops_tpl_copy_cancel').onclick=closeOpsModal;
+ modal.querySelector('#ops_tpl_copy_ok').onclick=async()=>{
+  const name=modal.querySelector('#ops_tpl_copy_name').value.trim();if(!name)return modal.querySelector('#ops_tpl_copy_name').focus();
+  const row={...src};['id','created_at','updated_at'].forEach(k=>delete row[k]);
+  row.code='TPL-'+Date.now().toString(36).toUpperCase();row.name=name;row.default_invoice=false;row.default_proforma=false;row.active=true;
+  row.logo_path=null;row.logo_name=null;row.logo_mime=null;row.logo_size_bytes=0;
+  const {data,error}=await sb.from('ops_document_templates').insert(row).select('id').single();
+  if(error)return alert('No se pudo duplicar: '+error.message);
+  closeOpsModal();await featureLoad(true);E.templateId=data.id;render();
+ };
 };
 window.opsSaveSeries=async function(id){if(!admin())return;const s=O.series.find(x=>x.id===id),prefix=document.getElementById('ser_p_'+id).value.trim(),next=parseInt(document.getElementById('ser_n_'+id).value,10),padding=parseInt(document.getElementById('ser_d_'+id).value,10);const max=Math.max(0,...O.invoices.filter(x=>x.series_id===id&&x.number!=null).map(x=>N(x.number)));if(!prefix||!next||next<=max)return alert(`El siguiente número debe ser mayor que ${max}.`);if(padding<1||padding>10)return alert('Dígitos entre 1 y 10.');const {error}=await sb.from('ops_invoice_series').update({prefix,next_number:next,padding}).eq('id',id);if(error)return alert(error.message);await window.opsLoadData(true);render()};
 window.opsPreviewDoc=async function(id){
