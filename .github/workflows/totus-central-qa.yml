@@ -1,5 +1,5 @@
 name: Totus Central QA
-# qa-revision: 7
+# qa-revision: 8
 
 on:
   workflow_dispatch:
