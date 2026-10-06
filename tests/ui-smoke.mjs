@@ -203,6 +203,18 @@ await page.locator('#ops_tpl_logo').setInputFiles({name:'logo-qa.png',mimeType:'
 await page.getByRole('button',{name:'Subir logo',exact:true}).click();
 await page.waitForTimeout(150);
 
+// Encargado: facturación debe quedar estrictamente en modo consulta.
+fixtures.team_members[0].role='encargado';
+fixtures.profiles[0].role='encargado';
+await page.reload({waitUntil:'networkidle'});
+await heading('Totus Central');
+await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');
+await page.getByText('Modo consulta:',{exact:false}).waitFor();
+assert(await page.getByRole('button',{name:'Guardar borrador',exact:true}).count()===0,'El encargado no debe poder guardar facturas');
+assert(await page.getByRole('button',{name:'+ Nuevo',exact:true}).count()===0,'El encargado no debe poder crear facturas');
+assert(await page.getByRole('button',{name:'Facturas',exact:true}).count()===1,'El encargado debe poder consultar facturas');
+assert(await page.getByRole('button',{name:'Proformas',exact:true}).count()===1,'El encargado debe poder consultar proformas');
+
 // Responsive smoke.
 await page.setViewportSize({width:390,height:844});
 await page.locator('.app-home-logo').click();await heading('Totus Central');
