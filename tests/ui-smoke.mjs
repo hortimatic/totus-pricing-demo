@@ -362,6 +362,8 @@ assert(fixtures.ops_suppliers.some(x=>x.name==='Distribuidor Nuevo QA'),'No se c
 await page.evaluate(()=>opsNewExpense());await page.waitForTimeout(50);
 savedExpenseRow=page.locator('tr').filter({hasText:'PROV-QA-001'}).first();
 await savedExpenseRow.getByRole('checkbox').check();
+assert((await page.locator('#ops_exp_selected_count').innerText()).includes('1 seleccionados'),'El contador de selección masiva de gastos no se actualizó');
+assert(!(await page.locator('#ops_exp_download_selected').isDisabled()),'La descarga masiva debe activarse al seleccionar un gasto');
 let expenseZipPromise=page.waitForEvent('download');
 await page.getByRole('button',{name:'Descargar facturas',exact:true}).click();
 const expenseZip=await expenseZipPromise;
@@ -565,9 +567,11 @@ const reportQa=await page.evaluate(()=>{
   const i=window.__TotusOpsTest.managerIncomeRows('2026-01-01','2026-12-31');
   return {g,s,i};
 });
-assert(reportQa.g[0].join('|')==='Orden|Fecha|Nºfra.rec.|Nºfra.proveedor|Rt|Identificación|Concepto|Base IVA|%|Cuota IVA|Base R. Equiv.|% R.Eq.|Cuota R.Equiv.|Imputable a IRPF|Base retención|% ret.|Cuota retenida','Cabecera de gastos no coincide con gestoría');
-assert(reportQa.g.some(r=>String(r[6]).includes('IVA SOPORTADO(RECARGO - REAGYP)')),'Falta fila separada de IVA/RE en gastos');
-assert(reportQa.g.at(-1)[6]==='TOTAL ACUMULADO','Falta total acumulado en gastos');
+assert(reportQa.g[0].join('|')==='Orden|Fecha|Nº fra. recibida|Nº fra. proveedor|Rt|NIF/CIF|Razón social|Concepto|Base IVA|% IVA|Cuota IVA|Base R.E.|% R.E.|Cuota R.E.|Imputable a IRPF|Base retención|% retención|Cuota retenida|Total factura|Neto pagado','Cabecera de gastos no coincide con las 20 columnas reales de gestoría');
+assert(reportQa.g[0].length===20,'El libro de gastos debe conservar exactamente 20 columnas');
+assert(reportQa.g.at(-1)[7]==='TOTAL ACUMULADO','Falta total acumulado en gastos');
+assert(String(reportQa.g.at(-1)[18]).startsWith('=SUM(S2:S'),'Falta fórmula de Total factura');
+assert(String(reportQa.g.at(-1)[19]).startsWith('=SUM(T2:T'),'Falta fórmula de Neto pagado');
 assert(reportQa.s[0][0]==='Código'&&reportQa.s[0][1]==='Descripción'&&reportQa.s[0][6]==='Imputable IRPF','Desglose de conceptos/códigos incorrecto');
 assert(reportQa.i[0][0]==='Orden'&&reportQa.i[0][2]==='Nº factura'&&reportQa.i[0][4]==='Identificación del Cliente','Cabecera de ingresos no coincide con gestoría');
 assert(reportQa.i.at(-1)[5]==='TOTAL ACUMULADO','Falta total acumulado en ingresos');
@@ -581,9 +585,10 @@ assert((await expensesXlsx.suggestedFilename()).endsWith('.xlsx'),'Informe de ga
 const expensesWb=XLSXNode.readFile(await expensesXlsx.path(),{cellStyles:true});
 assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes('DESGLOSE CONCEPTOS'),'Libro de gastos no contiene sus hojas esperadas');
 const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
-assert(expensesRows[0][0]==='Orden'&&expensesRows[0][6]==='Concepto'&&expensesRows.at(-1)[6]==='TOTAL ACUMULADO','Contenido del XLSX de gastos incorrecto');
-assert(expensesWb.Sheets.GASTOS.A1.s,'El XLSX de gastos no conserva estilo de cabecera');
-assert(expensesWb.Sheets.GASTOS['H'+expensesRows.length].f,'El total de gastos no es una fórmula real de Excel');
+assert(expensesRows[0].length===20&&expensesRows[0][5]==='NIF/CIF'&&expensesRows[0][6]==='Razón social'&&expensesRows[0][7]==='Concepto'&&expensesRows[0][18]==='Total factura'&&expensesRows[0][19]==='Neto pagado'&&expensesRows.at(-1)[7]==='TOTAL ACUMULADO','Contenido/orden del XLSX de gastos incorrecto');
+assert(expensesWb.Sheets.GASTOS.A1.s&&expensesWb.Sheets.GASTOS.T1.s,'El XLSX de gastos no conserva estilo completo de cabecera');
+assert(expensesWb.Sheets.GASTOS['I'+expensesRows.length].f,'El total de Base IVA no es una fórmula real de Excel');
+assert(expensesWb.Sheets.GASTOS['S'+expensesRows.length].f&&expensesWb.Sheets.GASTOS['T'+expensesRows.length].f,'Los totales de factura/neto no son fórmulas reales de Excel');
 const conceptRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets['DESGLOSE CONCEPTOS'],{header:1,raw:false});
 assert(conceptRows[0][0]==='Código'&&conceptRows.some(r=>String(r[0])==='600'),'Desglose sin códigos contables');
 assert(expensesWb.Sheets['DESGLOSE CONCEPTOS']['A1'].s,'Desglose de conceptos sin formato');
