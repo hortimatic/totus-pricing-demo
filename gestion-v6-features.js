@@ -23,10 +23,6 @@ async function featureLoad(force=false){
  E.loaded=true;
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
 }
-function docTpl(id,type='factura'){
- const inv=O.invoices.find(i=>i.id===id);if(inv?.design_snapshot&&Object.keys(inv.design_snapshot).length)return inv.design_snapshot;
- return E.templates.find(t=>t.id===(id||E.templateId))||E.templates.find(t=>type==='proforma'?t.default_proforma:t.default_invoice)||E.templates[0]||{};
-}
 function historicalIncome(from,to,store='all'){
  return sum(E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to&&(store==='all'||x.store_id===store)),x=>N(x.total_income));
 }
