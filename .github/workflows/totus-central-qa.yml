@@ -1,8 +1,12 @@
 name: Totus Central QA
-# qa-revision: 5
+# qa-revision: 6
 
 on:
   workflow_dispatch:
+  push:
+    branches: [desarrollo-v6]
+    paths:
+      - '.github/workflows/totus-central-qa.yml'
 
 jobs:
   ui-smoke:
