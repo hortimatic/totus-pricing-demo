@@ -50,3 +50,20 @@
 }
 
 .app-home-logo{cursor:pointer;user-select:none}.app-home-logo:focus-visible{outline:2px solid rgba(75,217,255,.65);outline-offset:4px;border-radius:8px}
+
+/* V7 responsive header: keep home/user controls clear of the scrollable module row */
+@media(max-width:1050px){
+ .top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+ .app-home-logo{grid-column:1;grid-row:1;position:relative;z-index:3}
+ .top .search{grid-column:2;grid-row:1;width:100%;max-width:100%;min-width:0}
+ .top .userpill{grid-column:3;grid-row:1;position:relative;z-index:3}
+ .app-nav{grid-column:1/-1;grid-row:2;order:initial;position:relative;z-index:1;max-width:100%;width:100%}
+}
+@media(max-width:650px){
+ .top{grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;padding:10px 12px}
+ .app-home-logo{grid-column:1;grid-row:1}
+ .top .userpill{grid-column:2;grid-row:1}
+ .top .userpill>div:nth-child(2){display:none}
+ .top .search{grid-column:1/-1;grid-row:2}
+ .app-nav{grid-column:1/-1;grid-row:3}
+}
