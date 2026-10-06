@@ -474,7 +474,24 @@ window.billInvoicePdf=async function(id,saveServer=false){
  try{
   if(inv.generated_document_id&&!saveServer){const d=O.documents.find(x=>x.id===inv.generated_document_id);if(d)return window.opsDownloadDoc(d.id)}
   const blob=await makePdf('invoice',inv,ls,tpl),filename=slug(inv.display_number||'factura')+'.pdf';
-  if(saveServer&&!inv.generated_document_id&&typeof window.opsUploadGeneratedInvoice==='function')await window.opsUploadGeneratedInvoice(inv,blob,filename);
+  if(saveServer&&!inv.generated_document_id){
+   const file=new File([blob],filename,{type:'application/pdf'});
+   const path=['facturas_emitidas',String(inv.issue_date||today()).slice(0,4),String(inv.issue_date||today()).slice(5,7),slug(filename)].join('/');
+   const {error:upErr}=await sb.storage.from('business-documents').upload(path,file,{upsert:false,contentType:'application/pdf'});
+   if(upErr&&!/already exists/i.test(upErr.message||''))throw upErr;
+   let docId=null;
+   const existing=O.documents.find(d=>d.storage_path===path);
+   if(existing)docId=existing.id;
+   else{
+    const {data:docRow,error:docErr}=await sb.from('ops_documents').insert({
+      store_id:inv.store_id||null,doc_type:'factura_emitida',document_date:inv.issue_date,
+      supplier_or_customer:inv.customer_name||'',tax_id:inv.customer_tax_id||'',invoice_number:inv.display_number||'',
+      category_code:'700',status:'archivada',storage_path:path,original_name:filename,mime_type:'application/pdf',
+      size_bytes:file.size,sha256:'',linked_entity_type:'sales_invoice',linked_entity_id:inv.id,notes:'PDF generado y archivado automáticamente al emitir.',uploaded_by:authSession.user.id
+    }).select('id').single();if(docErr)throw docErr;docId=docRow.id;
+   }
+   if(docId){const {error:lnkErr}=await sb.from('ops_sales_invoices').update({generated_document_id:docId}).eq('id',inv.id);if(lnkErr)throw lnkErr;await window.opsLoadData(true)}
+  }
   downloadBlob(blob,filename);
  }catch(e){alert('No se pudo generar el PDF: '+e.message)}
 };
