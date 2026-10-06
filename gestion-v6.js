@@ -43,8 +43,8 @@ function dlBlob(blob,name){
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);
 }
 function statusBadge(v){
-  const good=['pagado','pagada','entregada_gestor','archivada','emitida','cerrado','revisada'];
-  const bad=['anulada','fallido'];
+  const good=['pagado','pagada','entregada_gestor','archivada','emitida','cerrado','revisada','aceptada','convertida'];
+  const bad=['anulada','rechazada','fallido'];
   return `<span class="badge ${good.includes(v)?'ok':bad.includes(v)?'badb':'warnb'}">${h(String(v||'').replaceAll('_',' '))}</span>`;
 }
 async function selectAll(table,orderCol=null,asc=false){
@@ -66,6 +66,8 @@ async function audit(area,action,entityId=null,detail={}){
 }
 function manager(){ return ['admin','gerente'].includes(currentRole()); }
 function adminOnly(){ return currentRole()==='admin'; }
+
+O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly};
 
 async function load(force=false){
   if(O.loading)return;
@@ -234,15 +236,18 @@ function headerHtml(){
 }
 function managementHtml(){
  if(!O.loaded)return `<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>Preparando ${sectionMeta()[0].toLowerCase()}…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando los datos necesarios…</div>`;
- let body='';
- if(O.tab==='resumen')body=dashboardHtml();
- if(O.tab==='cajas')body=closingsHtml();
- if(O.tab==='gastos')body=expensesHtml();
- if(O.tab==='facturas')body=window.BillingV7?window.BillingV7.html():invoicesHtml();
- if(O.tab==='documentos')body=documentsHtml();
- if(O.tab==='fiscal')body=fiscalHtml();
- if(O.tab==='informes')body=reportsHtml();
- if(O.tab==='config')body=`${window.adminStripHtml?window.adminStripHtml('config'):''}${configHtml()}`;
+ const moduleBody=window.TotusGestionExt?.body?.(O.tab);
+ let body=moduleBody??'';
+ if(moduleBody==null){
+  if(O.tab==='resumen')body=dashboardHtml();
+  if(O.tab==='cajas')body=closingsHtml();
+  if(O.tab==='gastos')body=expensesHtml();
+  if(O.tab==='facturas')body=invoicesHtml();
+  if(O.tab==='documentos')body=documentsHtml();
+  if(O.tab==='fiscal')body=fiscalHtml();
+  if(O.tab==='informes')body=reportsHtml();
+  if(O.tab==='config')body=`${window.adminStripHtml?window.adminStripHtml('config'):''}${configHtml()}`;
+ }
  return `<div class="ops-wrap">${headerHtml()}${body}</div>`;
 }
 window.opsManagementHtml=managementHtml;
@@ -832,6 +837,7 @@ window.goOps=async function(tab='resumen'){
  render();
  try{
    await load();
+   await window.TotusGestionExt?.load?.();
    if(O.tab==='cajas'&&(!O.closeDraft?.storeId||!O.stores.some(s=>s.id===O.closeDraft.storeId)))O.closeDraft=newClosingDraft();
    if(O.tab==='gastos'&&(!O.expenseDraft?.storeId||!O.stores.some(s=>s.id===O.expenseDraft.storeId))){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
    render();
