@@ -95,6 +95,15 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
      const assets_bytes=fixtures.ops_document_templates.reduce((a,x)=>a+Number(x.logo_size_bytes||0),0);
      return route.fulfill(out({documents_count:fixtures.ops_documents.length,documents_bytes,assets_count:fixtures.ops_document_templates.filter(x=>Number(x.logo_size_bytes||0)>0).length,assets_bytes,total_bytes:documents_bytes+assets_bytes}));
    }
+   if(fn==='ops_delete_manual_expense'){
+     const id=body.p_expense_id,row=fixtures.ops_expenses.find(x=>x.id===id);
+     if(!row||row.source!=='manual')return route.fulfill(out({message:'not allowed'},400));
+     const doc=fixtures.ops_documents.find(x=>x.id===row.document_id&&x.linked_entity_type==='expense'&&x.linked_entity_id===id);
+     fixtures.ops_expenses=fixtures.ops_expenses.filter(x=>x.id!==id);
+     fixtures.ops_expense_lines=fixtures.ops_expense_lines.filter(x=>x.expense_id!==id);
+     if(doc)fixtures.ops_documents=fixtures.ops_documents.filter(x=>x.id!==doc.id);
+     return route.fulfill(out({expense_id:id,document_id:doc?.id||null,storage_path:doc?.storage_path||null}));
+   }
    if(fn==='ops_save_closing'){
      const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
      const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
@@ -481,6 +490,21 @@ await page.waitForTimeout(180);
 assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Duplicar plantilla no creó una copia');
 const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
 assert(!duplicatedTemplate.logo_path&&Number(duplicatedTemplate.logo_size_bytes||0)===0,'La plantilla duplicada heredó indebidamente el archivo de logo');
+
+// Eliminar gasto manual: doble confirmación y cascada de líneas.
+await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
+await page.evaluate(()=>opsNewExpense());
+await field('Proveedor / servicio').fill('Gasto eliminable QA');
+await field('Base').fill('12');
+await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
+await page.waitForTimeout(180);
+const disposable=fixtures.ops_expenses.find(x=>x.supplier_name==='Gasto eliminable QA');
+assert(disposable&&fixtures.ops_expense_lines.some(x=>x.expense_id===disposable.id),'No se creó gasto temporal para probar borrado');
+const disposableRow=page.locator('tr').filter({hasText:'Gasto eliminable QA'}).first();
+await disposableRow.getByRole('button',{name:'Eliminar',exact:true}).click();
+await page.waitForTimeout(180);
+assert(!fixtures.ops_expenses.some(x=>x.id===disposable.id),'Eliminar gasto manual no borró la cabecera');
+assert(!fixtures.ops_expense_lines.some(x=>x.expense_id===disposable.id),'Eliminar gasto manual no borró las líneas');
 
 // Encargado: facturación debe quedar estrictamente en modo consulta.
 fixtures.team_members[0].role='encargado';
