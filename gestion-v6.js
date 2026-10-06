@@ -76,7 +76,12 @@ const OPS_HELP={
  'facturas.external':['Documento externo','Úsalo cuando la factura ya se emitió fuera de Totus. Debes indicar el número utilizado y adjuntar el original; Totus lo registra sin renumerarlo.'],
  'gastos.internal':['Solo control interno','Afecta al resultado real del negocio, pero se excluye de cálculos fiscales, IRPF y exportación para gestoría.'],
  'documentos.estado':['Estado documental','Sirve para saber si un justificante está pendiente, revisado, preparado o ya entregado a gestoría. No modifica el gasto o factura original.'],
- 'informes.gestor':['Paquete gestoría','Genera una estructura estable con ingresos, gastos, diarios, resumen y documentos. Los gastos internos quedan fuera.']
+ 'informes.gestor':['Paquete gestoría','Genera una estructura estable con ingresos, gastos, diarios, resumen y documentos. Los gastos internos quedan fuera.'],
+ 'fiscal.130':['Modelo 130','Estimación acumulada del pago fraccionado de IRPF. Parte de ingresos y gastos deducibles, aplica difícil justificación, resta pagos anteriores y retenciones soportadas. Es orientativa hasta contrastar con gestoría.'],
+ 'fiscal.diff':['Difícil justificación','Porcentaje aplicado sobre el rendimiento previo, limitado por el máximo anual configurado. Totus lo muestra separado para que puedas ver su impacto.'],
+ 'fiscal.simulator':['Simulador fiscal','Permite probar un gasto deducible adicional sin guardarlo. Solo modifica temporalmente la estimación para ayudarte a decidir antes del cierre.'],
+ 'fiscal.reta':['RETA orientativo','Proyecta el rendimiento neto mensual y lo compara con los tramos/base configurados para el año. No sustituye la regularización oficial de Seguridad Social.'],
+ 'admin.roles':['Roles de Totus','Admin: control total. Gerente: operación avanzada, facturación, plantillas y revisión. Encargado: trabajo diario de cajas/gastos/documentos y consulta de facturación, sin administración sensible.']
 };
 let __opsModal=null;
 function closeOpsModal(){
