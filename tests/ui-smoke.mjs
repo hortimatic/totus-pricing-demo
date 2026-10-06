@@ -94,6 +94,7 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
 
 function assert(cond,msg){if(!cond)throw new Error(msg)}
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
+function field(label){return page.locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
 
 await page.goto(base,{waitUntil:'networkidle'});
 await heading('Totus Central');
@@ -112,14 +113,14 @@ assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálcul
 
 // Cajas: isolated page and live cash calculation.
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');
-await page.getByLabel('Tarjeta').fill('333,31');
-const closeInputs=page.getByLabel(/queda en caja/);
+await field('Tarjeta').fill('333,31');
+const closeInputs=page.locator('label').filter({hasText:'queda en caja'}).locator('..').locator('input');
 assert(await closeInputs.count()===2,'Hortimatic debe mostrar dos cajas');
-await page.getByLabel(/Caja vape · apertura/).fill('100');
-await page.getByLabel(/Caja vape · queda en caja/).fill('130');
-await page.getByLabel(/Caja head · apertura/).fill('100');
-await page.getByLabel(/Caja head · queda en caja/).fill('120');
-await page.getByLabel('Salida de caja').fill('50');
+await field('Caja vape · apertura').fill('100');
+await field('Caja vape · queda en caja').fill('130');
+await field('Caja head · apertura').fill('100');
+await field('Caja head · queda en caja').fill('120');
+await field('Salida de caja').fill('50');
 await page.waitForTimeout(100);
 assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo efectivo de cierre incorrecto');
 
@@ -127,7 +128,7 @@ assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
 await page.getByRole('button',{name:'Almacén 300 €',exact:true}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Almacén debe quedar como solo control interno');
-assert(await page.getByLabel('Proveedor / servicio').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
+assert(await field('Proveedor / servicio').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
 await page.getByRole('button',{name:'Horas extra',exact:true}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Horas extra debe quedar fuera de fiscalidad');
 
@@ -136,11 +137,11 @@ await page.getByRole('button',{name:'Facturación',exact:true}).click();await he
 await page.getByRole('heading',{name:'Factura',exact:true}).waitFor();
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
-await page.getByLabel('Cliente / razón social').fill('Cliente QA');
-await page.getByLabel('Descripción').fill('Servicio QA');
-await page.getByLabel('Cant.').fill('2');
-await page.getByLabel('Precio base').fill('100');
-await page.getByLabel('Dto %').fill('10');
+await field('Cliente / razón social').fill('Cliente QA');
+await field('Descripción').fill('Servicio QA');
+await field('Cant.').fill('2');
+await field('Precio base').fill('100');
+await field('Dto %').fill('10');
 await page.waitForTimeout(200);
 assert((await page.locator('.ops-invoice-total').innerText()).includes('217,80'),'Total de proforma incorrecto');
 const pdfDownload=page.waitForEvent('download');
@@ -156,7 +157,7 @@ assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Se
 // Fiscalidad: counters and simulator.
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');
 await page.getByRole('heading',{name:/Contador IRPF/}).waitFor();
-await page.getByLabel('Gasto deducible adicional').fill('500');
+await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 
@@ -170,10 +171,10 @@ dl=page.waitForEvent('download');await page.getByRole('button',{name:'Preparar p
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');
 await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');
 await page.getByText('Datos fiscales',{exact:true}).waitFor();
-await page.getByLabel('Color de texto').waitFor();
-await page.getByLabel('Posición logo').waitFor();
-await page.getByLabel('Título factura').waitFor();
-await page.getByLabel('Título proforma').waitFor();
+await field('Color de texto').waitFor();
+await field('Posición logo').waitFor();
+await field('Título factura').waitFor();
+await field('Título proforma').waitFor();
 
 // Responsive smoke.
 await page.setViewportSize({width:390,height:844});
