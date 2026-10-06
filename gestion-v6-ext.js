@@ -151,10 +151,12 @@ window.opsSaveDocument=async function(){if(!manager())return alert('Facturación
   const external=d.origin==='externa';let num=external?parseInt(d.externalNumber,10):null;if(external&&(!num||num<1))return alert('Indica el número usado fuera.');
   const payload={id:d.id||null,series_id:d.seriesId,store_id:d.storeId||null,issue_date:d.date,due_date:d.dueDate||null,operation_date:d.operationDate||null,origin:d.origin,document_type:d.documentType,invoice_kind:d.invoiceKind||'invoice',customer_id:d.customerId||null,customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept||'',payment_method:d.payment,paid_status:d.paidStatus||'pendiente',paid_date:d.paidDate||null,template_id:d.templateId||null,terms_text:d.terms||'',footer_text:d.footer||'',purchase_order_ref:d.poRef||'',include_in_income:!!d.includeIncome,notes:d.notes||''};
   const lines=O.invoiceDraftLines.map((l,i)=>({sort_order:(i+1)*10,description:l.description.trim(),quantity:N(l.qty),unit_price_base:N(l.unit),discount_pct:N(l.discount),vat_rate:N(l.vat)}));
+  const file=external?document.getElementById('ops_external_doc_file')?.files?.[0]:null;
+  if(file)window.__opsValidateDocumentFile(file);
   const {data:id,error}=await sb.rpc('ops_save_document_draft',{p_document:payload,p_lines:lines});if(error)throw error;
   if(external){
+    if(file)await window.__opsUploadDocumentFile(file,id,d);
     const er=await sb.rpc('ops_register_external_document',{p_document_id:id,p_number:num});if(er.error)throw er.error;
-    const file=document.getElementById('ops_external_doc_file')?.files?.[0];if(file)await window.__opsUploadDocumentFile(file,id,d);
   }
   await audit('facturas',d.id?'actualizar_borrador':external?'registrar_externa':'crear_borrador',id,{tipo:d.documentType,cliente:d.customer,total:draftTotals().total});
   await window.opsLoadData(true);await extLoad(true);opsNewDocument(d.documentType);
