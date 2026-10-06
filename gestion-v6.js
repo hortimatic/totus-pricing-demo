@@ -8,7 +8,7 @@ const O=window.TotusGestion={
   settings:null,stores:[],categories:[],suppliers:[],personnel:[],documents:[],expenses:[],expenseLines:[],
   closings:[],drawers:[],closingDrawers:[],series:[],invoices:[],invoiceLines:[],
   taxPayments:[],retaBrackets:[],fiscalAdjustments:[],incomeAdjustments:[],gestorQuarterSummary:[],reconciliationNotes:[],
-  closeDraft:null,expenseDraft:null,expenseDraftLines:[],invoiceDraft:null,invoiceDraftLines:[],
+  closeDraft:null,expenseDraft:null,expenseDraftLines:[],expenseSelected:[],invoiceDraft:null,invoiceDraftLines:[],
   docFilter:{from:'',to:'',store:'all',status:'all',type:'all',q:''},
   reportFrom:'',reportTo:'',plannedSpend:'',
   saving:false
@@ -345,8 +345,8 @@ function expensesHtml(){
  <div class="ops-totalbox"><div><small>Base + IVA + RE</small><b>${eur(t.accounting)}</b></div><div><small>Retenciones</small><b>${eur(t.withholding)}</b></div><div><small>A pagar proveedor</small><b>${eur(t.payable)}</b></div><div><small>Pagado indicado</small><b>${d.amountPaid!==''?eur(n(d.amountPaid)):eur(t.payable)}</b></div></div>
  <div class="invoice-section-title">4 · Observaciones</div><div class="ops-form"><div class="span4"><label>Notas</label><textarea oninput="opsExpenseField('notes',this.value)">${h(d.notes)}</textarea></div></div>
  </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3><div class="small">Admin/Gerencia pueden corregir o eliminar cualquier registro con motivo y trazabilidad. Los importados muestran siempre su procedencia.</div></div><button class="secondary" onclick="opsExportExpenses()">Exportar CSV</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}${e.source!=='manual'?'<div><span class="badge">Importado</span></div>':''}${e.source==='importacion_excel'&&!e.fiscal_reviewed&&!e.management_only?'<div><span class="badge warnb">Fiscal pendiente</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
+ <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3><div class="small">Admin/Gerencia pueden corregir o eliminar cualquier registro con motivo y trazabilidad. Los importados muestran siempre su procedencia.</div></div><div class="ops-actions"><button class="secondary" onclick="opsDownloadSelectedExpenses()">Descargar facturas</button>${manager()?'<button class="danger" onclick="opsDeleteSelectedExpenses()">Eliminar selección</button>':''}<button class="secondary" onclick="opsExportExpenses()">Exportar CSV</button></div></div>
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th><input type="checkbox" aria-label="Seleccionar todos los gastos visibles" onchange='opsExpenseSelectAll(${JSON.stringify(rows.map(x=>x.id))},this.checked)'></th><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td><input type="checkbox" aria-label="Seleccionar gasto ${h(e.supplier_name)}" ${O.expenseSelected.includes(e.id)?'checked':''} onchange="opsExpenseSelect('${e.id}',this.checked)"></td><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}${e.source!=='manual'?'<div><span class="badge">Importado</span></div>':''}${e.source==='importacion_excel'&&!e.fiscal_reviewed&&!e.management_only?'<div><span class="badge warnb">Fiscal pendiente</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
  </div>`;
 }
 function expenseLineHtml(l,i){
@@ -397,6 +397,30 @@ window.opsOpenSupplierManager=function(){
 };
 window.opsToggleSupplier=async function(id,active){const {error}=await sb.from('ops_suppliers').update({active,updated_at:new Date().toISOString()}).eq('id',id);if(error)return alert(error.message);await load(true);opsOpenSupplierManager()};
 window.opsDeleteSupplier=async function(id){const p=O.suppliers.find(x=>x.id===id);if(!p)return;const reason=await askReason('Eliminar proveedor',`Se eliminará "${p.name}" del maestro. Los gastos históricos conservarán sus datos; solo perderán el vínculo al maestro.`,'Eliminar proveedor');if(!reason)return;const {error}=await sb.rpc('ops_delete_supplier_controlled',{p_supplier_id:id,p_reason:reason});if(error)return alert(error.message);await load(true);opsOpenSupplierManager()};
+
+window.opsExpenseSelect=function(id,on){const set=new Set(O.expenseSelected||[]);on?set.add(id):set.delete(id);O.expenseSelected=[...set]};
+window.opsExpenseSelectAll=function(ids,on){const set=new Set(O.expenseSelected||[]);ids.forEach(id=>on?set.add(id):set.delete(id));O.expenseSelected=[...set];render()};
+window.opsDownloadSelectedExpenses=async function(){
+ const selected=O.expenses.filter(e=>(O.expenseSelected||[]).includes(e.id));if(!selected.length)return alert('Selecciona al menos un gasto.');
+ if(!window.JSZip)return alert('ZIP no disponible.');
+ const z=new JSZip(),missing=[];let added=0;
+ for(const e of selected){
+  const d=O.documents.find(x=>x.id===e.document_id);
+  if(!d){missing.push(`${e.expense_date} · ${e.supplier_name} · ${e.invoice_number||'sin nº factura'}`);continue}
+  const {data,error}=await sb.storage.from('business-documents').download(d.storage_path);
+  if(error){missing.push(`${e.expense_date} · ${e.supplier_name} · ${e.invoice_number||'sin nº factura'} · ERROR DESCARGA`);continue}
+  z.file(`${safeSegment(e.supplier_name)}_${safeSegment(e.invoice_number||e.expense_date)}_${safeSegment(d.original_name)}`,data);added++;
+ }
+ if(missing.length)z.file('FALTAN_FACTURAS.txt','Faltan o no se pudieron descargar estos justificantes:\n\n'+missing.join('\n'));
+ if(!added&&!missing.length)return alert('La selección no contiene facturas adjuntas.');
+ dlBlob(await z.generateAsync({type:'blob'}),`Totus_facturas_gastos_${isoToday()}.zip`);
+};
+window.opsDeleteSelectedExpenses=async function(){
+ if(!manager())return;const selected=O.expenses.filter(e=>(O.expenseSelected||[]).includes(e.id));if(!selected.length)return alert('Selecciona al menos un gasto.');
+ const reason=await askReason('Eliminar gastos seleccionados',`Vas a eliminar ${selected.length} gastos. Se guardará snapshot individual de cada registro.`,'Eliminar selección');if(!reason)return;
+ for(const e of selected){const {data,error}=await sb.rpc('ops_delete_expense_controlled',{p_expense_id:e.id,p_reason:reason});if(error)return alert('No se pudo eliminar '+e.supplier_name+': '+error.message);for(const path of (data?.storage_paths||[]))await sb.storage.from('business-documents').remove([path])}
+ O.expenseSelected=[];await load(true);render();
+};
 
 window.opsExpenseField=(k,v,rer=false)=>{O.expenseDraft[k]=v;if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}if(rer)render();};
 window.opsExpenseLineField=function(i,k,v,recalc=false){
