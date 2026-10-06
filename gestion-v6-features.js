@@ -519,12 +519,11 @@ function documentsHtml(){
 window.opsDeleteDocument=async function(id){
  if(!manager())return alert('Solo administración o gerencia puede eliminar documentos.');
  const d=O.documents.find(x=>x.id===id);if(!d)return;
- if(String(d.linked_entity_type||'').startsWith('sales_invoice'))return alert('Los documentos ligados a facturación no se eliminan desde el archivo.');
- if(!confirm(`¿Eliminar definitivamente ${d.original_name}? El registro desaparecerá de Totus.`))return;
+ const reason=await askReason('Eliminar documento',`Vas a eliminar "${d.original_name}". Si está enlazado a un gasto o factura, se quitará también ese vínculo. El cambio quedará registrado.`,'Eliminar documento');
+ if(!reason)return;
  try{
-  const {data,error}=await sb.rpc('ops_delete_document',{p_id:id});if(error)throw error;
+  const {data,error}=await sb.rpc('ops_delete_document_controlled',{p_document_id:id,p_reason:reason});if(error)throw error;
   if(data?.storage_path){const rm=await sb.storage.from('business-documents').remove([data.storage_path]);if(rm.error)console.warn('Archivo físico pendiente de limpieza:',rm.error.message)}
-  await audit('documentos','eliminar',id,{archivo:d.original_name});
   await window.opsLoadData(true);await featureLoad(true);render();
  }catch(e){alert('No se pudo eliminar el documento: '+e.message)}
 };
@@ -571,7 +570,7 @@ function managerExpenseRows(from,to){
  O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
  let order=Math.max(0,...rows.map(r=>N(r[0])));
  O.expenses
-  .filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to))
+  .filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to)&&(e.source!=='importacion_excel'||e.fiscal_reviewed))
   .sort((x,y)=>x.expense_date.localeCompare(y.expense_date)||String(x.invoice_number||'').localeCompare(String(y.invoice_number||'')))
   .forEach(e=>(lineMap.get(e.id)||[]).forEach(l=>{
     const c=O.categories.find(x=>x.id===l.category_id);
@@ -607,7 +606,7 @@ function managerExpenseSummaryRows(from,to){
  };
  E.gestorRows.filter(r=>inRange(r.expense_date,from,to)).forEach(r=>add(r.concept_code,r.concept_text,r.base_vat,r.vat_amount,r.re_base,r.re_amount,r.imputable_irpf,r.withholding_base,r.withholding_amount));
  const lineMap=new Map();O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
- O.expenses.filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to)).forEach(e=>(lineMap.get(e.id)||[]).forEach(l=>{
+ O.expenses.filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to)&&(e.source!=='importacion_excel'||e.fiscal_reviewed)).forEach(e=>(lineMap.get(e.id)||[]).forEach(l=>{
   const c=O.categories.find(x=>x.id===l.category_id),deductible=l.deductible_irpf!==false&&!l.fixed_asset;
   const base=N(l.base_amount),vat=N(l.vat_amount),re=N(l.re_amount),tax=vat+re;
   add(c?.manager_code||'',c?.name||l.description,base,vat,N(l.re_base),re,deductible?base:0,N(l.withholding_base),N(l.withholding_amount));
@@ -739,13 +738,15 @@ window.opsGestorPack=async function(){
   .filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo))
   .filter(d=>!(d.linked_entity_type==='expense'&&internalExpenseIds.has(d.linked_entity_id)))
   .sort((a,b)=>String(a.document_date||'').localeCompare(String(b.document_date||''))||String(a.supplier_or_customer||'').localeCompare(String(b.supplier_or_customer||'')));
+ const missingDocs=[];
  for(const doc of docs){
    const {data,error}=await sb.storage.from('business-documents').download(doc.storage_path);
-   if(error)continue;
+   if(error){missingDocs.push(`${doc.document_date||'sin_fecha'} · ${doc.supplier_or_customer||'sin proveedor'} · ${doc.invoice_number||'sin número'} · ${doc.original_name}`);continue}
    const inv=String(doc.invoice_number||'SIN_NUMERO').replace(/[^a-zA-Z0-9._-]+/g,'_');
    const original=String(doc.original_name||'documento').replace(/[^a-zA-Z0-9._-]+/g,'_');
    z.file(gestorDocFolder(doc,base)+`/${doc.document_date||'sin_fecha'}_${inv}_${original}`,data);
  }
+ if(missingDocs.length)throw new Error('Paquete no generado: faltan '+missingDocs.length+' documentos físicos. '+missingDocs.join(' | '));
  z.file(base+'/00_LEEME.txt',
    'PAQUETE DE GESTORIA GENERADO POR TOTUS CENTRAL\r\n\r\n'+
    '01_INGRESOS: estructura de ingresos facilitada por gestoría.\r\n'+
