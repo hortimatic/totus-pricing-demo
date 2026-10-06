@@ -923,4 +923,81 @@ grant execute on function private.ops_delete_manual_expense_internal(uuid) to au
 revoke all on function public.ops_delete_manual_expense(uuid) from public,anon;
 grant execute on function public.ops_delete_manual_expense(uuid) to authenticated,service_role;
 
+
+-- Plantillas documentales y borrado de documentos: operaciones atómicas.
+create or replace function private.ops_save_document_template_internal(p_id uuid,p_template jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path=public
+as $function$
+declare
+  v_inv boolean:=coalesce((p_template->>'default_invoice')::boolean,false);
+  v_pro boolean:=coalesce((p_template->>'default_proforma')::boolean,false);
+begin
+  if not private.is_manager() then raise exception 'Solo administración o gerencia puede editar plantillas'; end if;
+  if not exists(select 1 from public.ops_document_templates where id=p_id) then raise exception 'Plantilla no encontrada'; end if;
+  if nullif(btrim(coalesce(p_template->>'name','')),'') is null then raise exception 'Nombre de plantilla obligatorio'; end if;
+  if coalesce((p_template->>'logo_width_mm')::numeric,34)<10 or coalesce((p_template->>'logo_width_mm')::numeric,34)>80 then
+    raise exception 'El ancho del logo debe estar entre 10 y 80 mm';
+  end if;
+  if v_inv then update public.ops_document_templates set default_invoice=false where id<>p_id and default_invoice; end if;
+  if v_pro then update public.ops_document_templates set default_proforma=false where id<>p_id and default_proforma; end if;
+  update public.ops_document_templates set
+    name=btrim(p_template->>'name'),style=coalesce(nullif(p_template->>'style',''),'clean'),
+    primary_color=coalesce(nullif(p_template->>'primary_color',''),'#17202A'),
+    secondary_color=coalesce(nullif(p_template->>'secondary_color',''),'#3B82F6'),
+    text_color=coalesce(nullif(p_template->>'text_color',''),'#17202A'),
+    font_family=coalesce(nullif(p_template->>'font_family',''),'helvetica'),
+    logo_width_mm=coalesce((p_template->>'logo_width_mm')::numeric,34),
+    logo_position=coalesce(nullif(p_template->>'logo_position',''),'left'),
+    show_logo=coalesce((p_template->>'show_logo')::boolean,true),
+    show_payment_details=coalesce((p_template->>'show_payment_details')::boolean,true),
+    invoice_title=coalesce(nullif(btrim(p_template->>'invoice_title'),''),'FACTURA'),
+    proforma_title=coalesce(nullif(btrim(p_template->>'proforma_title'),''),'FACTURA PROFORMA'),
+    header_text=coalesce(p_template->>'header_text',''),
+    payment_terms_default=coalesce(p_template->>'payment_terms_default',''),
+    bank_details=coalesce(p_template->>'bank_details',''),
+    footer_text=coalesce(p_template->>'footer_text',''),
+    default_invoice=v_inv,default_proforma=v_pro,updated_at=now()
+  where id=p_id;
+  return p_id;
+end;
+$function$;
+
+create or replace function public.ops_save_document_template(p_id uuid,p_template jsonb)
+returns uuid language sql security invoker set search_path=public
+as $function$ select private.ops_save_document_template_internal(p_id,p_template); $function$;
+
+revoke all on function private.ops_save_document_template_internal(uuid,jsonb) from public,anon;
+grant execute on function private.ops_save_document_template_internal(uuid,jsonb) to authenticated,service_role;
+revoke all on function public.ops_save_document_template(uuid,jsonb) from public,anon;
+grant execute on function public.ops_save_document_template(uuid,jsonb) to authenticated,service_role;
+
+create or replace function private.ops_delete_document_internal(p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path=public
+as $function$
+declare d public.ops_documents;
+begin
+  if not private.is_manager() then raise exception 'Solo administración o gerencia puede eliminar documentos'; end if;
+  select * into d from public.ops_documents where id=p_id for update;
+  if not found then raise exception 'Documento no encontrado'; end if;
+  if coalesce(d.linked_entity_type,'') like 'sales_invoice%' then raise exception 'Los documentos de facturación no se eliminan desde el archivo'; end if;
+  delete from public.ops_documents where id=p_id;
+  return jsonb_build_object('id',d.id,'storage_path',d.storage_path,'original_name',d.original_name);
+end;
+$function$;
+
+create or replace function public.ops_delete_document(p_id uuid)
+returns jsonb language sql security invoker set search_path=public
+as $function$ select private.ops_delete_document_internal(p_id); $function$;
+
+revoke all on function private.ops_delete_document_internal(uuid) from public,anon;
+grant execute on function private.ops_delete_document_internal(uuid) to authenticated,service_role;
+revoke all on function public.ops_delete_document(uuid) from public,anon;
+grant execute on function public.ops_delete_document(uuid) to authenticated,service_role;
+
 commit;
