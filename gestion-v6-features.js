@@ -2,7 +2,7 @@
 'use strict';
 const O=window.TotusGestion;
 if(!O) return;
-O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
+O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.features;
 const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal}=O.core;
 const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
@@ -108,7 +108,27 @@ function newDocDraft(type='factura'){
  return {id:null,mode,documentType,invoiceKind,origin:'totus',seriesId:ser?.id||'',storeId:sid,date:today(),dueDate:'',operationDate:'',externalNumber:'',customerId:'',customer:'',taxId:'',address:'',email:'',concept:'',payment:'transferencia',paidStatus:'pendiente',paidDate:'',includeIncome:false,notes:'',terms:tpl?.payment_terms_default||'',footer:tpl?.footer_text||'',poRef:'',templateId:tpl?.id||'',sourceFile:null};
 }
 window.opsInvoiceStatus=function(v){E.invoiceStatus=v;render()};
-window.opsBillingPanel=function(v){if(!manager()&&v!=='documents')return;E.billingPanel=v;render()};
+window.opsBillingPanel=function(v){if(!manager()&&v!=='documents')return;E.billingPanel=v;if(v==='customers'&&!E.customerDraft)E.customerDraft=blankCustomerDraft();render()};
+window.opsNewCustomerPanel=function(){E.customerDraft=blankCustomerDraft();render()};
+window.opsCustomerField=function(k,v){if(!E.customerDraft)E.customerDraft=blankCustomerDraft();E.customerDraft[k]=v};
+window.opsEditCustomerPanel=function(id){const c=E.customers.find(x=>x.id===id);if(!c)return;E.customerDraft={id:c.id,name:c.name||'',tax_id:c.tax_id||'',email:c.email||'',address:c.address||'',default_payment_method:c.default_payment_method||'transferencia',active:c.active!==false};render()};
+window.opsSaveCustomerPanel=async function(){
+ if(!manager())return;
+ const d=E.customerDraft||blankCustomerDraft();if(!String(d.name||'').trim())return alert('El nombre o razón social es obligatorio.');
+ const row={name:String(d.name).trim(),tax_id:String(d.tax_id||'').trim(),email:String(d.email||'').trim(),address:String(d.address||'').trim(),default_payment_method:d.default_payment_method||'transferencia',active:d.active!==false,updated_at:new Date().toISOString()};
+ const res=d.id?await sb.from('ops_customers').update(row).eq('id',d.id).select().single():await sb.from('ops_customers').insert(row).select().single();
+ if(res.error)return alert('No se pudo guardar el cliente: '+res.error.message);
+ await audit('facturas',d.id?'cliente_actualizar':'cliente_crear',res.data.id,{cliente:row.name});
+ await featureLoad(true);E.customerDraft={id:res.data.id,...row};render();
+};
+window.opsToggleCustomerPanel=async function(id,active){
+ if(!manager())return;
+ const c=E.customers.find(x=>x.id===id);if(!c)return;
+ if(!confirm((active?'Reactivar':'Archivar')+' a '+c.name+'?'))return;
+ const {error}=await sb.from('ops_customers').update({active,updated_at:new Date().toISOString()}).eq('id',id);
+ if(error)return alert('No se pudo cambiar el estado: '+error.message);
+ await audit('facturas',active?'cliente_reactivar':'cliente_archivar',id,{cliente:c.name});await featureLoad(true);render();
+};
 window.opsReportField=function(k,v){if(k==='from')O.reportFrom=v;else O.reportTo=v};
 window.opsInvoiceView=function(type='factura'){E.billingPanel='documents';E.invoiceMode=type;O.invoiceDraft=null;render();};
 window.opsNewDocument=function(type='factura'){if(!manager())return alert('Facturación en modo consulta. Solo administración o gerencia puede crear documentos.');O.tab='facturas';E.billingPanel='documents';E.invoiceMode=type;O.invoiceDraft=newDocDraft(type);O.invoiceDraftLines=[{description:'',qty:'1',unit:'',discount:'0',vat:'21'}];render();};
@@ -153,7 +173,12 @@ function templateEditorHtml(tpl){
 }
 function billingNavHtml(){
  const item=(key,label,active)=>`<button type="button" class="${active?'active':''}" onclick="opsBillingPanel('${key}')">${label}</button>`;
- return `<div class="billing-nav">${item('documents','Documentos',E.billingPanel==='documents')}${manager()?item('templates','Plantillas y marca',E.billingPanel==='templates'):''}${manager()?item('series','Series',E.billingPanel==='series'):''}</div>`;
+ return `<div class="billing-nav">${item('documents','Documentos',E.billingPanel==='documents')}${manager()?item('customers','Clientes',E.billingPanel==='customers'):''}${manager()?item('templates','Plantillas y marca',E.billingPanel==='templates'):''}${manager()?item('series','Series',E.billingPanel==='series'):''}</div>`;
+}
+function blankCustomerDraft(){return{id:null,name:'',tax_id:'',email:'',address:'',default_payment_method:'transferencia',active:true}}
+function billingCustomersHtml(){
+ const d=E.customerDraft||blankCustomerDraft(),rows=E.customers.slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ return `<div class="invoice-workspace">${billingNavHtml()}<div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">${d.id?'Editar cliente':'Nuevo cliente'}</div><h3>Ficha de cliente</h3><div class="small">Datos reutilizables en facturas y proformas. Archivar oculta el cliente sin romper documentos antiguos.</div></div><button class="ghost" onclick="opsNewCustomerPanel()">Nuevo</button></div><div class="ops-form"><div class="span2"><label>Nombre / razón social</label><input value="${H(d.name||'')}" oninput="opsCustomerField('name',this.value)"></div><div><label>NIF/CIF</label><input value="${H(d.tax_id||'')}" oninput="opsCustomerField('tax_id',this.value)"></div><div><label>Email</label><input type="email" value="${H(d.email||'')}" oninput="opsCustomerField('email',this.value)"></div><div class="span2"><label>Dirección</label><input value="${H(d.address||'')}" oninput="opsCustomerField('address',this.value)"></div><div><label>Forma de pago por defecto</label><select aria-label="Forma de pago por defecto del cliente" onchange="opsCustomerField('default_payment_method',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.default_payment_method===x?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="ops-actions" style="margin-top:12px"><button class="primary" onclick="opsSaveCustomerPanel()">${d.id?'Guardar cliente':'Crear cliente'}</button></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Directorio</div><h3>Clientes guardados</h3><div class="small">${rows.filter(x=>x.active!==false).length} activos · ${rows.filter(x=>x.active===false).length} archivados</div></div></div>${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Cliente</th><th>NIF/CIF</th><th>Email</th><th>Pago</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(c=>`<tr><td><b>${H(c.name)}</b></td><td>${H(c.tax_id||'—')}</td><td>${H(c.email||'—')}</td><td>${H(c.default_payment_method||'transferencia')}</td><td>${c.active!==false?'<span class="badge ok">Activo</span>':'<span class="badge warnb">Archivado</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditCustomerPanel('${c.id}')">Editar</button><button class="ghost" onclick="opsToggleCustomerPanel('${c.id}',${c.active===false?'true':'false'})">${c.active===false?'Reactivar':'Archivar'}</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay clientes guardados.</div>'}</div></div></div>`;
 }
 function billingTemplatesHtml(){
  const tpl=E.templates.find(t=>t.id===E.templateId)||E.templates.find(t=>t.default_invoice)||E.templates[0]||{};
@@ -163,6 +188,7 @@ function billingSeriesHtml(){
  return `<div class="invoice-workspace">${billingNavHtml()}<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Numeración</div><div class="ops-title-line"><h3>Series ${O.year}</h3>${infoButton('facturas.series','Cómo funciona la numeración')}</div><div class="small">Una serie por tienda, año y tipo de documento. El siguiente número nunca puede retroceder.</div></div></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Tipo</th><th>Tienda</th><th>Código</th><th>Prefijo</th><th>Siguiente</th><th>Dígitos</th><th></th></tr></thead><tbody>${O.series.filter(x=>x.year===O.year).map(x=>`<tr><td>${H(x.document_type||'factura')}${x.series_kind==='rectifying'?' · rectificativa':''}</td><td>${H(storeName(x.store_id))}</td><td><b>${H(x.code)}</b></td><td><input aria-label="Prefijo de ${H(x.code)}" id="ser_p_${x.id}" value="${H(x.prefix)}" ${admin()?'':'disabled'}></td><td><input aria-label="Siguiente número de ${H(x.code)}" id="ser_n_${x.id}" inputmode="numeric" value="${x.next_number}" ${admin()?'':'disabled'}></td><td><input aria-label="Dígitos de ${H(x.code)}" id="ser_d_${x.id}" inputmode="numeric" value="${x.padding}" ${admin()?'':'disabled'}></td><td><button class="ghost" onclick="opsSaveSeries('${x.id}')" ${admin()?'':'disabled'}>Guardar</button></td></tr>`).join('')}</tbody></table></div><div class="ops-note warn" style="margin-top:10px">Las series ya usadas no deben renombrarse sin un motivo administrativo claro.</div></div></div>`;
 }
 function invoicesHtml(){
+ if(E.billingPanel==='customers')return billingCustomersHtml();
  if(E.billingPanel==='templates')return billingTemplatesHtml();
  if(E.billingPanel==='series')return billingSeriesHtml();
  const d=ensureDraft(),tot=draftTotals(),sers=seriesFor(d);const rows=O.invoices.filter(x=>{const mode=x.document_type==='proforma'?'proforma':(x.invoice_kind==='rectifying'?'rectificativa':'factura');return mode===E.invoiceMode&&x.issue_date?.startsWith(String(O.year))&&(O.storeId==='all'||x.store_id===O.storeId)&&(E.invoiceStatus==='all'||x.status===E.invoiceStatus)}).slice(0,200);
