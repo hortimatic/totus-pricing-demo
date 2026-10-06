@@ -62,7 +62,44 @@ async function audit(area,action,entityId=null,detail={}){
 function manager(){ return ['admin','gerente'].includes(currentRole()); }
 function adminOnly(){ return currentRole()==='admin'; }
 
-O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly};
+const OPS_HELP={
+ resumen:['Resumen','Vista general del negocio: ingresos, gastos, resultado, previsión fiscal y almacenamiento. Los importes internos se muestran separados de los fiscales.'],
+ cajas:['Cajas','Registra cada cierre diario por tienda y caja. La apertura se arrastra del último cierre y el efectivo vendido se calcula con apertura, caja final, retiradas y gastos de caja.'],
+ gastos:['Gastos','Registra facturas y pagos, incluido IVA, recargo, retenciones y justificantes. Los gastos de control interno no pasan a fiscalidad ni al paquete de gestoría.'],
+ facturas:['Facturación','Crea facturas, rectificativas y proformas. La numeración se asigna al emitir. Plantillas, logo, clientes y series pertenecen a este módulo.'],
+ documentos:['Documentos','Archivo digital de justificantes. Puedes filtrar, revisar, descargar y preparar ZIP. Los documentos ligados a facturación quedan protegidos.'],
+ fiscal:['Fiscalidad','Previsión de IRPF, retenciones y RETA. Es una herramienta de control y planificación; no sustituye la liquidación de la gestoría.'],
+ informes:['Informes','Exporta gastos, ingresos, diarios, resumen fiscal y paquete de gestoría con la estructura documental acordada.'],
+ config:['Configuración','Solo parámetros generales de empresa, fiscalidad y almacenamiento. Los elementos propios de facturación se gestionan dentro de Facturación.'],
+ 'facturas.series':['Series de numeración','Cada serie pertenece a un año, establecimiento y tipo de documento. Al emitir, Totus asigna el siguiente número y evita retrocesos o cruces de año/tienda.'],
+ 'facturas.includeIncome':['Sumar a ingresos','Actívalo únicamente cuando esa venta no esté ya incluida en los cierres diarios. Evita duplicar ingresos en informes y previsiones.'],
+ 'facturas.external':['Documento externo','Úsalo cuando la factura ya se emitió fuera de Totus. Debes indicar el número utilizado y adjuntar el original; Totus lo registra sin renumerarlo.'],
+ 'gastos.internal':['Solo control interno','Afecta al resultado real del negocio, pero se excluye de cálculos fiscales, IRPF y exportación para gestoría.'],
+ 'documentos.estado':['Estado documental','Sirve para saber si un justificante está pendiente, revisado, preparado o ya entregado a gestoría. No modifica el gasto o factura original.'],
+ 'informes.gestor':['Paquete gestoría','Genera una estructura estable con ingresos, gastos, diarios, resumen y documentos. Los gastos internos quedan fuera.']
+};
+let __opsModal=null;
+function closeOpsModal(){
+ if(!__opsModal)return;
+ const url=__opsModal.dataset.objectUrl;if(url)URL.revokeObjectURL(url);
+ __opsModal.remove();__opsModal=null;
+}
+function openOpsModal(title,html,{wide=false}={}){
+ closeOpsModal();
+ const wrap=document.createElement('div');wrap.className='ops-modal-backdrop';
+ wrap.innerHTML=`<section class="ops-modal ${wide?'wide':''}" role="dialog" aria-modal="true" aria-labelledby="ops_modal_title"><div class="ops-modal-head"><div><div class="eyebrow">Ayuda / vista</div><h3 id="ops_modal_title">${h(title)}</h3></div><button type="button" class="ops-modal-close" aria-label="Cerrar">×</button></div><div class="ops-modal-body">${html}</div></section>`;
+ wrap.querySelector('.ops-modal-close').onclick=closeOpsModal;
+ wrap.addEventListener('click',e=>{if(e.target===wrap)closeOpsModal()});
+ document.body.appendChild(wrap);__opsModal=wrap;return wrap;
+}
+window.opsCloseModal=closeOpsModal;
+window.opsInfo=function(key){
+ const item=OPS_HELP[key]||OPS_HELP[String(key).split('.')[0]]||['Información','Sin información adicional disponible.'];
+ openOpsModal(item[0],`<div class="ops-help-copy">${h(item[1])}</div>`);
+};
+function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}')">i</button>`}
+
+O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal};
 
 async function load(force=false){
   if(O.loading)return;
@@ -148,7 +185,7 @@ function sectionMeta(tab=O.tab){
 }
 function headerHtml(){
  const m=sectionMeta();
- return `<div class="head"><div><div class="eyebrow">${m[1]}</div><h1>${m[0]}</h1><p>${m[2]}</p></div><div class="ops-filters"><div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div><div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div><div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div></div></div>`;
+ return `<div class="head"><div><div class="eyebrow">${m[1]}</div><div class="ops-title-line"><h1>${m[0]}</h1>${infoButton(O.tab,'Información sobre '+m[0])}</div><p>${m[2]}</p></div><div class="ops-filters"><div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div><div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div><div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div></div></div>`;
 }
 function managementHtml(){
  if(!O.loaded)return `<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>Preparando ${sectionMeta()[0].toLowerCase()}…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando los datos necesarios…</div>`;
