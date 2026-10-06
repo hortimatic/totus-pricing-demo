@@ -502,7 +502,49 @@ window.opsDeleteDocument=async function(id){
   await window.opsLoadData(true);await featureLoad(true);render();
  }catch(e){alert('No se pudo eliminar el documento: '+e.message)}
 };
-function fiscalProjectionHtml(){const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection();return `${importedStatusHtml()}<div class="ops-kpis" style="margin-top:14px"><div class="ops-kpi"><small>Ingresos acumulados</small><strong>${euro(f.income)}</strong><div class="sub">01/01 → T${O.quarter}</div></div><div class="ops-kpi"><small>Gastos deducibles</small><strong>${euro(f.raw)}</strong><div class="sub">Antes de difícil justificación</div></div><div class="ops-kpi"><small>Difícil justificación</small><strong>${euro(f.diff)}</strong><div class="sub">${N(O.settings?.difficult_expense_pct||5)} % · máximo ${euro(O.settings?.difficult_expense_annual_cap||2000)}</div></div><div class="ops-kpi ${f.net>=0?'good':'bad'}"><small>Rendimiento neto</small><strong>${euro(f.net)}</strong></div><div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelo 130</div><h3>Contador IRPF T${O.quarter}</h3></div></div><div class="ops-metric-line"><span>01 · Ingresos acumulados</span><b>${euro(f.income)}</b></div><div class="ops-metric-line"><span>02 · Gastos deducibles</span><b>${euro(f.raw+f.diff)}</b></div><div class="ops-metric-line"><span>03 · Rendimiento neto</span><b>${euro(f.net)}</b></div><div class="ops-metric-line"><span>04 · ${N(O.settings?.irpf_prepayment_rate||20)} %</span><b>${euro(f.gross)}</b></div><div class="ops-metric-line"><span>05 · 130 anteriores</span><b>− ${euro(f.prev)}</b></div><div class="ops-metric-line"><span>06 · Retenciones soportadas</span><b>− ${euro(f.ret)}</b></div><div class="ops-metric-line"><span><b>Estimación pendiente</b></span><b>${euro(f.payable)}</b></div><div class="ops-note warn" style="margin-top:10px">Previsión interna. Los cierres oficiales se contrastan con gestoría antes de presentar.</div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Simulador</div><h3>¿Qué pasa si gasto más?</h3></div></div><label>Gasto deducible adicional</label><input inputmode="decimal" value="${H(O.plannedSpend||'')}" oninput="opsPlannedSpend(this.value)" placeholder="0,00"><div class="ops-metric-line"><span>130 con simulación</span><b>${euro(f.payable)}</b></div><div class="ops-metric-line"><span>Reserva con simulación</span><b>${euro(f.reserve)}</b></div><div class="ops-note">La simulación no guarda ningún gasto. Sirve para decidir antes del cierre trimestral.</div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Retenciones</div><h3>Otros modelos</h3></div></div><div class="ops-metric-line"><span>Modelo 111 T${O.quarter}</span><b>${euro(f.m111)}</b></div><div class="ops-metric-line"><span>Modelo 115 T${O.quarter}</span><b>${euro(f.m115)}</b></div><div class="ops-metric-line"><span>Reserva total orientativa</span><b>${euro(f.reserve)}</b></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA 2026</div><h3>Tramo orientativo</h3></div></div><div class="ops-metric-line"><span>Rendimiento neto mensual proyectado</span><b>${euro(r.monthly)}</b></div><div class="ops-metric-line"><span>Base permitida</span><b>${r.bracket?euro(r.bracket.min_base)+' – '+euro(r.bracket.max_base):'—'}</b></div><div class="ops-metric-line"><span>Cuota orientativa</span><b>${r.bracket?euro(r.minQuota)+' – '+euro(r.maxQuota):'—'}</b></div><div class="ops-metric-line"><span>Cuota actual registrada</span><b>${euro(O.settings?.actual_reta_monthly||0)}</b></div></div></div>`}
+function fiscalProjectionHtml(){
+ const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection();
+ return `${importedStatusHtml()}
+ <div class="ops-note" style="margin-top:14px"><b>Régimen fiscal configurado:</b> recargo de equivalencia / estimación directa simplificada. Esta pantalla es de control interno y previsión; las presentaciones oficiales se contrastan con gestoría.</div>
+ <div class="ops-kpis" style="margin-top:14px">
+  <div class="ops-kpi"><small>Ingresos acumulados</small><strong>${euro(f.income)}</strong><div class="sub">01/01 → T${O.quarter}</div></div>
+  <div class="ops-kpi"><small>Gastos deducibles</small><strong>${euro(f.raw)}</strong><div class="sub">Antes de difícil justificación</div></div>
+  <div class="ops-kpi"><small>Difícil justificación ${infoButton('fiscal.diff','Qué es la difícil justificación')}</small><strong>${euro(f.diff)}</strong><div class="sub">${N(O.settings?.difficult_expense_pct||5)} % · máximo ${euro(O.settings?.difficult_expense_annual_cap||2000)}</div></div>
+  <div class="ops-kpi ${f.net>=0?'good':'bad'}"><small>Rendimiento neto</small><strong>${euro(f.net)}</strong></div>
+  <div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div>
+ </div>
+ <div class="ops-grid">
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelo 130</div><div class="ops-title-line"><h3>Contador IRPF T${O.quarter}</h3>${infoButton('fiscal.130','Cómo se calcula el modelo 130')}</div></div></div>
+   <div class="ops-metric-line"><span>01 · Ingresos acumulados</span><b>${euro(f.income)}</b></div>
+   <div class="ops-metric-line"><span>02 · Gastos deducibles + difícil justificación</span><b>${euro(f.raw+f.diff)}</b></div>
+   <div class="ops-metric-line"><span>03 · Rendimiento neto</span><b>${euro(f.net)}</b></div>
+   <div class="ops-metric-line"><span>04 · ${N(O.settings?.irpf_prepayment_rate||20)} %</span><b>${euro(f.gross)}</b></div>
+   <div class="ops-metric-line"><span>05 · 130 anteriores</span><b>− ${euro(f.prev)}</b></div>
+   <div class="ops-metric-line"><span>06 · Retenciones soportadas</span><b>− ${euro(f.ret)}</b></div>
+   <div class="ops-metric-line"><span><b>Estimación pendiente</b></span><b>${euro(f.payable)}</b></div>
+   <div class="ops-note warn" style="margin-top:10px">No es una liquidación oficial. Sirve para reservar caja y detectar desviaciones antes de enviar datos a gestoría.</div>
+  </div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Simulador</div><div class="ops-title-line"><h3>¿Qué pasa si gasto más?</h3>${infoButton('fiscal.simulator','Cómo usar el simulador')}</div></div></div>
+   <label>Gasto deducible adicional</label><input inputmode="decimal" value="${H(O.plannedSpend||'')}" oninput="opsPlannedSpend(this.value)" placeholder="0,00">
+   <div class="ops-metric-line"><span>130 con simulación</span><b>${euro(f.payable)}</b></div>
+   <div class="ops-metric-line"><span>Reserva con simulación</span><b>${euro(f.reserve)}</b></div>
+   <div class="ops-note">No guarda ningún gasto ni altera tus datos. Borra el importe para volver al escenario real.</div>
+  </div>
+ </div>
+ <div class="ops-grid">
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Retenciones</div><h3>Otros modelos</h3></div></div>
+   <div class="ops-metric-line"><span>Modelo 111 T${O.quarter}</span><b>${euro(f.m111)}</b></div>
+   <div class="ops-metric-line"><span>Modelo 115 T${O.quarter}</span><b>${euro(f.m115)}</b></div>
+   <div class="ops-metric-line"><span>Reserva total orientativa</span><b>${euro(f.reserve)}</b></div>
+  </div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA ${O.year}</div><div class="ops-title-line"><h3>Tramo orientativo</h3>${infoButton('fiscal.reta','Cómo se estima el tramo RETA')}</div></div></div>
+   <div class="ops-metric-line"><span>Rendimiento neto mensual proyectado</span><b>${euro(r.monthly)}</b></div>
+   <div class="ops-metric-line"><span>Base permitida</span><b>${r.bracket?euro(r.bracket.min_base)+' – '+euro(r.bracket.max_base):'—'}</b></div>
+   <div class="ops-metric-line"><span>Cuota orientativa</span><b>${r.bracket?euro(r.minQuota)+' – '+euro(r.maxQuota):'—'}</b></div>
+   <div class="ops-metric-line"><span>Cuota actual registrada</span><b>${euro(O.settings?.actual_reta_monthly||0)}</b></div>
+  </div>
+ </div>`;
+}
 function managerExpenseRows(from,to){
  const headers=['Orden','Fecha','Nºfra.rec.','Nºfra.proveedor','Rt','Identificación','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
  const rows=[];
