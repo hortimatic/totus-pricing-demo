@@ -2,8 +2,8 @@ import { chromium } from 'playwright';
 
 const base='http://127.0.0.1:4173';
 const project='zwkpmjjuurgjygcrejiw';
-const userId='85d4df93-4481-40d0-8a42-7521be6aa0c1';
-const email='hortimatic@gmail.com';
+const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const email='qa-admin@example.test';
 const enc=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
 const token=enc({alg:'HS256',typ:'JWT'})+'.'+enc({sub:userId,email,role:'authenticated',aud:'authenticated',exp:4102444800})+'.qa';
 const session={access_token:token,refresh_token:'qa-refresh',expires_in:3600,expires_at:4102444800,token_type:'bearer',user:{id:userId,aud:'authenticated',role:'authenticated',email,app_metadata:{provider:'email',providers:['email']},user_metadata:{},created_at:'2026-01-01T00:00:00Z'}};
@@ -23,8 +23,8 @@ const ids={
 const fixtures={
  brands:[],families:[],products:[],product_variants:[],providers:[],product_provider_prices:[],product_competitor_prices:[],
  consultations:[],consultation_history:[],price_history:[],team_email_log:[],
- team_members:[{email,full_name:'Diego Sequera',role:'admin',active:true,job_title:'Admin'}],
- profiles:[{id:userId,email,full_name:'Diego Sequera',role:'admin',active:true}],
+ team_members:[{email,full_name:'QA Admin',role:'admin',active:true,job_title:'Admin'}],
+ profiles:[{id:userId,email,full_name:'QA Admin',role:'admin',active:true}],
  ops_business_settings:[{id:1,business_name:'Empresa QA',tax_id:'B00000000',business_address:'Calle QA',business_email:'qa@example.com',business_phone:'',current_year:2026,irpf_prepayment_rate:20,difficult_expense_enabled:true,difficult_expense_pct:5,difficult_expense_annual_cap:2000,reta_generic_deduction_pct:7,reta_total_rate:31.5,actual_reta_monthly:315,storage_limit_bytes:1073741824,document_max_bytes:20971520}],
  ops_stores:[{id:ids.h,code:'HORTIMATIC',name:'Hortimatic',active:true,sort_order:10},{id:ids.n,code:'NEWOLDSMOK',name:'NewOldSmok',active:true,sort_order:20}],
  ops_expense_categories:[{id:ids.merch,code:'MERCH',name:'Mercancía / producto para tienda',manager_code:'600',deductible_default:true,fixed_asset_default:false,sort_order:10},{id:ids.internal,code:'INTERNAL_WAREHOUSE',name:'Almacén / pago interno',manager_code:'',deductible_default:false,fixed_asset_default:false,sort_order:920}],
