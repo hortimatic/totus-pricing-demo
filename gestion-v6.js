@@ -109,115 +109,6 @@ async function load(force=false){
 }
 window.opsLoadData=load;
 
-function filteredClosings(from,to,store='all'){
-  return O.closings.filter(x=>inRange(x.business_date,from,to)&&(store==='all'||x.store_id===store));
-}
-function invoiceIncome(from,to,store='all'){
-  return O.invoices.filter(x=>x.status==='emitida'&&x.include_in_income&&inRange(x.issue_date,from,to)&&(store==='all'||x.store_id===store));
-}
-function extraIncome(from,to,store='all'){
-  return O.incomeAdjustments.filter(x=>inRange(x.income_date,from,to)&&(store==='all'||x.store_id===store));
-}
-function incomeFor(from,to,store='all'){
-  return sum(filteredClosings(from,to,store),x=>n(x.cash_sales)+n(x.card_sales)+n(x.bizum_sales)+n(x.online_sales)+n(x.other_income))
-    +sum(invoiceIncome(from,to,store),x=>n(x.total_amount))
-    +sum(extraIncome(from,to,store),x=>n(x.amount));
-}
-function expenseLineMap(){ const m=new Map(); O.expenseLines.forEach(l=>{if(!m.has(l.expense_id))m.set(l.expense_id,[]);m.get(l.expense_id).push(l)}); return m; }
-function expenseFor(from,to,store='all',onlyDeductible=true){
-  const map=expenseLineMap();
-  let total=0;
-  O.expenses.filter(e=>inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store)&&(!onlyDeductible||!e.management_only)).forEach(e=>{
-    const lines=map.get(e.id)||[];
-    if(lines.length){
-      total+=sum(lines,l=>{
-        if(onlyDeductible&&!l.deductible_irpf)return 0;
-        if(l.fixed_asset)return 0;
-        return n(l.irpf_imputable);
-      });
-    } else {
-      if(!onlyDeductible||e.deductible_irpf!==false) total+=n(e.accounting_amount||e.gross_expense);
-    }
-  });
-  O.fiscalAdjustments.filter(a=>inRange(a.adjustment_date,from,to)&&['gasto_deducible_extra','amortizacion'].includes(a.kind))
-    .forEach(a=>total+=n(a.amount));
-  return total;
-}
-function managementExpenseFor(from,to,store='all'){
-  return O.expenses
-    .filter(e=>inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store))
-    .reduce((a,e)=>a+n(e.accounting_amount||e.gross_expense||e.amount_paid),0);
-}
-function internalExpenseFor(from,to,store='all'){
-  return O.expenses
-    .filter(e=>e.management_only&&inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store))
-    .reduce((a,e)=>a+n(e.accounting_amount||e.gross_expense||e.amount_paid),0);
-}
-function retaPaid(from,to){
-  const retaCat=O.categories.find(c=>c.code==='RETA');
-  if(!retaCat)return 0;
-  const map=expenseLineMap(); let total=0;
-  O.expenses.filter(e=>inRange(e.expense_date,from,to)).forEach(e=>{
-    (map.get(e.id)||[]).filter(l=>l.category_id===retaCat.id).forEach(l=>total+=n(l.irpf_imputable)||n(l.base_amount));
-  });
-  return total;
-}
-function taxWithheld(model,from,to){
-  const ids=new Set(O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)).map(e=>e.id));
-  return sum(O.expenseLines.filter(l=>ids.has(l.expense_id)&&l.withholding_model===model),l=>n(l.withholding_amount));
-}
-function supportedWithholding(from,to){
-  return sum(O.fiscalAdjustments.filter(a=>a.kind==='retencion_soportada'&&inRange(a.adjustment_date,from,to)),a=>n(a.amount));
-}
-function difficultExpense(pre){
-  if(!O.settings?.difficult_expense_enabled||pre<=0)return 0;
-  return Math.min(pre*(n(O.settings.difficult_expense_pct||5)/100),n(O.settings.difficult_expense_annual_cap||2000));
-}
-function fiscal(year=O.year,quarter=O.quarter,planned=0){
-  const acc=periodBounds(year,quarter,true),cur=periodBounds(year,quarter,false);
-  const incomeAcc=incomeFor(acc.start,acc.end,'all');
-  const expRaw=expenseFor(acc.start,acc.end,'all')+n(planned);
-  const pre=Math.max(0,incomeAcc-expRaw);
-  const difficult=difficultExpense(pre);
-  const deductible=expRaw+difficult;
-  const net=incomeAcc-deductible;
-  const box4=Math.max(net,0)*(n(O.settings?.irpf_prepayment_rate||20)/100);
-  const previous=sum(O.taxPayments.filter(t=>t.tax_type==='130'&&t.fiscal_year===year&&n(t.quarter)<quarter&&t.status==='pagado'),t=>n(t.amount));
-  const ret=supportedWithholding(acc.start,acc.end);
-  const box7=box4-previous-ret;
-  const payable=Math.max(0,box7);
-  const qIncome=incomeFor(cur.start,cur.end,'all'),qExpense=expenseFor(cur.start,cur.end,'all');
-  const m111=taxWithheld('111',cur.start,cur.end),m115=taxWithheld('115',cur.start,cur.end);
-  const reserve=payable+m111+m115;
-  return {acc,cur,incomeAcc,expRaw,difficult,deductible,net,box4,previous,ret,box7,payable,qIncome,qExpense,m111,m115,reserve};
-}
-function currentCutoff(){
-  const now=new Date(), y=O.year, q=O.quarter, pb=periodBounds(y,q,false);
-  if(y===now.getFullYear()&&q===Math.floor(now.getMonth()/3)+1)return isoToday();
-  return pb.end;
-}
-function retaEstimate(){
-  const from=`${O.year}-01-01`, cutoff=currentCutoff();
-  const inc=incomeFor(from,cutoff,'all'),exp=expenseFor(from,cutoff,'all');
-  const pre=Math.max(0,inc-exp),dif=difficultExpense(pre),irpfNet=inc-exp-dif;
-  const paidReta=retaPaid(from,cutoff);
-  const start=new Date(from+'T00:00:00'),end=new Date(cutoff+'T00:00:00');
-  const days=Math.max(1,Math.round((end-start)/86400000)+1);
-  const yearDays=((O.year%4===0&&O.year%100!==0)||O.year%400===0)?366:365;
-  const projectedIrpfNet=(irpfNet/days)*yearDays;
-  const projectedReta=(paidReta/days)*yearDays;
-  const computable=(projectedIrpfNet+projectedReta)*(1-n(O.settings?.reta_generic_deduction_pct||7)/100);
-  const monthly=computable/12;
-  const brackets=O.retaBrackets.filter(b=>b.year===O.year);
-  const bracket=brackets.find(b=>{
-    const lo=b.min_net_monthly==null||monthly>n(b.min_net_monthly)||(b.min_inclusive&&monthly>=n(b.min_net_monthly));
-    const hi=b.max_net_monthly==null||monthly<n(b.max_net_monthly)||(b.max_inclusive&&monthly<=n(b.max_net_monthly));
-    return lo&&hi;
-  })||brackets[brackets.length-1];
-  const rate=n(O.settings?.reta_total_rate||31.5)/100;
-  return {monthly,computable,projectedIrpfNet,projectedReta,bracket,minQuota:bracket?n(bracket.min_base)*rate:0,maxQuota:bracket?n(bracket.max_base)*rate:0,actual:n(O.settings?.actual_reta_monthly)};
-}
-
 function sectionMeta(tab=O.tab){
  return ({
   resumen:['Resumen','Visión global','Ventas, gastos, resultado, fiscalidad y servidor.'],
@@ -239,57 +130,13 @@ function managementHtml(){
  const moduleBody=window.TotusGestionExt?.body?.(O.tab);
  let body=moduleBody??'';
  if(moduleBody==null){
-  if(O.tab==='resumen')body=dashboardHtml();
   if(O.tab==='cajas')body=closingsHtml();
-  if(O.tab==='gastos')body=expensesHtml();
-  if(O.tab==='facturas')body=invoicesHtml();
-  if(O.tab==='documentos')body=documentsHtml();
-  if(O.tab==='fiscal')body=fiscalHtml();
-  if(O.tab==='informes')body=reportsHtml();
-  if(O.tab==='config')body=`${window.adminStripHtml?window.adminStripHtml('config'):''}${configHtml()}`;
+  else if(O.tab==='gastos')body=expensesHtml();
+  else body='<div class="ops-card">Cargando módulo de gestión…</div>';
  }
  return `<div class="ops-wrap">${headerHtml()}${body}</div>`;
 }
 window.opsManagementHtml=managementHtml;
-
-function dashboardHtml(){
- const pb=periodBounds(O.year,O.quarter,false),store=O.storeId;
- const inc=incomeFor(pb.start,pb.end,store),exp=expenseFor(pb.start,pb.end,store),internal=internalExpenseFor(pb.start,pb.end,store),realExp=managementExpenseFor(pb.start,pb.end,store),benefFiscal=inc-exp,benefReal=inc-realExp;
- const f=fiscal(),r=retaEstimate(),usage=sum(O.documents,d=>n(d.size_bytes)),limit=n(O.settings?.storage_limit_bytes||1073741824),pct=limit?usage/limit*100:0;
- const recent=O.closings.filter(x=>x.business_date.startsWith(String(O.year))).slice(0,6);
- return `<div class="ops-kpis">
-  <div class="ops-kpi"><small>Ingresos T${O.quarter}</small><strong>${eur(inc)}</strong><div class="sub">${store==='all'?'Ambos establecimientos':h(storeName(store))}</div></div>
-  <div class="ops-kpi"><small>Gastos fiscales T${O.quarter}</small><strong>${eur(exp)}</strong><div class="sub">Los que entran en cálculo fiscal</div></div>
-  <div class="ops-kpi"><small>Gastos internos T${O.quarter}</small><strong>${eur(internal)}</strong><div class="sub">No se envían a gestoría</div></div>
-  <div class="ops-kpi ${benefReal>=0?'good':'bad'}"><small>Resultado real interno T${O.quarter}</small><strong>${eur(benefReal)}</strong><div class="sub">Ingresos menos todos los gastos registrados</div></div>
-  <div class="ops-kpi warn"><small>Reserva fiscal estimada</small><strong>${eur(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div>
-  <div class="ops-kpi"><small>RETA estimado</small><strong>${r.bracket?eur(r.minQuota)+'–'+eur(r.maxQuota):'—'}</strong><div class="sub">Rendimiento mensual ${eur(r.monthly)}</div></div>
- </div>
- <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trimestre</div><h3>IRPF y retenciones</h3></div><button class="ghost" onclick="opsTab('fiscal')">Ver fiscalidad</button></div>
-   <div class="ops-metric-line"><span>Ingresos acumulados año → T${O.quarter}</span><b>${eur(f.incomeAcc)}</b></div>
-   <div class="ops-metric-line"><span>Gastos + difícil justificación</span><b>${eur(f.deductible)}</b></div>
-   <div class="ops-metric-line"><span>Modelo 130 estimado pendiente</span><b>${eur(f.payable)}</b></div>
-   <div class="ops-metric-line"><span>Modelo 111 del trimestre</span><b>${eur(f.m111)}</b></div>
-   <div class="ops-metric-line"><span>Modelo 115 del trimestre</span><b>${eur(f.m115)}</b></div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Servidor</div><h3>Documentos</h3></div><button class="ghost" onclick="opsTab('documentos')">Abrir archivo</button></div>
-   <div class="ops-space-head"><div><b>${fmtInt(usage/1024/1024)} MB</b> usados</div><div class="small">${pct.toFixed(1).replace('.',',')} % de ${fmtInt(limit/1024/1024)} MB</div></div>
-   <div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div>
-   <div class="ops-metric-line"><span>Documentos guardados</span><b>${O.documents.length}</b></div>
-   <div class="ops-metric-line"><span>Pendientes para gestor</span><b>${O.documents.filter(d=>!['entregada_gestor','archivada'].includes(d.status)).length}</b></div>
-  </div>
- </div>
- <div class="ops-grid">
-   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Cajas</div><h3>Últimos cierres</h3></div><button class="primary" onclick="opsTab('cajas')">Nuevo cierre</button></div>
-    ${recent.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Ventas</th><th>Caja final</th></tr></thead><tbody>${recent.map(c=>`<tr><td>${dmy(c.business_date)}</td><td>${h(storeName(c.store_id))}</td><td class="num">${eur(n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income))}</td><td class="num">${eur(c.actual_cash)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">Aún no hay cierres.</div>'}
-   </div>
-   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Accesos rápidos</div><h3>Trabajo diario</h3></div></div>
-    <div class="ops-actions"><button class="primary" onclick="opsTab('cajas')">Cerrar caja</button><button class="secondary" onclick="opsTab('gastos')">Registrar gasto</button><button class="secondary" onclick="opsTab('facturas')">Crear factura</button><button class="secondary" onclick="opsTab('documentos')">Subir documento</button></div>
-    <div class="ops-note" style="margin-top:12px">Los cierres sustituyen el chat y las hojas mensuales. El saldo final de cada caja se propone como apertura del siguiente día.</div>
-   </div>
- </div>`;
-}
 
 function newClosingDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
@@ -519,27 +366,6 @@ function docMatches(d){
  const f=O.docFilter;
  return (!f.from||d.document_date>=f.from)&&(!f.to||d.document_date<=f.to)&&(f.store==='all'||d.store_id===f.store)&&(f.status==='all'||d.status===f.status)&&(f.type==='all'||d.doc_type===f.type)&&(!f.q||[d.supplier_or_customer,d.invoice_number,d.original_name,d.notes].join(' ').toLowerCase().includes(f.q.toLowerCase()));
 }
-function documentsHtml(){
- const usage=sum(O.documents,d=>n(d.size_bytes)),limit=n(O.settings?.storage_limit_bytes||1073741824),pct=limit?usage/limit*100:0;
- const rows=O.documents.filter(docMatches).slice(0,300);
- return `<div class="ops-grid">
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Archivo</div><h3>Subir documento</h3></div><button class="primary" onclick="opsUploadStandaloneDoc()">Subir</button></div>
-  <div class="ops-form">
-   <div><label>Fecha</label><input id="ops_doc_date" type="date" value="${isoToday()}"></div>
-   <div><label>Tienda</label><select id="ops_doc_store"><option value="">General</option>${O.stores.map(s=>`<option value="${s.id}">${h(s.name)}</option>`).join('')}</select></div>
-   <div><label>Tipo</label><select id="ops_doc_type"><option value="factura_recibida">Factura recibida</option><option value="factura_emitida">Factura emitida</option><option value="ticket">Ticket</option><option value="contrato">Contrato</option><option value="impuesto">Impuesto</option><option value="informe">Informe</option><option value="otro">Otro</option></select></div>
-   <div><label>Estado</label><select id="ops_doc_status"><option value="pendiente">Pendiente</option><option value="pagada">Pagada</option><option value="revisada">Revisada</option><option value="preparada_gestor">Preparada gestor</option><option value="entregada_gestor">Entregada gestor</option><option value="archivada">Archivada</option></select></div>
-   <div><label>Proveedor / cliente</label><input id="ops_doc_party"></div><div><label>NIF/CIF</label><input id="ops_doc_tax"></div><div><label>Nº factura</label><input id="ops_doc_invoice"></div>
-   <div><label>Archivo</label><input id="ops_doc_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"></div>
-  </div>
- </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Espacio</div><h3>${fmtInt(usage/1024/1024)} MB / ${fmtInt(limit/1024/1024)} MB</h3></div><span class="badge ${pct>=95?'badb':pct>=80?'warnb':'ok'}">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="small" style="margin-top:10px">El contador corresponde al archivo de Gestión registrado por la aplicación.</div></div>
- </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Documentos</div><h3>Buscar y descargar</h3></div><div class="ops-actions"><button class="secondary" onclick="opsZipFilteredDocs()">ZIP filtrado</button></div></div>
- <div class="ops-filters"><div><label>Desde</label><input type="date" value="${h(O.docFilter.from)}" onchange="opsDocFilter('from',this.value)"></div><div><label>Hasta</label><input type="date" value="${h(O.docFilter.to)}" onchange="opsDocFilter('to',this.value)"></div><div><label>Tienda</label><select onchange="opsDocFilter('store',this.value)"><option value="all">Todas</option>${O.stores.map(s=>`<option value="${s.id}" ${O.docFilter.store===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div><div><label>Estado</label><select onchange="opsDocFilter('status',this.value)"><option value="all">Todos</option>${['pendiente','pagada','revisada','preparada_gestor','entregada_gestor','archivada'].map(x=>`<option ${O.docFilter.status===x?'selected':''}>${x}</option>`).join('')}</select></div><div style="flex:1"><label>Buscar</label><input value="${h(O.docFilter.q)}" oninput="opsDocFilter('q',this.value,true)" placeholder="Proveedor, número, archivo…"></div></div>
- ${rows.length?`<div class="ops-table-wrap" style="margin-top:12px"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Tipo</th><th>Proveedor / cliente</th><th>Número</th><th>Archivo</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(d=>`<tr><td>${dmy(d.document_date)}</td><td>${h(storeName(d.store_id))}</td><td>${h(d.doc_type.replaceAll('_',' '))}</td><td>${h(d.supplier_or_customer||'—')}</td><td>${h(d.invoice_number||'—')}</td><td>${h(d.original_name)}<div class="ops-tiny">${fmtInt(n(d.size_bytes)/1024)} KB</div></td><td><select onchange="opsSetDocStatus('${d.id}',this.value)">${['pendiente','pagada','revisada','preparada_gestor','entregada_gestor','archivada'].map(x=>`<option ${d.status===x?'selected':''}>${x}</option>`).join('')}</select></td><td><button class="ghost" onclick="opsDownloadDoc('${d.id}')">Descargar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay documentos con esos filtros.</div>'}
- </div>`;
-}
 window.opsDocFilter=function(k,v,soft=false){O.docFilter[k]=v;if(!soft)render();else{clearTimeout(window.__opsDocTimer);window.__opsDocTimer=setTimeout(render,200)}};
 window.opsUploadStandaloneDoc=async function(){
  const file=document.getElementById('ops_doc_file')?.files?.[0];if(!file){alert('Selecciona un archivo.');return}
@@ -553,193 +379,7 @@ window.opsDownloadDoc=async function(id){
 };
 window.opsSetDocStatus=async function(id,status){const {error}=await sb.from('ops_documents').update({status}).eq('id',id);if(error){alert(error.message);return}const d=O.documents.find(x=>x.id===id);if(d)d.status=status;await audit('documentos','estado',id,{status});};
 
-function newInvoiceDraft(){
- const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
- const series=O.series.find(s=>s.store_id===sid&&s.year===O.year&&s.active)||O.series.find(s=>s.year===O.year&&s.active);
- return {id:null,origin:'totus',seriesId:series?.id||'',storeId:sid,date:isoToday(),externalNumber:'',customer:'',taxId:'',address:'',email:'',concept:'',payment:'transferencia',paidStatus:'pendiente',paidDate:'',includeIncome:false,notes:''};
-}
-function defaultInvoiceLine(){return{description:'',qty:'1',unit:'',discount:'0',vat:'21'};}
-function invLineCalc(l){const qty=n(l.qty)||0,unit=n(l.unit),disc=n(l.discount),base=qty*unit*(1-disc/100),vat=base*n(l.vat)/100;return{base,vat,total:base+vat}}
-function invoiceDraftTotals(){return O.invoiceDraftLines.reduce((a,l)=>{const x=invLineCalc(l);a.base+=x.base;a.vat+=x.vat;a.total+=x.total;return a},{base:0,vat:0,total:0})}
-function invoicesHtml(){
- if(!O.invoiceDraft){O.invoiceDraft=newInvoiceDraft();O.invoiceDraftLines=[defaultInvoiceLine()]}
- const d=O.invoiceDraft,t=invoiceDraftTotals();const rows=O.invoices.filter(x=>x.issue_date.startsWith(String(O.year))&&(O.storeId==='all'||x.store_id===O.storeId)).slice(0,150);
- const series=O.series.filter(s=>s.year===O.year&&s.active&&(d.storeId?(!s.store_id||s.store_id===d.storeId):true));
- return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">${d.origin==='externa'?'Registrar':'Crear'} factura</div><h3>Facturación ${O.year}</h3><div class="small">Numeración controlada por serie y año. Las facturas emitidas no se reescriben.</div></div><div class="ops-actions"><button class="primary" onclick="opsSaveInvoice()">${d.origin==='externa'?'Registrar externa':'Guardar borrador'}</button></div></div>
- <div class="ops-form">
-  <div><label>Origen</label><select onchange="opsInvoiceField('origin',this.value,true)"><option value="totus" ${d.origin==='totus'?'selected':''}>Crear en Totus</option><option value="externa" ${d.origin==='externa'?'selected':''}>Creada fuera</option></select></div>
-  <div><label>Fecha emisión</label><input type="date" value="${h(d.date)}" oninput="opsInvoiceField('date',this.value)"></div>
-  <div><label>Establecimiento</label><select onchange="opsInvoiceField('storeId',this.value,true)"><option value="">General</option>${O.stores.map(s=>`<option value="${s.id}" ${d.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div>
-  <div><label>Serie</label><select onchange="opsInvoiceField('seriesId',this.value)">${series.map(s=>`<option value="${s.id}" ${d.seriesId===s.id?'selected':''}>${h(s.code)} · siguiente ${h(s.prefix)}${String(s.next_number).padStart(s.padding,'0')}</option>`).join('')}</select></div>
-  ${d.origin==='externa'?`<div><label>Número usado fuera</label><input inputmode="numeric" value="${h(d.externalNumber)}" oninput="opsInvoiceField('externalNumber',this.value)" placeholder="Ej. 27"></div>`:''}
-  <div><label>Cliente</label><input value="${h(d.customer)}" oninput="opsInvoiceField('customer',this.value)"></div><div><label>NIF/CIF</label><input value="${h(d.taxId)}" oninput="opsInvoiceField('taxId',this.value)"></div>
-  <div class="span2"><label>Dirección</label><input value="${h(d.address)}" oninput="opsInvoiceField('address',this.value)"></div><div><label>Email</label><input type="email" value="${h(d.email)}" oninput="opsInvoiceField('email',this.value)"></div>
-  <div><label>Forma de pago</label><select onchange="opsInvoiceField('payment',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.payment===x?'selected':''}>${x}</option>`).join('')}</select></div>
-  <div class="span2"><label>Concepto general</label><input value="${h(d.concept)}" oninput="opsInvoiceField('concept',this.value)"></div>
-  <div class="span4 checkline"><input id="ops_inv_income" type="checkbox" ${d.includeIncome?'checked':''} onchange="opsInvoiceField('includeIncome',this.checked)"><label for="ops_inv_income" style="margin:0">Añadir a ingresos fiscales (solo si esta venta NO está ya incluida en los cierres diarios)</label></div>
- </div>
- <div class="section-head" style="margin-top:16px"><div><h4>Líneas</h4></div><button class="secondary" onclick="opsAddInvoiceLine()">Añadir línea</button></div>
- <div class="ops-lines">${O.invoiceDraftLines.map((l,i)=>`<div class="ops-line"><div><label>Descripción</label><input value="${h(l.description)}" oninput="opsInvoiceLineField(${i},'description',this.value)"></div><div><label>Cant.</label><input inputmode="decimal" value="${h(l.qty)}" oninput="opsInvoiceLineField(${i},'qty',this.value,true)"></div><div><label>Precio base</label><input inputmode="decimal" value="${h(l.unit)}" oninput="opsInvoiceLineField(${i},'unit',this.value,true)"></div><div><label>Dto %</label><input inputmode="decimal" value="${h(l.discount)}" oninput="opsInvoiceLineField(${i},'discount',this.value,true)"></div><div><label>IVA %</label><input inputmode="decimal" value="${h(l.vat)}" oninput="opsInvoiceLineField(${i},'vat',this.value,true)"></div><button class="ghost" onclick="opsRemoveInvoiceLine(${i})" ${O.invoiceDraftLines.length===1?'disabled':''}>×</button><div style="grid-column:1/-1" class="small">Total línea ${eur(invLineCalc(l).total)}</div></div>`).join('')}</div>
- <div class="ops-invoice-total"><span>Base <b>${eur(t.base)}</b></span><span>IVA <b>${eur(t.vat)}</b></span><span>Total <b>${eur(t.total)}</b></span></div>
- </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">${O.year}</div><h3>Facturas emitidas y borradores</h3></div></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Número</th><th>Cliente</th><th>Estado</th><th>Total</th><th>Origen</th><th></th></tr></thead><tbody>${rows.map(i=>`<tr><td>${dmy(i.issue_date)}</td><td><b>${h(i.display_number||'Borrador')}</b></td><td>${h(i.customer_name||'—')}</td><td>${statusBadge(i.status)}</td><td class="num">${eur(i.total_amount)}</td><td>${h(i.origin)}</td><td><div class="ops-actions">${i.status==='borrador'?`<button class="primary" onclick="opsIssueInvoice('${i.id}')">Emitir</button>`:''}${i.status==='emitida'?`<button class="ghost" onclick="opsInvoicePdf('${i.id}')">PDF</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay facturas este año.</div>'}
- </div>`;
-}
-window.opsInvoiceField=function(k,v,rerender=false){O.invoiceDraft[k]=v;if(k==='storeId'&&rerender){const s=O.series.find(s=>s.store_id===v&&s.year===O.year&&s.active);if(s)O.invoiceDraft.seriesId=s.id}if(rerender)render()};
-window.opsInvoiceLineField=function(i,k,v,recalc=false){O.invoiceDraftLines[i][k]=v;if(recalc){clearTimeout(window.__opsInvTimer);window.__opsInvTimer=setTimeout(render,120)}};
-window.opsAddInvoiceLine=function(){O.invoiceDraftLines.push(defaultInvoiceLine());render()};
-window.opsRemoveInvoiceLine=function(i){if(O.invoiceDraftLines.length>1){O.invoiceDraftLines.splice(i,1);render()}};
-window.opsSaveInvoice=async function(){
- const d=O.invoiceDraft;if(!d.seriesId||!d.date||!d.customer){alert('Serie, fecha y cliente son obligatorios.');return}
- if(O.invoiceDraftLines.some(l=>!l.description||!n(l.qty))){alert('Completa las líneas de la factura.');return}
- try{
-  const external=d.origin==='externa',num=external?parseInt(d.externalNumber,10):null,ser=O.series.find(s=>s.id===d.seriesId);
-  if(external&&(!num||num<1)){alert('Indica el número de la factura creada fuera.');return}
-  const row={series_id:d.seriesId,store_id:d.storeId||null,issue_date:d.date,number:null,display_number:null,external_number_text:external?String(num):null,origin:d.origin,status:'borrador',customer_name:d.customer,customer_tax_id:d.taxId,customer_address:d.address,customer_email:d.email,concept:d.concept,payment_method:d.payment,paid_status:d.paidStatus||'pendiente',paid_date:d.paidDate||null,include_in_income:!!d.includeIncome,notes:d.notes||'',created_by:authSession.user.id};
-  const {data,error}=await sb.from('ops_sales_invoices').insert(row).select('id').single();if(error)throw error;
-  const lines=O.invoiceDraftLines.map((l,i)=>{const x=invLineCalc(l);return{invoice_id:data.id,sort_order:(i+1)*10,description:l.description,quantity:n(l.qty),unit_price_base:n(l.unit),discount_pct:n(l.discount),vat_rate:n(l.vat),base_amount:x.base,vat_amount:x.vat,total_amount:x.total}});
-  const {error:le}=await sb.from('ops_sales_invoice_lines').insert(lines);if(le)throw le;
-  if(external){const display=ser.prefix+String(num).padStart(ser.padding,'0');const {error:xe}=await sb.from('ops_sales_invoices').update({number:num,display_number:display,status:'emitida'}).eq('id',data.id);if(xe)throw xe;}
-  await audit('facturas',external?'registrar_externa':'crear_borrador',data.id,{cliente:d.customer,total:invoiceDraftTotals().total});
-  await load(true);O.invoiceDraft=newInvoiceDraft();O.invoiceDraftLines=[defaultInvoiceLine()];render();
- }catch(e){alert('No se pudo guardar la factura: '+e.message)}
-};
-window.opsIssueInvoice=async function(id){
- if(!confirm('¿Emitir esta factura? Se asignará el siguiente número de la serie y ya no podrá reescribirse.'))return;
- try{const {data,error}=await sb.rpc('ops_issue_invoice',{p_invoice_id:id});if(error)throw error;await audit('facturas','emitir',id,{numero:data?.display_number||''});await load(true);render();setTimeout(()=>opsInvoicePdf(id,true),100)}catch(e){alert('No se pudo emitir: '+e.message)}
-};
-async function invoicePdfBlob(id){
- const inv=O.invoices.find(x=>x.id===id);if(!inv)throw new Error('Factura no encontrada');
- const lines=O.invoiceLines.filter(x=>x.invoice_id===id);if(!window.jspdf?.jsPDF)throw new Error('No está disponible el generador PDF');
- const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});
- const s=O.settings||{};doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text(s.business_name||'Factura',15,18);doc.setFontSize(10);doc.setFont('helvetica','normal');
- let y=25;[s.tax_id,s.business_address,s.business_email,s.business_phone].filter(Boolean).forEach(v=>{doc.text(String(v),15,y);y+=5});
- doc.setFont('helvetica','bold');doc.text('FACTURA '+(inv.display_number||''),135,18);doc.setFont('helvetica','normal');doc.text('Fecha: '+dmy(inv.issue_date),135,24);
- doc.setFont('helvetica','bold');doc.text('Cliente',15,48);doc.setFont('helvetica','normal');doc.text(inv.customer_name||'',15,54);if(inv.customer_tax_id)doc.text(inv.customer_tax_id,15,59);if(inv.customer_address)doc.text(inv.customer_address,15,64,{maxWidth:90});
- y=78;doc.setFont('helvetica','bold');doc.text('Descripción',15,y);doc.text('Cant.',115,y);doc.text('Base',135,y);doc.text('IVA',160,y);doc.text('Total',180,y,{align:'right'});doc.line(15,y+2,195,y+2);doc.setFont('helvetica','normal');y+=8;
- lines.forEach(l=>{if(y>260){doc.addPage();y=20}doc.text(String(l.description||''),15,y,{maxWidth:92});doc.text(String(l.quantity),118,y,{align:'right'});doc.text(n(l.base_amount).toFixed(2),150,y,{align:'right'});doc.text(n(l.vat_rate).toFixed(0)+'%',169,y,{align:'right'});doc.text(n(l.total_amount).toFixed(2),195,y,{align:'right'});y+=8});
- y+=4;doc.line(120,y,195,y);y+=7;doc.text('Base: '+eur(inv.base_amount),195,y,{align:'right'});y+=6;doc.text('IVA: '+eur(inv.vat_amount),195,y,{align:'right'});y+=7;doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('TOTAL: '+eur(inv.total_amount),195,y,{align:'right'});
- return doc.output('blob');
-}
-window.opsInvoicePdf=async function(id,saveServer=false){
- try{
-  const inv=O.invoices.find(x=>x.id===id);if(!inv)return;
-  if(inv.generated_document_id&&!saveServer){const d=O.documents.find(x=>x.id===inv.generated_document_id);if(d){return opsDownloadDoc(d.id)}}
-  const blob=await invoicePdfBlob(id);const filename=(inv.display_number||'factura').replaceAll('/','-')+'.pdf';
-  if(saveServer&&!inv.generated_document_id){
-   const file=new File([blob],filename,{type:'application/pdf'});
-   const docId=await uploadDoc(file,{store_id:inv.store_id,doc_type:'factura_emitida',document_date:inv.issue_date,supplier_or_customer:inv.customer_name,tax_id:inv.customer_tax_id,invoice_number:inv.display_number,status:'archivada'},'sales_invoice',id);
-   if(docId){await sb.from('ops_sales_invoices').update({generated_document_id:docId}).eq('id',id);await load(true)}
-  }
-  dlBlob(blob,filename);
- }catch(e){alert('No se pudo generar el PDF: '+e.message)}
-};
-
-function fiscalHtml(){
- const f=fiscal(O.year,O.quarter,n(O.plannedSpend)),r=retaEstimate(),pb=periodBounds(O.year,O.quarter,false);
- const prev=O.settings?.previous_year_net_income;let minor=0;if(prev!=null&&prev<=12000){minor=prev<=9000?100:prev<=10000?75:prev<=11000?50:25}
- const reserve=f.payable+f.m111+f.m115;
- const gestorRef=sum(O.gestorQuarterSummary.filter(x=>x.fiscal_year===O.year&&n(x.quarter)===O.quarter),x=>n(x.imputable_irpf));
- const recon=O.reconciliationNotes.filter(x=>(x.fiscal_year==null||x.fiscal_year===O.year)&&(x.quarter==null||n(x.quarter)===O.quarter));
- return `<div class="ops-kpis">
-  <div class="ops-kpi"><small>Ingresos acumulados</small><strong>${eur(f.incomeAcc)}</strong><div class="sub">01/01 → fin T${O.quarter}</div></div>
-  <div class="ops-kpi"><small>Gastos deducibles</small><strong>${eur(f.expRaw)}</strong><div class="sub">Antes del 5 %</div></div>
-  <div class="ops-kpi"><small>Difícil justificación</small><strong>${eur(f.difficult)}</strong><div class="sub">${h(String(O.settings?.difficult_expense_pct||5))}% · máximo ${eur(O.settings?.difficult_expense_annual_cap||2000)}</div></div>
-  <div class="ops-kpi ${f.net>=0?'good':'bad'}"><small>Rendimiento neto estimado</small><strong>${eur(f.net)}</strong><div class="sub">Acumulado año</div></div>
-  <div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${eur(reserve)}</strong><div class="sub">130 + 111 + 115</div></div>
- </div>
- <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelo 130</div><h3>Contador IRPF T${O.quarter}</h3></div></div>
-   <div class="ops-metric-line"><span>01 · Ingresos acumulados</span><b>${eur(f.incomeAcc)}</b></div>
-   <div class="ops-metric-line"><span>02 · Gastos deducibles estimados</span><b>${eur(f.deductible)}</b></div>
-   <div class="ops-metric-line"><span>03 · Rendimiento neto</span><b>${eur(f.net)}</b></div>
-   <div class="ops-metric-line"><span>04 · ${h(String(O.settings?.irpf_prepayment_rate||20))}%</span><b>${eur(f.box4)}</b></div>
-   <div class="ops-metric-line"><span>05 · 130 anteriores pagados</span><b>− ${eur(f.previous)}</b></div>
-   <div class="ops-metric-line"><span>06 · Retenciones soportadas</span><b>− ${eur(f.ret)}</b></div>
-   ${minor?`<div class="ops-metric-line"><span>Minoración orientativa</span><b>− ${eur(minor)}</b></div>`:''}
-   <div class="ops-metric-line"><span><b>Estimación pendiente</b></span><b>${eur(Math.max(0,f.payable-minor))}</b></div>
-   <div class="ops-note warn" style="margin-top:10px">Es una previsión de control interno. La presentación oficial debe cuadrarse con la gestoría y con los ajustes que no estén registrados en Totus.</div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Simulador</div><h3>¿Y si gasto más?</h3></div></div>
-   <label>Gasto deducible adicional antes de cerrar T${O.quarter}</label><input inputmode="decimal" value="${h(O.plannedSpend)}" oninput="opsPlannedSpend(this.value)" placeholder="0,00">
-   <div class="ops-metric-line"><span>130 estimado con ese gasto</span><b>${eur(Math.max(0,f.payable-minor))}</b></div>
-   <div class="ops-metric-line"><span>Ahorro aproximado frente a ahora</span><b>${eur(Math.max(0,fiscal(O.year,O.quarter,0).payable-f.payable))}</b></div>
-   <div class="ops-note" style="margin-top:10px">No recomienda comprar por comprar: muestra únicamente el impacto fiscal aproximado de un gasto que sea real, necesario y deducible.</div>
-  </div>
- </div>
- <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Retenciones</div><h3>Modelos 111 y 115</h3></div></div>
-   <div class="ops-metric-line"><span>111 · nóminas/profesionales T${O.quarter}</span><b>${eur(f.m111)}</b></div>
-   <div class="ops-metric-line"><span>115 · alquileres T${O.quarter}</span><b>${eur(f.m115)}</b></div>
-   <div class="ops-metric-line"><span>Total a reservar</span><b>${eur(f.m111+f.m115)}</b></div>
-   <button class="secondary" onclick="opsOpenTaxPayment()">Registrar pago presentado</button>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Autónomos 2026</div><h3>Rango RETA previsto</h3></div></div>
-   <div class="ops-metric-line"><span>Rendimiento computable mensual proyectado</span><b>${eur(r.monthly)}</b></div>
-   <div class="ops-metric-line"><span>Base permitida estimada</span><b>${r.bracket?eur(r.bracket.min_base)+' – '+eur(r.bracket.max_base):'—'}</b></div>
-   <div class="ops-metric-line"><span>Cuota orientativa por rango</span><b>${r.bracket?eur(r.minQuota)+' – '+eur(r.maxQuota):'—'}</b></div>
-   <div class="ops-metric-line"><span>Cuota actual configurada</span><b>${r.actual?eur(r.actual):'Sin indicar'}</b></div>
-   <div class="ops-note">Estimación anualizada con los datos registrados. Para el rendimiento de cotización se suma de nuevo la cuota RETA deducida en IRPF y se aplica la deducción genérica configurada.</div>
-  </div>
- </div>
- ${gestorRef?`<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Cuadre histórico</div><h3>Referencia gestoría T${O.quarter}</h3></div></div><div class="ops-metric-line"><span>Imputable IRPF según documento gestor</span><b>${eur(gestorRef)}</b></div><div class="ops-metric-line"><span>Gastos Totus por fechas del trimestre</span><b>${eur(f.qExpense)}</b></div><div class="ops-metric-line"><span>Diferencia de referencia</span><b>${eur(f.qExpense-gestorRef)}</b></div>${recon.map(x=>`<div class="ops-note warn" style="margin-top:8px"><b>${h(String(x.issue_type||'').replaceAll('_',' '))}</b> · ${h(x.detail)}<br><span class="ops-tiny">${h(x.resolution||'')}</span></div>`).join('')}</div>`:''}
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trimestres ${O.year}</div><h3>Evolución</h3></div></div><div class="ops-quarter-grid">${[1,2,3,4].map(q=>{const x=fiscal(O.year,q,0);return `<div class="ops-quarter ${q===O.quarter?'current':''}"><small>T${q}</small><strong>${eur(x.payable)}</strong><div class="small">130 previsto</div><div class="ops-tiny">Ingresos ${eur(x.qIncome)} · Gastos ${eur(x.qExpense)}</div></div>`}).join('')}</div></div>`;
-}
 window.opsPlannedSpend=function(v){O.plannedSpend=v;clearTimeout(window.__opsPlanTimer);window.__opsPlanTimer=setTimeout(render,150)};
-window.opsOpenTaxPayment=async function(){
- if(!manager()){alert('Solo administración o gerencia puede registrar impuestos presentados.');return}
- const type=prompt('Modelo a registrar: 130, 111 o 115','130');if(!['130','111','115'].includes(type))return;
- const amount=prompt('Importe pagado (€):','');if(amount===null)return;
- try{const {error}=await sb.from('ops_tax_payments').insert({tax_type:type,fiscal_year:O.year,quarter:O.quarter,period_label:`T${O.quarter} ${O.year}`,payment_date:isoToday(),amount:n(amount),status:'pagado',created_by:authSession.user.id});if(error)throw error;await audit('fiscal','registrar_pago',null,{type,amount:n(amount),quarter:O.quarter});await load(true);render()}catch(e){alert(e.message)}
-};
-
-function reportsHtml(){
- return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Descargas</div><h3>Informes y entrega a gestoría</h3><div class="small">Selecciona una franja; todo se genera con los datos registrados en Gestión.</div></div></div>
- <div class="ops-filters"><div><label>Desde</label><input type="date" value="${h(O.reportFrom)}" onchange="opsReportDate('from',this.value)"></div><div><label>Hasta</label><input type="date" value="${h(O.reportTo)}" onchange="opsReportDate('to',this.value)"></div></div>
- <div class="ops-grid-3" style="margin-top:14px">
-  <div class="ops-card"><h4>Cierres de caja</h4><p class="small">Detalle diario por tienda y medio de pago.</p><button class="secondary" onclick="opsExportClosings(true)">Descargar CSV</button></div>
-  <div class="ops-card"><h4>Gastos gestoría</h4><p class="small">Concepto, bases, IVA, recargo y retenciones.</p><button class="secondary" onclick="opsExportExpenses(true)">Descargar CSV</button></div>
-  <div class="ops-card"><h4>Ingresos gestoría</h4><p class="small">Resumen mensual por establecimiento.</p><button class="secondary" onclick="opsExportIncome()">Descargar CSV</button></div>
-  <div class="ops-card"><h4>Informe fiscal</h4><p class="small">Resumen de resultado, 130, 111, 115 y RETA.</p><button class="secondary" onclick="opsFiscalPdf()">Descargar PDF</button></div>
-  <div class="ops-card"><h4>Facturas y documentos</h4><p class="small">Todos los archivos de la franja seleccionada.</p><button class="secondary" onclick="opsZipReportDocs()">Descargar ZIP</button></div>
-  <div class="ops-card"><h4>Paquete gestor</h4><p class="small">CSV + documentos en un solo ZIP.</p><button class="primary" onclick="opsGestorPack()">Preparar paquete</button></div>
- </div></div>`;
-}
-window.opsReportDate=function(k,v){if(k==='from')O.reportFrom=v;else O.reportTo=v};
-function closingRows(from,to){
- const rs=filteredClosings(from,to,'all').sort((a,b)=>a.business_date.localeCompare(b.business_date));
- return [['Fecha','Establecimiento','Apertura','Efectivo vendido','Tarjeta','Bizum','Online','Otras entradas','Salida caja','Gastos caja','Caja final','Total ventas','Notas'],...rs.map(c=>[c.business_date,storeName(c.store_id),c.opening_cash,c.cash_sales,c.card_sales,c.bizum_sales,c.online_sales,c.other_income,c.cash_withdrawals,c.cash_expenses_declared,c.actual_cash,n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income),c.notes||''])];
-}
-window.opsExportClosings=function(reportRange=false){const p=reportRange?{start:O.reportFrom,end:O.reportTo}:periodBounds(O.year,O.quarter,false);csvDownload(`cierres_${p.start}_${p.end}.csv`,closingRows(p.start,p.end))};
-function expenseRows(from,to){
- const map=expenseLineMap(),rows=[['Fecha','Nº fra. proveedor','NIF/CIF','Identificación','Código','Concepto','Base IVA','% IVA','Cuota IVA','Base R. Equiv.','% R.Equiv.','Cuota R.Equiv.','Imputable IRPF','Base retención','%','Cuota retenida','Modelo','Establecimiento']];
- O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)).sort((a,b)=>a.expense_date.localeCompare(b.expense_date)).forEach(e=>{
-  const lines=map.get(e.id)||[];
-  lines.forEach(l=>{
-   const c=category(l.category_id);rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,c?.manager_code||'',c?.name||l.description,l.base_amount,l.vat_rate,l.vat_amount,l.re_base,l.re_rate,l.re_amount,l.base_amount,l.withholding_base,l.withholding_rate,l.withholding_amount,l.withholding_model||'',storeName(e.store_id)]);
-   const tax=n(l.vat_amount)+n(l.re_amount);if(tax)rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,'632','IVA SOPORTADO (RECARGO - REAGYP)','', '', '', '', '', '',tax,'','','','',storeName(e.store_id)]);
-  });
- });
- return rows;
-}
-window.opsExportExpenses=function(reportRange=false){const p=reportRange?{start:O.reportFrom,end:O.reportTo}:periodBounds(O.year,O.quarter,false);csvDownload(`gastos_gestoria_${p.start}_${p.end}.csv`,expenseRows(p.start,p.end))};
-function incomeRows(from,to){
- const rows=[['Fecha','Nº factura','Identificación del cliente','Concepto','Ingresos','Establecimiento']];
- O.stores.forEach(s=>{
-  let cur=new Date(from+'T00:00:00'),end=new Date(to+'T00:00:00');
-  while(cur<=end){
-   const y=cur.getFullYear(),m=cur.getMonth(),ms=`${y}-${String(m+1).padStart(2,'0')}`;
-   const last=new Date(y,m+1,0),lastS=`${y}-${String(m+1).padStart(2,'0')}-${String(last.getDate()).padStart(2,'0')}`;
-   const mFrom=ms+'-01',mTo=lastS<to?lastS:to;const actualFrom=mFrom<from?from:mFrom;
-   const val=incomeFor(actualFrom,mTo,s.id);
-   if(val)rows.push([mTo,ms.replace('-','').slice(4)+'/'+String(y).slice(-2),`VENTAS ${s.name.toUpperCase()}`,'700 VENTAS - INGRESOS',val,s.name]);
-   cur=new Date(y,m+1,1);
-  }
- });
- return rows;
-}
-window.opsExportIncome=function(){csvDownload(`ingresos_gestoria_${O.reportFrom}_${O.reportTo}.csv`,incomeRows(O.reportFrom,O.reportTo))};
 function docArchiveFolder(d,root='04_DOCUMENTOS'){
  const dt=d.document_date||'sin_fecha',year=dt.slice(0,4)||'SIN_ANO',month=dt.slice(5,7)||'SIN_MES';
  const q=dt&&dt.length>=7?'T'+qtrFromDate(dt):'SIN_TRIMESTRE';
@@ -775,58 +415,13 @@ window.opsZipReportDocs=async function(){
  await zipDocs(docs,z,'DOCUMENTOS');
  dlBlob(await z.generateAsync({type:'blob'}),`documentos_${O.reportFrom}_${O.reportTo}.zip`);
 };
-window.opsGestorPack=async function(){
- if(!window.JSZip)return alert('ZIP no disponible.');
- const z=new JSZip(),toCsv=rows=>'\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
- const base=`GESTORIA_${O.reportFrom}_${O.reportTo}`;
- z.file(base+`/01_INGRESOS/INGRESOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(incomeRows(O.reportFrom,O.reportTo)));
- z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(expenseRows(O.reportFrom,O.reportTo)));
- z.file(base+`/03_CIERRES/CASH_CIERRES_${O.reportFrom}_${O.reportTo}.csv`,toCsv(closingRows(O.reportFrom,O.reportTo)));
- const internalExpenseIds=new Set(O.expenses.filter(e=>e.management_only).map(e=>e.id));
- const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo)&&!(d.linked_entity_type==='expense'&&internalExpenseIds.has(d.linked_entity_id)));
- await zipDocs(docs,z,base+'/04_DOCUMENTOS');
- z.file(base+'/00_LEEME.txt',
-   'Paquete generado por Totus Central.\r\n'+
-   'Orden: 01 INGRESOS · 02 GASTOS · 03 CIERRES · 04 DOCUMENTOS.\r\n'+
-   'Los CSV de ingresos y gastos respetan la estructura de trabajo facilitada por la gestoría.\r\n'+
-   'Los documentos se ordenan por año > trimestre > mes > establecimiento > tipo > proveedor/cliente.\r\n'+
-   'Periodo: '+O.reportFrom+' a '+O.reportTo+'\r\n');
- dlBlob(await z.generateAsync({type:'blob'}),`paquete_gestor_${O.reportFrom}_${O.reportTo}.zip`);
-};
-window.opsFiscalPdf=function(){
- if(!window.jspdf?.jsPDF)return alert('PDF no disponible.');
- const {jsPDF}=window.jspdf,doc=new jsPDF(),f=fiscal(O.year,O.quarter,0),r=retaEstimate();doc.setFontSize(18);doc.text(`Totus Gestión · Fiscal T${O.quarter} ${O.year}`,15,18);doc.setFontSize(11);let y=32;
- [['Ingresos acumulados',f.incomeAcc],['Gastos deducibles',f.deductible],['Rendimiento neto',f.net],['Modelo 130 previsto',f.payable],['Modelo 111 trimestre',f.m111],['Modelo 115 trimestre',f.m115],['Reserva fiscal',f.reserve],['RETA rendimiento mensual proyectado',r.monthly]].forEach(x=>{doc.text(x[0],15,y);doc.text(eur(x[1]),195,y,{align:'right'});y+=8});
- doc.setFontSize(9);doc.text('Documento de control interno. Debe cuadrarse con la gestoría antes de presentar autoliquidaciones.',15,y+8,{maxWidth:180});
- dlBlob(doc.output('blob'),`fiscal_T${O.quarter}_${O.year}.pdf`);
-};
-
-function configHtml(){
- const s=O.settings||{},usage=sum(O.documents,d=>n(d.size_bytes)),limit=n(s.storage_limit_bytes||1073741824);
- return `<div class="ops-grid">
-  <div class="ops-card ${adminOnly()?'ops-manager':''}"><div class="section-head"><div><div class="eyebrow">Empresa</div><h3>Datos y criterios</h3></div><button class="primary" onclick="opsSaveSettings()" ${adminOnly()?'':'disabled'}>Guardar</button></div>
-   <div class="ops-form">
-    <div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${h(s.business_name||'')}" ${adminOnly()?'':'disabled'}></div><div><label>NIF/CIF</label><input id="ops_set_tax" value="${h(s.tax_id||'')}" ${adminOnly()?'':'disabled'}></div>
-    <div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${h(s.business_address||'')}" ${adminOnly()?'':'disabled'}></div>
-    <div><label>Email</label><input id="ops_set_email" value="${h(s.business_email||'')}" ${adminOnly()?'':'disabled'}></div><div><label>Teléfono</label><input id="ops_set_phone" value="${h(s.business_phone||'')}" ${adminOnly()?'':'disabled'}></div>
-    <div><label>Cuota RETA actual / mes</label><input id="ops_set_reta" inputmode="decimal" value="${h(s.actual_reta_monthly??'')}" ${adminOnly()?'':'disabled'}></div><div><label>Rendimiento neto año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${h(s.previous_year_net_income??'')}" ${adminOnly()?'':'disabled'}></div>
-   </div>
-   <div class="ops-note" style="margin-top:12px">Régimen configurado: recargo de equivalencia · estimación directa simplificada · pago fraccionado IRPF ${h(String(s.irpf_prepayment_rate||20))}%.</div>
-  </div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Almacenamiento</div><h3>${fmtInt(usage/1024/1024)} MB usados</h3></div></div><div class="ops-progress"><i style="width:${Math.min(100,limit?usage/limit*100:0)}%"></i></div><div class="ops-metric-line"><span>Límite de control</span><b>${fmtInt(limit/1024/1024)} MB</b></div><div class="ops-metric-line"><span>Documentos</span><b>${O.documents.length}</b></div></div>
- </div>
- <div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Establecimientos y cajas</div><h3>Estructura diaria</h3></div></div>${O.stores.map(s=>`<div class="ops-metric-line"><span><b>${h(s.name)}</b><br><small>${O.drawers.filter(d=>d.store_id===s.id).map(d=>h(d.name)).join(' · ')}</small></span><b>${O.drawers.filter(d=>d.store_id===s.id).length} caja(s)</b></div>`).join('')}</div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Series de factura</div><h3>Numeración ${O.year}</h3></div></div>${O.series.filter(s=>s.year===O.year).map(s=>`<div class="ops-metric-line"><span>${h(s.code)} · ${h(storeName(s.store_id))}</span><b>Siguiente ${h(s.prefix)}${String(s.next_number).padStart(s.padding,'0')}</b></div>`).join('')||'<div class="ops-empty">Sin series para este año.</div>'}</div>
- </div>`;
-}
 window.opsSaveSettings=async function(){
  if(!adminOnly())return;
  const row={business_name:document.getElementById('ops_set_name').value,business_address:document.getElementById('ops_set_address').value,business_email:document.getElementById('ops_set_email').value,business_phone:document.getElementById('ops_set_phone').value,tax_id:document.getElementById('ops_set_tax').value,actual_reta_monthly:n(document.getElementById('ops_set_reta').value)||null,previous_year_net_income:n(document.getElementById('ops_set_prevnet').value)||null,current_year:O.year};
  const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}await audit('config','actualizar',null,{});await load(true);render();
 };
 
-window.opsTab=function(tab){O.tab=tab;if(tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();if(tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}if(tab==='facturas'&&!O.invoiceDraft){O.invoiceDraft=newInvoiceDraft();O.invoiceDraftLines=[defaultInvoiceLine()]}render();window.scrollTo({top:0,behavior:'smooth'})};
+window.opsTab=function(tab){O.tab=tab;if(tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();if(tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}render();window.scrollTo({top:0,behavior:'smooth'})};
 window.opsSetYear=function(v){O.year=+v;O.reportFrom=`${O.year}-01-01`;O.reportTo=`${O.year}-12-31`;O.invoiceDraft=null;render()};
 window.opsSetQuarter=function(v){O.quarter=+v;render()};
 window.opsSetStore=function(v){O.storeId=v;O.closeDraft=null;O.expenseDraft=null;O.invoiceDraft=null;render()};
