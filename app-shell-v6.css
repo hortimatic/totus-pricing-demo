@@ -26,3 +26,25 @@
  .portal-grid{grid-template-columns:1fr}
  .portal-card{min-height:190px}
 }
+
+/* V7 · navegación principal por funciones */
+.top{gap:10px}
+.app-nav{min-width:0;max-width:min(1120px,72vw);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;padding-bottom:2px}
+.app-nav button{flex:0 0 auto;white-space:nowrap}
+.portal-grid-modules{grid-template-columns:repeat(4,minmax(0,1fr))}
+.portal-grid-modules .portal-card{min-height:190px}
+.admin-module>.module-strip{margin-bottom:14px}
+@media(max-width:1380px){
+ .app-nav{max-width:64vw}
+ .portal-grid-modules{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:1050px){
+ .top{flex-wrap:wrap}
+ .app-nav{order:3;max-width:100%;width:100%}
+ .top .spacer{display:none}
+ .portal-grid-modules{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+ .portal-grid-modules{grid-template-columns:1fr}
+ .app-nav{margin-top:4px}
+}
