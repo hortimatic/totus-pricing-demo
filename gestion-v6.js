@@ -302,7 +302,7 @@ window.opsSaveClosing=async function(status='cerrado'){
 
 function defaultExpenseLine(){
  const cat=O.categories.find(c=>c.code==='MERCH')||O.categories[0];
- return {id:null,categoryId:cat?.id||'',description:'',base:'',vat:'21',re:cat?.code==='MERCH'?'5,2':'0',withholding:'0',model:'',deductible:true,fixed:false};
+ return {id:null,categoryId:cat?.id||'',description:'',base:'',vat:'21',re:cat?.code==='MERCH'?'5,2':'0',withholding:'0',model:'',deductible:true,deductiblePct:'100',fixed:false};
 }
 function newExpenseDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
@@ -312,7 +312,7 @@ function expenseLineCalc(l){
  const base=n(l.base),vatRate=n(l.vat),reRate=n(l.re),wRate=n(l.withholding);
  const vat=base*vatRate/100,re=base*reRate/100,withholding=base*wRate/100;
  const accounting=base+vat+re,payable=accounting-withholding;
- const imputable=(l.deductible&&!l.fixed)?accounting:0;
+ const pct=Math.min(100,Math.max(0,n(l.deductiblePct??100)));const imputable=(l.deductible&&!l.fixed)?accounting*pct/100:0;
  return {base,vatRate,reRate,wRate,vat,re,withholding,accounting,payable,imputable};
 }
 function draftExpenseTotals(){
@@ -334,7 +334,7 @@ function expensesHtml(){
   <div><label>NIF / CIF proveedor</label><input value="${h(d.taxId)}" oninput="opsExpenseField('taxId',this.value)"></div>
   <div><label>Nº factura proveedor</label><input value="${h(d.invoice)}" oninput="opsExpenseField('invoice',this.value)"></div>
   <div><label>Tipo de documento</label><select aria-label="Tipo de documento del gasto" oninput="opsExpenseField('documentKind',this.value)">${[['factura','Factura'],['rectificativa','Rectificativa / abono'],['ticket','Ticket'],['nomina','Nómina'],['seguridad_social','Seguridad Social'],['recibo','Recibo'],['otro','Otro']].map(x=>`<option value="${x[0]}" ${d.documentKind===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
-  <div class="span2"><label>Factura / documento adjunto</label><input id="ops_exp_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"><div class="small">${attached?'<span class="badge ok">Adjunto existente</span> Puedes sustituirlo seleccionando otro archivo.':'PDF, imagen, Excel o CSV · máximo configurado 20 MB'}</div></div>
+  <div class="span2"><label>Factura / documento adjunto</label><input id="ops_exp_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"><div class="small">${attached?'<span class="badge ok">Factura adjunta</span> Seleccionar otro archivo la sustituirá.':'PDF, imagen, Excel o CSV · máximo configurado 20 MB'}</div>${attached?`<div class="ops-actions" style="margin-top:8px"><button type="button" class="ghost" onclick="opsPreviewDoc('${attached}')">Ver factura</button><button type="button" class="ghost" onclick="opsDownloadDoc('${attached}')">Descargar</button>${manager()?`<button type="button" class="danger" onclick="opsRemoveExpenseDocument('${attached}')">Quitar factura</button>`:''}</div>`:''}</div>
  </div>
  <div class="invoice-section-title">2 · Pago</div>
  <div class="ops-form">
@@ -351,20 +351,22 @@ function expensesHtml(){
  <div class="ops-totalbox"><div><small>Base + IVA + RE</small><b>${eur(t.accounting)}</b></div><div><small>Retenciones</small><b>${eur(t.withholding)}</b></div><div><small>A pagar proveedor</small><b>${eur(t.payable)}</b></div><div><small>Pagado indicado</small><b>${d.amountPaid!==''?eur(n(d.amountPaid)):eur(t.payable)}</b></div></div>
  <div class="invoice-section-title">4 · Observaciones</div><div class="ops-form"><div class="span4"><label>Notas</label><textarea oninput="opsExpenseField('notes',this.value)">${h(d.notes)}</textarea></div></div>
  </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3><div class="small">Los importados quedan protegidos; los manuales pueden editarse y, por admin/gerencia, eliminarse.</div></div><button class="secondary" onclick="opsExportExpenses()">Exportar CSV</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()&&e.source==='manual'?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
+ <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3><div class="small">Admin/Gerencia pueden corregir o eliminar cualquier registro con motivo y trazabilidad. Los importados muestran siempre su procedencia.</div></div><button class="secondary" onclick="opsExportExpenses()">Exportar CSV</button></div>
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}${e.source!=='manual'?'<div><span class="badge">Importado</span></div>':''}${e.source==='importacion_excel'&&!e.fiscal_reviewed&&!e.management_only?'<div><span class="badge warnb">Fiscal pendiente</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
  </div>`;
 }
 function expenseLineHtml(l,i){
- const x=expenseLineCalc(l),cat=category(l.categoryId);
+ const x=expenseLineCalc(l),cat=category(l.categoryId),pct=Math.min(100,Math.max(0,n(l.deductiblePct??100)));
+ const treatment=l.fixed?'fixed':!l.deductible?'none':pct<100?'partial':'full';
  return `<div class="ops-line">
-  <div><label>Concepto / categoría</label><select onchange="opsExpenseLineField(${i},'categoryId',this.value,true)">${O.categories.map(c=>`<option value="${c.id}" ${l.categoryId===c.id?'selected':''}>${h(c.manager_code?c.manager_code+' · '+c.name:c.name)}</option>`).join('')}</select><input style="margin-top:6px" placeholder="Detalle opcional" value="${h(l.description)}" oninput="opsExpenseLineField(${i},'description',this.value)"></div>
+  <div><label>Concepto / categoría</label><select aria-label="Categoría de la línea ${i+1}" onchange="opsExpenseLineField(${i},'categoryId',this.value,true)">${O.categories.map(c=>`<option value="${c.id}" ${l.categoryId===c.id?'selected':''}>${h(c.manager_code?c.manager_code+' · '+c.name:c.name)}</option>`).join('')}</select><input aria-label="Detalle de la línea ${i+1}" style="margin-top:6px" placeholder="Detalle opcional" value="${h(l.description)}" oninput="opsExpenseLineField(${i},'description',this.value)"></div>
   <div><label>Base</label><input inputmode="decimal" value="${h(l.base)}" oninput="opsExpenseLineField(${i},'base',this.value,true)"></div>
   <div><label>IVA %</label><input inputmode="decimal" value="${h(l.vat)}" oninput="opsExpenseLineField(${i},'vat',this.value,true)"></div>
   <div><label>RE %</label><input inputmode="decimal" value="${h(l.re)}" oninput="opsExpenseLineField(${i},'re',this.value,true)"></div>
   <div><label>Retención %</label><input inputmode="decimal" value="${h(l.withholding)}" oninput="opsExpenseLineField(${i},'withholding',this.value,true)"><select aria-label="Modelo de retención" style="margin-top:5px" onchange="opsExpenseLineField(${i},'model',this.value)"><option value="">Sin modelo</option><option value="111" ${l.model==='111'?'selected':''}>111</option><option value="115" ${l.model==='115'?'selected':''}>115</option></select></div>
-  <button class="ghost" onclick="opsRemoveExpenseLine(${i})" ${O.expenseDraftLines.length===1?'disabled':''}>×</button>
-  <div style="grid-column:1/-1" class="small">${h(cat?.aeat_group||'')} · Base ${eur(x.base)} · IVA ${eur(x.vat)} · RE ${eur(x.re)} · Ret. ${eur(x.withholding)} · <b>Imputable IRPF ${eur(x.imputable)}</b></div>
+  <div><label>Tratamiento IRPF ${infoButton('gastos','Ayuda sobre deducibilidad')}</label><select aria-label="Tratamiento IRPF de la línea ${i+1}" onchange="opsExpenseTreatment(${i},this.value)"><option value="full" ${treatment==='full'?'selected':''}>Deducible 100 %</option><option value="partial" ${treatment==='partial'?'selected':''}>Deducible parcial</option><option value="none" ${treatment==='none'?'selected':''}>No deducible</option><option value="fixed" ${treatment==='fixed'?'selected':''}>Inmovilizado / amortizable</option></select>${treatment==='partial'?`<input aria-label="Porcentaje deducible de la línea ${i+1}" style="margin-top:5px" inputmode="decimal" value="${h(l.deductiblePct??100)}" oninput="opsExpenseLineField(${i},'deductiblePct',this.value,true)" placeholder="% deducible">`:''}</div>
+  <button class="ghost" aria-label="Eliminar línea ${i+1}" onclick="opsRemoveExpenseLine(${i})" ${O.expenseDraftLines.length===1?'disabled':''}>×</button>
+  <div style="grid-column:1/-1" class="small">${h(cat?.aeat_group||'')} · Base ${eur(x.base)} · IVA ${eur(x.vat)} · RE ${eur(x.re)} · Ret. ${eur(x.withholding)} · <b>Imputable IRPF ${eur(x.imputable)}</b>${treatment==='partial'?` (${pct.toFixed(2).replace('.',',')} %)`:''}</div>
  </div>`;
 }
 window.opsExpenseField=(k,v,rer=false)=>{O.expenseDraft[k]=v;if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}if(rer)render();};
@@ -372,7 +374,7 @@ window.opsExpenseLineField=function(i,k,v,recalc=false){
  const l=O.expenseDraftLines[i]; if(!l)return;l[k]=v;
  if(k==='categoryId'){
   const c=category(v);
-  l.deductible=c?.deductible_default!==false;
+  l.deductible=c?.deductible_default!==false;l.deductiblePct=l.deductible?'100':'0';
   if(c?.code==='MERCH'){l.vat='21';l.re='5,2';l.withholding='0';l.model=''}
   else if(c?.code==='RENT'){l.vat='21';l.re='0';l.withholding='19';l.model='115'}
   else if(['BANK','INSURANCE','RETA','PAYROLL','SOCIAL','INTERNAL_OVERTIME','INTERNAL_WAREHOUSE'].includes(c?.code)){l.vat='0';l.re='0';l.withholding='0';l.model=''}
@@ -380,6 +382,14 @@ window.opsExpenseLineField=function(i,k,v,recalc=false){
   l.fixed=!!c?.fixed_asset_default;
  }
  if(recalc)render();
+};
+window.opsExpenseTreatment=function(i,v){
+ const l=O.expenseDraftLines[i];if(!l)return;
+ if(v==='full'){l.deductible=true;l.deductiblePct='100';l.fixed=false}
+ if(v==='partial'){l.deductible=true;l.deductiblePct=(n(l.deductiblePct)>0&&n(l.deductiblePct)<100)?l.deductiblePct:'50';l.fixed=false}
+ if(v==='none'){l.deductible=false;l.deductiblePct='0';l.fixed=false}
+ if(v==='fixed'){l.deductible=false;l.deductiblePct='0';l.fixed=true}
+ render();
 };
 window.opsAddExpenseLine=function(){O.expenseDraftLines.push(defaultExpenseLine());render()};
 window.opsRemoveExpenseLine=function(i){if(O.expenseDraftLines.length>1){O.expenseDraftLines.splice(i,1);render()}};
@@ -389,7 +399,7 @@ window.opsQuickInternal=function(kind){
  const c=O.categories.find(x=>x.code===code);
  d.managementOnly=true;d.documentKind='otro';d.taxId='';d.invoice='';d.fiscalReviewed=false;d.paidStatus='pagado';d.paidDate=d.date||isoToday();
  d.supplier=kind==='warehouse'?'Almacén':'Horas extra empleados';
- O.expenseDraftLines=[{id:null,categoryId:c?.id||'',description:kind==='warehouse'?'Pago interno de almacén':'Horas extra / pago interno de personal',base:kind==='warehouse'?'300':'',vat:'0',re:'0',withholding:'0',model:'',deductible:false,fixed:false}];
+ O.expenseDraftLines=[{id:null,categoryId:c?.id||'',description:kind==='warehouse'?'Pago interno de almacén':'Horas extra / pago interno de personal',base:kind==='warehouse'?'300':'',vat:'0',re:'0',withholding:'0',model:'',deductible:false,deductiblePct:'0',fixed:false}];
  d.amountPaid=kind==='warehouse'?'300':'';
  render();
 };
@@ -397,7 +407,7 @@ window.opsNewExpense=function(){O.expenseDraft=newExpenseDraft();O.expenseDraftL
 window.opsEditExpense=function(id){
  const e=O.expenses.find(x=>x.id===id);if(!e)return;
  O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed,managementOnly:!!e.management_only};
- const lines=O.expenseLines.filter(x=>x.expense_id===id);O.expenseDraftLines=lines.length?lines.map(l=>({id:l.id,categoryId:l.category_id||'',description:l.description||'',base:String(l.base_amount??''),vat:String(l.vat_rate??0).replace('.',','),re:String(l.re_rate??0).replace('.',','),withholding:String(l.withholding_rate??0).replace('.',','),model:l.withholding_model||'',deductible:l.deductible_irpf!==false,fixed:!!l.fixed_asset})): [defaultExpenseLine()];
+ const lines=O.expenseLines.filter(x=>x.expense_id===id);O.expenseDraftLines=lines.length?lines.map(l=>({id:l.id,categoryId:l.category_id||'',description:l.description||'',base:String(l.base_amount??''),vat:String(l.vat_rate??0).replace('.',','),re:String(l.re_rate??0).replace('.',','),withholding:String(l.withholding_rate??0).replace('.',','),model:l.withholding_model||'',deductible:l.deductible_irpf!==false,deductiblePct:String(l.deductible_pct??(l.deductible_irpf!==false?100:0)).replace('.',','),fixed:!!l.fixed_asset})): [defaultExpenseLine()];
  render();window.scrollTo({top:0,behavior:'smooth'});
 };
 async function fileSha256(file){
@@ -434,15 +444,25 @@ async function uploadDoc(file,meta,linkedType='',linkedId=null){
 window.opsDeleteExpense=async function(id){
  if(!manager())return alert('Solo administración o gerencia puede eliminar gastos.');
  const e=O.expenses.find(x=>x.id===id);if(!e)return;
- if(e.source!=='manual')return alert('Los gastos importados no se eliminan desde la aplicación.');
- if(!confirm('¿Eliminar este gasto manual? Esta acción quitará también su desglose.'))return;
- if(!confirm('Confirmación final: ¿seguro que quieres eliminarlo definitivamente?'))return;
+ const origin=e.source==='manual'?'manual':'importado ('+e.source+')';
+ const reason=await askReason('Eliminar gasto',`Vas a eliminar el gasto de ${e.supplier_name} del ${dmy(e.expense_date)} · ${origin}. Se conservará una copia completa en el historial administrativo.`,'Eliminar definitivamente');
+ if(!reason)return;
  try{
-  const {data,error}=await sb.rpc('ops_delete_manual_expense',{p_expense_id:id});if(error)throw error;
-  if(data?.storage_path){const rm=await sb.storage.from('business-documents').remove([data.storage_path]);if(rm.error)console.warn('No se pudo limpiar el archivo físico:',rm.error.message)}
-  await audit('gastos','eliminar',id,{proveedor:e.supplier_name,fecha:e.expense_date});
+  const {data,error}=await sb.rpc('ops_delete_expense_controlled',{p_expense_id:id,p_reason:reason});if(error)throw error;
+  for(const path of (data?.storage_paths||[])){const rm=await sb.storage.from('business-documents').remove([path]);if(rm.error)console.warn('Archivo físico pendiente de limpieza:',rm.error.message)}
   await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
  }catch(err){alert('No se pudo eliminar el gasto: '+err.message)}
+};
+window.opsRemoveExpenseDocument=async function(docId){
+ if(!manager())return alert('Solo administración o gerencia puede quitar adjuntos.');
+ const d=O.documents.find(x=>x.id===docId);if(!d)return;
+ const reason=await askReason('Quitar factura adjunta',`Se desvinculará y eliminará del archivo de Totus "${d.original_name}". El gasto seguirá existiendo.`,'Quitar factura');
+ if(!reason)return;
+ try{
+  const {data,error}=await sb.rpc('ops_delete_document_controlled',{p_document_id:docId,p_reason:reason});if(error)throw error;
+  if(data?.storage_path){const rm=await sb.storage.from('business-documents').remove([data.storage_path]);if(rm.error)console.warn('Archivo físico pendiente de limpieza:',rm.error.message)}
+  await load(true);render();
+ }catch(err){alert('No se pudo quitar el adjunto: '+err.message)}
 };
 
 window.opsSaveExpense=async function(){
@@ -458,13 +478,21 @@ window.opsSaveExpense=async function(){
    validateDocFile(file);
    const totals=draftExpenseTotals();
    const payload={id:d.id||null,store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
-   const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}));
+   const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:Math.min(100,Math.max(0,n(l.deductiblePct??100))),fixed_asset:!!l.fixed,notes:''}));
    const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
    if(file){
      try{
       const cat=category(O.expenseDraftLines[0]?.categoryId);
+      const previousDocId=d.id?O.expenses.find(x=>x.id===d.id)?.document_id:null;
       const docId=await uploadDoc(file,{store_id:d.storeId||null,doc_type:'factura_recibida',document_date:d.date,supplier_or_customer:d.supplier,tax_id:d.taxId,invoice_number:d.invoice,category_code:cat?.manager_code||'',status:d.paidStatus==='pagado'?'pagada':'pendiente',notes:d.notes},'expense',id);
-      if(docId){const link=await sb.from('ops_expenses').update({document_id:docId}).eq('id',id);if(link.error)throw link.error}
+      if(docId){
+       const link=await sb.rpc('ops_link_expense_document',{p_expense_id:id,p_document_id:docId});if(link.error)throw link.error;
+       if(previousDocId&&previousDocId!==docId&&manager()){
+        const oldDoc=O.documents.find(x=>x.id===previousDocId);
+        const rmDb=await sb.rpc('ops_delete_document_controlled',{p_document_id:previousDocId,p_reason:'Sustituido por un nuevo adjunto desde la ficha de gasto.'});
+        if(!rmDb.error&&oldDoc?.storage_path)await sb.storage.from('business-documents').remove([oldDoc.storage_path]);
+       }
+      }
      }catch(uploadError){
       await audit('gastos',d.id?'actualizar':'crear',id,{fecha:d.date,proveedor:d.supplier,total:totals.accounting,adjunto:'fallido'});
       await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
