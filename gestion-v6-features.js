@@ -238,7 +238,11 @@ function invoicesReadOnlyHtml(){
  const rows=O.invoices.filter(x=>{const mode=x.document_type==='proforma'?'proforma':(x.invoice_kind==='rectifying'?'rectificativa':'factura');return mode===E.invoiceMode&&x.issue_date?.startsWith(String(O.year))&&(O.storeId==='all'||x.store_id===O.storeId)&&(E.invoiceStatus==='all'||x.status===E.invoiceStatus)}).slice(0,200);
  return `<div class="invoice-workspace"><div class="invoice-toolbar"><div class="invoice-type-switch"><button class="${E.invoiceMode==='factura'?'active':''}" onclick="opsInvoiceView('factura')">Facturas</button><button class="${E.invoiceMode==='rectificativa'?'active':''}" onclick="opsInvoiceView('rectificativa')">Rectificativas</button><button class="${E.invoiceMode==='proforma'?'active':''}" onclick="opsInvoiceView('proforma')">Proformas</button></div></div><div class="ops-note warn">Modo consulta: el encargado puede revisar facturas, rectificativas y proformas, pero solo administración o gerencia puede crear, editar, emitir, cobrar, rectificar o convertir documentos.</div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">${O.year}</div><h3>${E.invoiceMode==='proforma'?'Proformas':E.invoiceMode==='rectificativa'?'Facturas rectificativas':'Facturas'}</h3></div><select aria-label="Filtrar por estado" onchange="opsInvoiceStatus(this.value)"><option value="all">Todos los estados</option>${['borrador','emitida','aceptada','rechazada','convertida','anulada'].map(x=>`<option value="${x}" ${E.invoiceStatus===x?'selected':''}>${x}</option>`).join('')}</select></div>${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Número</th><th>Cliente</th><th>Estado</th><th>Total</th><th>Serie</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${row.issue_date?.split('-').reverse().join('/')||'—'}</td><td><b>${H(row.display_number||'Borrador')}</b></td><td>${H(row.customer_name||'—')}</td><td>${statusBadge(row.status)}</td><td class="num">${euro(row.total_amount)}</td><td>${H(O.series.find(s=>s.id===row.series_id)?.code||'')}</td><td>${row.status!=='borrador'?`<button class="ghost" onclick="opsDocumentPdf('${row.id}')">Ver</button>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay documentos en esta vista.</div>'}</div></div>`;
 }
-function miniPreview(d,t){const tpl=E.templates.find(x=>x.id===d.templateId)||{};return `<div class="mini-head" style="border-color:${H(tpl.secondary_color||'#3B82F6')}"><div class="mini-logo">${tpl.logo_path?'LOGO':'TU LOGO'}</div><div><b>${documentLabel(d.documentType).toUpperCase()}</b><small>${H(O.series.find(s=>s.id===d.seriesId)?.prefix||'SERIE-')}####</small></div></div><div class="mini-client"><b>${H(d.customer||'Cliente')}</b><small>${H(d.taxId||'NIF/CIF')}</small></div><div class="mini-line"></div><div class="mini-line short"></div><div class="mini-total" style="color:${H(tpl.primary_color||'#17202A')}">Total ${euro(t.total)}</div>`}
+function templateMiniPreview(tpl,d,t){
+ const style=tpl.style||'clean',logoText=tpl.show_logo===false?'':(tpl.logo_path?'LOGO':'TU LOGO'),title=d.documentType==='proforma'?(tpl.proforma_title||'FACTURA PROFORMA'):(tpl.invoice_title||documentLabel(d.documentType).toUpperCase());
+ return `<div class="mini-doc-style ${H(style)}" style="--tpl-primary:${H(tpl.primary_color||'#17202A')};--tpl-secondary:${H(tpl.secondary_color||'#3B82F6')};--tpl-text:${H(tpl.text_color||'#17202A')}"><div class="mini-head" style="border-color:${H(tpl.secondary_color||'#3B82F6')}"><div class="mini-logo ${logoText?'':'empty'}">${H(logoText||'SIN LOGO')}</div><div><b>${H(title)}</b><small>${H(O.series.find(s=>s.id===d.seriesId)?.prefix||'SERIE-')}####</small></div></div>${tpl.header_text?`<div class="mini-header-copy">${H(tpl.header_text)}</div>`:''}<div class="mini-client"><b>${H(d.customer||'Cliente')}</b><small>${H(d.taxId||'NIF/CIF')}</small></div><div class="mini-line"></div><div class="mini-line short"></div><div class="mini-total" style="color:${H(tpl.primary_color||'#17202A')}">Total ${euro(t.total)}</div>${tpl.footer_text?`<div class="mini-footer-copy">${H(tpl.footer_text)}</div>`:''}</div>`;
+}
+function miniPreview(d,t){const tpl=E.templates.find(x=>x.id===d.templateId)||{};return templateMiniPreview(tpl,d,t)}
 window.opsDocField=function(k,v,rer=false){const d=ensureDraft();d[k]=v;if(k==='storeId'&&rer){const s=seriesFor(d).find(x=>x.store_id===v)||seriesFor(d)[0];d.seriesId=s?.id||'';}if(rer)render()};
 window.opsDocLine=function(i,k,v,re=false){O.invoiceDraftLines[i][k]=v;if(re){clearTimeout(window.__docCalc);window.__docCalc=setTimeout(render,100)}};
 window.opsAddDocLine=()=>{O.invoiceDraftLines.push({description:'',qty:'1',unit:'',discount:'0',vat:'21'});render()};
@@ -520,28 +524,53 @@ function configHtml(){
  </div>`;
 }
 window.opsSelectTemplateConfig=id=>{E.templateId=id;render()};
+function readTemplateForm(base={}){
+ const get=id=>document.getElementById(id);
+ return {...base,
+  name:(get('ops_tpl_name')?.value||base.name||'').trim(),
+  style:get('ops_tpl_style')?.value||base.style||'clean',
+  primary_color:get('ops_tpl_primary')?.value||base.primary_color||'#17202A',
+  secondary_color:get('ops_tpl_secondary')?.value||base.secondary_color||'#3B82F6',
+  text_color:get('ops_tpl_text')?.value||base.text_color||'#17202A',
+  font_family:get('ops_tpl_font')?.value||base.font_family||'helvetica',
+  logo_width_mm:N(get('ops_tpl_width')?.value||base.logo_width_mm||34),
+  logo_position:get('ops_tpl_logo_pos')?.value||base.logo_position||'left',
+  show_logo:get('ops_tpl_show_logo')?.checked??base.show_logo??true,
+  show_payment_details:get('ops_tpl_show_pay')?.checked??base.show_payment_details??true,
+  invoice_title:(get('ops_tpl_invoice_title')?.value||base.invoice_title||'FACTURA').trim(),
+  proforma_title:(get('ops_tpl_proforma_title')?.value||base.proforma_title||'FACTURA PROFORMA').trim(),
+  header_text:get('ops_tpl_header')?.value||'',
+  payment_terms_default:get('ops_tpl_terms')?.value||'',
+  bank_details:get('ops_tpl_bank')?.value||'',
+  footer_text:get('ops_tpl_footer')?.value||'',
+  default_invoice:!!get('ops_tpl_definv')?.checked,
+  default_proforma:!!get('ops_tpl_defpro')?.checked
+ };
+}
+window.opsTemplateLiveUpdate=function(){
+ const tpl=E.templates.find(t=>t.id===E.templateId)||E.templates[0]||{},target=document.getElementById('ops_tpl_live_preview');if(!target)return;
+ const live=readTemplateForm(tpl),sample={documentType:'factura',invoiceKind:'invoice',templateId:tpl.id,customer:'Cliente de ejemplo',taxId:'B12345678',seriesId:O.series.find(s=>s.document_type==='factura'&&s.series_kind!=='rectifying')?.id||''};
+ target.innerHTML=templateMiniPreview(live,sample,{total:1234.56});
+};
+window.opsPreviewTemplatePdf=async function(id){
+ const tpl=E.templates.find(t=>t.id===id)||{};const live=readTemplateForm(tpl);
+ const fake={document_type:'factura',invoice_kind:'invoice',template_id:id,issue_date:today(),customer_name:'Cliente de ejemplo',customer_tax_id:'B12345678',customer_address:'Calle Ejemplo 1, 28000 Madrid',customer_email:'cliente@ejemplo.es',purchase_order_ref:'PED-001',payment_method:'transferencia',terms_text:live.payment_terms_default,footer_text:live.footer_text,display_number:'BORRADOR',design_snapshot:live};
+ const lines=[{description:'Producto o servicio de ejemplo',quantity:2,unit_price_base:150,discount_pct:0,vat_rate:21},{description:'Segundo concepto',quantity:1,unit_price_base:934.56,discount_pct:0,vat_rate:21}];
+ try{const blob=await makePdf(fake,lines,true);openPdfPreview(blob,'Vista previa de plantilla · '+(live.name||'Sin nombre'),'vista_previa_plantilla.pdf')}catch(e){alert('No se pudo generar la vista previa: '+e.message)}
+};
+window.opsRemoveTemplateLogo=async function(id){
+ if(!manager())return;const tpl=E.templates.find(t=>t.id===id);if(!tpl?.logo_path)return;
+ if(!confirm('¿Quitar el logo de esta plantilla? El resto del diseño se conservará.'))return;
+ try{
+  const rm=await sb.storage.from('business-assets').remove([tpl.logo_path]);if(rm.error)throw rm.error;
+  const {error}=await sb.from('ops_document_templates').update({logo_path:null,logo_name:null,logo_mime:null,logo_size_bytes:0,updated_at:new Date().toISOString()}).eq('id',id);if(error)throw error;
+  await featureLoad(true);render();
+ }catch(e){alert('No se pudo quitar el logo: '+e.message)}
+};
+
 window.opsSaveTemplate=async function(id){
  if(!manager())return alert('Solo administración o gerencia puede editar plantillas.');
- const payload={
-  name:document.getElementById('ops_tpl_name').value.trim(),
-  style:document.getElementById('ops_tpl_style').value,
-  primary_color:document.getElementById('ops_tpl_primary').value,
-  secondary_color:document.getElementById('ops_tpl_secondary').value,
-  text_color:document.getElementById('ops_tpl_text').value,
-  font_family:document.getElementById('ops_tpl_font').value,
-  logo_width_mm:N(document.getElementById('ops_tpl_width').value)||34,
-  logo_position:document.getElementById('ops_tpl_logo_pos').value,
-  show_logo:document.getElementById('ops_tpl_show_logo').checked,
-  show_payment_details:document.getElementById('ops_tpl_show_pay').checked,
-  invoice_title:document.getElementById('ops_tpl_invoice_title').value.trim()||'FACTURA',
-  proforma_title:document.getElementById('ops_tpl_proforma_title').value.trim()||'FACTURA PROFORMA',
-  header_text:document.getElementById('ops_tpl_header').value,
-  payment_terms_default:document.getElementById('ops_tpl_terms').value,
-  bank_details:document.getElementById('ops_tpl_bank').value,
-  footer_text:document.getElementById('ops_tpl_footer').value,
-  default_invoice:document.getElementById('ops_tpl_definv').checked,
-  default_proforma:document.getElementById('ops_tpl_defpro').checked
- };
+ const payload=readTemplateForm(E.templates.find(t=>t.id===id)||{});
  if(!payload.name)return alert('El nombre de la plantilla es obligatorio.');
  if(payload.logo_width_mm<10||payload.logo_width_mm>80)return alert('El ancho del logo debe estar entre 10 y 80 mm.');
  const {error}=await sb.rpc('ops_save_document_template',{p_id:id,p_template:payload});
