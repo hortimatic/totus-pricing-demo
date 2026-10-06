@@ -348,8 +348,11 @@ function validateDocFile(file){
  const max=n(O.settings?.document_max_bytes||20971520);
  const ext='.'+String(file.name||'').split('.').pop().toLowerCase();
  const allowedExt=new Set(['.pdf','.jpg','.jpeg','.png','.webp','.xlsx','.xls','.csv']);
+ const allowedMime=new Set(['application/pdf','image/jpeg','image/png','image/webp','text/csv','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel']);
+ if(file.size<=0)throw new Error('El archivo está vacío.');
  if(file.size>max)throw new Error('El archivo supera el límite de '+Math.round(max/1048576)+' MB.');
  if(!allowedExt.has(ext))throw new Error('Tipo de archivo no permitido. Usa PDF, imagen, Excel o CSV.');
+ if(file.type&&!allowedMime.has(file.type))throw new Error('El contenido del archivo no coincide con un formato permitido.');
  return true;
 }
 window.__opsValidateDocumentFile=validateDocFile;
@@ -358,7 +361,7 @@ async function uploadDoc(file,meta,linkedType='',linkedId=null){
  validateDocFile(file);
  const sha=await fileSha256(file);
  const dup=O.documents.find(d=>d.sha256&&d.sha256===sha);
- if(dup&&!confirm('Este archivo parece estar ya guardado como "'+dup.original_name+'". ¿Subirlo otra vez?'))return dup.id;
+ if(dup&&!confirm('Este archivo ya existe como "'+dup.original_name+'". ¿Quieres guardar otra copia vinculada a este registro?'))return null;
  const dt=meta.document_date||isoToday(),year=dt.slice(0,4),month=dt.slice(5,7),q='T'+qtrFromDate(dt),sc=meta.store_id?(O.stores.find(s=>s.id===meta.store_id)?.code||'TIENDA'):'GENERAL';
  const kind=b64Safe(meta.doc_type||'otro')||'otro',party=b64Safe(meta.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
  const path=[year,q,month,sc,kind,party,crypto.randomUUID()+'_'+b64Safe(file.name)].join('/');
