@@ -435,7 +435,7 @@ window.opsQuickInternal=function(kind){
  const d=O.expenseDraft||(O.expenseDraft=newExpenseDraft());
  const code=kind==='warehouse'?'INTERNAL_WAREHOUSE':'INTERNAL_OVERTIME';
  const c=O.categories.find(x=>x.code===code);
- d.managementOnly=true;d.documentKind='otro';d.taxId='';d.invoice='';d.fiscalReviewed=false;d.payment='efectivo';d.paidStatus='pagado';d.paidDate=d.date||isoToday();
+ d.managementOnly=true;d.documentKind='otro';d.taxId='';d.invoice='';d.fiscalReviewed=false;d.paidStatus='pagado';d.paidDate=d.date||isoToday();
  d.supplier=kind==='warehouse'?'Almacén':'Horas extra empleados';
  O.expenseDraftLines=[{id:null,categoryId:c?.id||'',description:kind==='warehouse'?'Pago interno de almacén':'Horas extra / pago interno de personal',base:kind==='warehouse'?'300':'',vat:'0',re:'0',withholding:'0',model:'',deductible:false,fixed:false}];
  d.amountPaid=kind==='warehouse'?'300':'';
@@ -756,7 +756,8 @@ window.opsGestorPack=async function(){
  z.file(base+`/01_INGRESOS/INGRESOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(incomeRows(O.reportFrom,O.reportTo)));
  z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(expenseRows(O.reportFrom,O.reportTo)));
  z.file(base+`/03_CIERRES/CASH_CIERRES_${O.reportFrom}_${O.reportTo}.csv`,toCsv(closingRows(O.reportFrom,O.reportTo)));
- const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));
+ const internalExpenseIds=new Set(O.expenses.filter(e=>e.management_only).map(e=>e.id));
+ const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo)&&!(d.linked_entity_type==='expense'&&internalExpenseIds.has(d.linked_entity_id)));
  await zipDocs(docs,z,base+'/04_DOCUMENTOS');
  z.file(base+'/00_LEEME.txt',
    'Paquete generado por Totus Central.\r\n'+
