@@ -160,6 +160,7 @@ function invoiceEditor(){
     <div class="bill-section-title"><span>3</span><div><b>Conceptos</b><small>Precios base, descuentos e IVA</small></div><button class="secondary" onclick="billAddInvoiceLine()">Añadir línea</button></div>
     <div class="bill-line-head"><span>Descripción</span><span>Cant.</span><span>Precio</span><span>Dto.</span><span>IVA</span><span>Total</span><span></span></div>
     <div class="bill-lines">${ls.map((l,i)=>invoiceLineHtml(l,i,'invoice')).join('')}</div>
+    ${d.kind==='rectifying'?'<div class="bill-summary-note" style="margin-top:10px">En una rectificativa puedes introducir importes negativos para corregir o devolver cantidades.</div>':''}
    </div>
 
    <div class="bill-section">
@@ -214,7 +215,7 @@ function invoiceTableRows(rows){
  return rows.map(i=>`<tr data-bill-search="${H([i.display_number,i.external_number_text,i.customer_name,i.customer_tax_id].join(' ').toLowerCase())}">
   <td>${fmtDate(i.issue_date)}</td><td><b>${H(i.display_number||i.external_number_text||'Borrador')}</b></td><td>${H(i.customer_name||'—')}</td>
   <td>${H(i.invoice_kind==='rectifying'?'Rectificativa':'Factura')}</td><td>${badge(i.status)}</td><td class="num">${E(i.total_amount)}</td><td>${H(storeName(i.store_id))}</td>
-  <td><div class="ops-actions">${i.status==='borrador'?`<button class="secondary" onclick="billEditInvoice('${i.id}')">Editar</button><button class="primary" onclick="billIssueInvoice('${i.id}')">Emitir</button>`:`<button class="secondary" onclick="billInvoicePdf('${i.id}')">PDF</button>`}</div></td></tr>`).join('');
+  <td><div class="ops-actions">${i.status==='borrador'?`<button class="secondary" onclick="billEditInvoice('${i.id}')">Editar</button><button class="primary" onclick="billIssueInvoice('${i.id}')">Emitir</button>`:`<button class="secondary" onclick="billInvoicePdf('${i.id}')">PDF</button><button class="ghost" onclick="billMarkPaid('${i.id}')">${i.paid_status==='pagada'?'Pagada ✓':'Marcar cobrada'}</button>`}</div></td></tr>`).join('');
 }
 window.billFilterInvoices=q=>{document.querySelectorAll('#bill_invoice_rows tr[data-bill-search]').forEach(tr=>tr.classList.toggle('ops-hidden',q&&!tr.dataset.billSearch.includes(String(q).toLowerCase())))};
 window.billNewInvoice=()=>{B.invoiceDraft=newInvoiceDraft();B.invoiceLines=[newLine()];B.selectedInvoiceId=null;B.sub='invoices';render();window.scrollTo({top:0,behavior:'smooth'})};
@@ -258,7 +259,8 @@ async function saveInvoice(){
   const {error:le}=await sb.from('ops_sales_invoice_lines').insert(lr);if(le)throw le;
   if(external){
    const display=ser.prefix+String(num).padStart(ser.padding,'0');
-   const {error:xe}=await sb.from('ops_sales_invoices').update({number:num,display_number:display,external_number_text:String(num),status:'emitida'}).eq('id',id);if(xe)throw xe;
+   const tpl=activeTemplate(d.templateId),snap={...tpl,source:'external_registration'};
+   const {error:xe}=await sb.from('ops_sales_invoices').update({number:num,display_number:display,external_number_text:String(num),status:'emitida',issued_at:new Date().toISOString(),design_snapshot:snap,template_snapshot:snap}).eq('id',id);if(xe)throw xe;
   }
   await sb.from('ops_audit_log').insert({user_id:authSession.user.id,user_email:authSession.user.email,area:'facturas',action:external?'registrar_externa':(d.id?'actualizar_borrador':'crear_borrador'),entity_id:id,detail:{total:t.total}});
   await window.opsLoadData(true);B.invoiceDraft=newInvoiceDraft();B.invoiceLines=[newLine()];render();
@@ -273,6 +275,15 @@ window.billIssueInvoice=async function(id){
   await window.opsLoadData(true);await load(true);render();
   setTimeout(()=>billInvoicePdf(id,true),100);
  }catch(e){alert('No se pudo emitir: '+e.message)}
+};
+window.billMarkPaid=async function(id){
+ const inv=O.invoices.find(x=>x.id===id);if(!inv)return;
+ if(inv.paid_status==='pagada')return;
+ if(!confirm('¿Marcar esta factura como cobrada?'))return;
+ const {error}=await sb.from('ops_sales_invoices').update({paid_status:'pagada',paid_date:today()}).eq('id',id);
+ if(error)return alert('No se pudo actualizar el cobro: '+error.message);
+ await sb.from('ops_audit_log').insert({user_id:authSession.user.id,user_email:authSession.user.email,area:'facturas',action:'marcar_cobrada',entity_id:id,detail:{fecha:today()}});
+ await window.opsLoadData(true);render();
 };
 
 /* ---------------- PROFORMAS ---------------- */
@@ -317,24 +328,51 @@ function proEditor(){
 }
 function proformasHtml(){
  const rows=proRows();
- return `${proEditor()}<div class="ops-card bill-list-card"><div class="section-head"><div><div class="eyebrow">${O.year}</div><h3>Proformas</h3></div></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Número</th><th>Cliente</th><th>Estado</th><th>Total</th><th>Válida hasta</th><th></th></tr></thead><tbody>${rows.length?rows.map(p=>`<tr><td>${fmtDate(p.issue_date)}</td><td><b>${H(p.display_number)}</b></td><td>${H(p.customer_name)}</td><td>${badge(p.status)}</td><td class="num">${E(p.total_amount)}</td><td>${fmtDate(p.valid_until)}</td><td><div class="ops-actions"><button class="secondary" onclick="billProPdf('${p.id}')">PDF</button>${!['convertida','anulada'].includes(p.status)?`<button class="primary" onclick="billConvertProforma('${p.id}')">Convertir</button>`:''}</div></td></tr>`).join(''):`<tr><td colspan="7"><div class="ops-empty">Todavía no hay proformas.</div></td></tr>`}</tbody></table></div></div>`;
+ return `${proEditor()}<div class="ops-card bill-list-card"><div class="section-head"><div><div class="eyebrow">${O.year}</div><h3>Proformas</h3></div></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Número</th><th>Cliente</th><th>Estado</th><th>Total</th><th>Válida hasta</th><th></th></tr></thead><tbody>${rows.length?rows.map(p=>`<tr><td>${fmtDate(p.issue_date)}</td><td><b>${H(p.display_number)}</b></td><td>${H(p.customer_name)}</td><td>${badge(p.status)}</td><td class="num">${E(p.total_amount)}</td><td>${fmtDate(p.valid_until)}</td><td><div class="ops-actions"><button class="secondary" onclick="billProPdf('${p.id}')">PDF</button>${p.status==='borrador'?`<button class="ghost" onclick="billEditProforma('${p.id}')">Editar</button>`:''}${!['convertida','anulada','rechazada'].includes(p.status)?`<button class="primary" onclick="billConvertProforma('${p.id}')">Convertir</button>`:''}${!['convertida','anulada'].includes(p.status)?`<button class="ghost" onclick="billProStatus('${p.id}')">Estado</button>`:''}</div></td></tr>`).join(''):`<tr><td colspan="7"><div class="ops-empty">Todavía no hay proformas.</div></td></tr>`}</tbody></table></div></div>`;
 }
 window.billNewProforma=()=>{B.proDraft=newProDraft();B.proDraftLines=[newLine()];B.sub='proformas';render();window.scrollTo({top:0,behavior:'smooth'})};
 window.billProField=(k,v,rer=false)=>{const d=B.proDraft||(B.proDraft=newProDraft());d[k]=v;if(k==='storeId'){d.seriesId=proformaSeries(d.storeId)[0]?.id||''}if(rer)render()};
 window.billProLineField=(i,k,v,rer=false)=>{B.proDraftLines[i][k]=v;if(rer)render()};
 window.billAddProLine=()=>{B.proDraftLines.push(newLine());render()};
 window.billRemoveProLine=i=>{if(B.proDraftLines.length>1){B.proDraftLines.splice(i,1);render()}};
+window.billEditProforma=function(id){
+ const p=B.proformas.find(x=>x.id===id);if(!p||p.status!=='borrador')return;
+ B.proDraft={id:p.id,storeId:p.store_id||'',seriesId:p.series_id||'',templateId:p.template_id||O.settings?.default_invoice_template_id||'',date:p.issue_date||today(),validUntil:p.valid_until||'',customer:p.customer_name||'',taxId:p.customer_tax_id||'',address:p.customer_address||'',email:p.customer_email||'',concept:p.concept||'',payment:p.payment_method||'transferencia',notes:p.notes||''};
+ B.proDraftLines=B.proLines.filter(l=>l.proforma_id===id).sort((a,b)=>a.sort_order-b.sort_order).map(l=>({description:l.description||'',qty:String(l.quantity),unit:String(l.unit_price_base),discount:String(l.discount_pct),vat:String(l.vat_rate)}));
+ if(!B.proDraftLines.length)B.proDraftLines=[newLine()];
+ B.sub='proformas';render();window.scrollTo({top:0,behavior:'smooth'});
+};
 window.billSaveProforma=async function(){
- if(B.saving)return;const d=B.proDraft;if(!d.seriesId||!d.date||!d.customer.trim())return alert('Serie, fecha y cliente son obligatorios.');if(B.proDraftLines.some(l=>!String(l.description).trim()||N(l.qty)<=0))return alert('Completa las líneas.');
+ if(B.saving)return;const d=B.proDraft;
+ if(!d.seriesId||!d.date||!d.customer.trim())return alert('Serie, fecha y cliente son obligatorios.');
+ if(B.proDraftLines.some(l=>!String(l.description).trim()||N(l.qty)<=0))return alert('Completa las líneas.');
  B.saving=true;
  try{
-  const {data:num,error:ne}=await sb.rpc('ops_next_proforma_number',{p_series_id:d.seriesId});if(ne)throw ne;const nr=Array.isArray(num)?num[0]:num;
-  const row={series_id:d.seriesId,store_id:d.storeId||null,template_id:d.templateId||null,issue_date:d.date,valid_until:d.validUntil||null,number:nr.number,display_number:nr.display_number,status:'borrador',customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept.trim(),payment_method:d.payment,notes:d.notes||'',created_by:authSession.user.id};
-  const {data,error}=await sb.from('ops_proformas').insert(row).select('id').single();if(error)throw error;
-  const lr=B.proDraftLines.map((l,idx)=>{const x=lineCalc(l);return{proforma_id:data.id,sort_order:(idx+1)*10,description:l.description.trim(),quantity:N(l.qty),unit_price_base:N(l.unit),discount_pct:N(l.discount),vat_rate:N(l.vat),base_amount:x.base,vat_amount:x.vat,total_amount:x.total}});
+  let id=d.id;
+  if(id){
+   const current=B.proformas.find(x=>x.id===id);if(!current||current.status!=='borrador')throw new Error('Solo se puede editar una proforma en borrador.');
+   const row={store_id:d.storeId||null,template_id:d.templateId||null,issue_date:d.date,valid_until:d.validUntil||null,customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept.trim(),payment_method:d.payment,notes:d.notes||''};
+   const {error}=await sb.from('ops_proformas').update(row).eq('id',id);if(error)throw error;
+   const {error:de}=await sb.from('ops_proforma_lines').delete().eq('proforma_id',id);if(de)throw de;
+  }else{
+   const {data:num,error:ne}=await sb.rpc('ops_next_proforma_number',{p_series_id:d.seriesId});if(ne)throw ne;const nr=Array.isArray(num)?num[0]:num;
+   const row={series_id:d.seriesId,store_id:d.storeId||null,template_id:d.templateId||null,issue_date:d.date,valid_until:d.validUntil||null,number:nr.number,display_number:nr.display_number,status:'borrador',customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept.trim(),payment_method:d.payment,notes:d.notes||'',created_by:authSession.user.id};
+   const {data,error}=await sb.from('ops_proformas').insert(row).select('id').single();if(error)throw error;id=data.id;
+  }
+  const lr=B.proDraftLines.map((l,idx)=>{const x=lineCalc(l);return{proforma_id:id,sort_order:(idx+1)*10,description:l.description.trim(),quantity:N(l.qty),unit_price_base:N(l.unit),discount_pct:N(l.discount),vat_rate:N(l.vat),base_amount:x.base,vat_amount:x.vat,total_amount:x.total}});
   const {error:le}=await sb.from('ops_proforma_lines').insert(lr);if(le)throw le;
+  await sb.from('ops_audit_log').insert({user_id:authSession.user.id,user_email:authSession.user.email,area:'proformas',action:d.id?'actualizar':'crear',entity_id:id,detail:{}});
   await load(true);B.proDraft=newProDraft();B.proDraftLines=[newLine()];render();
  }catch(e){alert('No se pudo guardar la proforma: '+e.message)}finally{B.saving=false}
+};
+window.billProStatus=async function(id){
+ const p=B.proformas.find(x=>x.id===id);if(!p)return;
+ const next=prompt('Estado: borrador, enviada, aceptada, rechazada o anulada',p.status||'borrador');
+ if(next===null)return;
+ const value=String(next).trim().toLowerCase();
+ if(!['borrador','enviada','aceptada','rechazada','anulada'].includes(value))return alert('Estado no válido.');
+ const {error}=await sb.from('ops_proformas').update({status:value}).eq('id',id);if(error)return alert(error.message);
+ await load(true);render();
 };
 window.billConvertProforma=async function(id){
  const p=B.proformas.find(x=>x.id===id);if(!p)return;
