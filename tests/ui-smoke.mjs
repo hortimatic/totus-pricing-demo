@@ -104,6 +104,20 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
      if(doc)fixtures.ops_documents=fixtures.ops_documents.filter(x=>x.id!==doc.id);
      return route.fulfill(out({expense_id:id,document_id:doc?.id||null,storage_path:doc?.storage_path||null}));
    }
+   if(fn==='ops_save_document_template'){
+     const id=body.p_id,row=fixtures.ops_document_templates.find(x=>x.id===id),p=body.p_template||{};
+     if(!row)return route.fulfill(out({message:'not found'},404));
+     if(p.default_invoice)fixtures.ops_document_templates.forEach(x=>{if(x.id!==id)x.default_invoice=false});
+     if(p.default_proforma)fixtures.ops_document_templates.forEach(x=>{if(x.id!==id)x.default_proforma=false});
+     Object.assign(row,p,{updated_at:new Date().toISOString()});
+     return route.fulfill(out(id));
+   }
+   if(fn==='ops_delete_document'){
+     const id=body.p_id,row=fixtures.ops_documents.find(x=>x.id===id);
+     if(!row||String(row.linked_entity_type||'').startsWith('sales_invoice'))return route.fulfill(out({message:'not allowed'},400));
+     fixtures.ops_documents=fixtures.ops_documents.filter(x=>x.id!==id);
+     return route.fulfill(out({id,storage_path:row.storage_path,original_name:row.original_name}));
+   }
    if(fn==='ops_save_closing'){
      const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
      const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
@@ -408,7 +422,18 @@ await page.evaluate(id=>window.opsDownloadDoc(id),qaDoc.id);
 await page.waitForTimeout(180);
 assert(storageDownloads===beforeStorageDownloads+1,'Descarga documental no consultó Supabase Storage');
 assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
-
+const qaRow=page.locator('tr').filter({has:page.getByRole('cell',{name:'qa.pdf',exact:true})}).first();
+await qaRow.locator('select').selectOption('revisada');
+await page.waitForTimeout(120);
+assert(qaDoc.status==='revisada','Cambiar estado documental no persistió');
+let zipDl=page.waitForEvent('download');
+await page.getByRole('button',{name:'ZIP filtrado',exact:true}).click();
+const filteredZip=await zipDl;
+const filteredZipObj=await JSZipNode.loadAsync(await fs.readFile(await filteredZip.path()));
+assert(Object.keys(filteredZipObj.files).some(n=>n.endsWith('qa.pdf')),'ZIP filtrado no contiene el documento esperado');
+await qaRow.getByRole('button',{name:'Eliminar',exact:true}).click();
+await page.waitForTimeout(150);
+assert(!fixtures.ops_documents.some(x=>x.id===qaDoc.id),'Eliminar documento no quitó el registro');
 
 // Fiscalidad: counters and simulator.
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
