@@ -830,4 +830,52 @@ create policy "totus_business_assets_delete"
 on storage.objects for delete to authenticated
 using (bucket_id='business-assets' and private.is_manager());
 
+
+-- Contador real de almacenamiento desde storage.objects.
+create or replace function private.ops_storage_usage_internal()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, storage
+as $function$
+declare
+  docs_bytes bigint:=0;
+  assets_bytes bigint:=0;
+  docs_count integer:=0;
+  assets_count integer:=0;
+begin
+  if not private.is_team_member() then raise exception 'Sin acceso'; end if;
+
+  select count(*)::int,coalesce(sum(coalesce((metadata->>'size')::bigint,0)),0)::bigint
+    into docs_count,docs_bytes
+  from storage.objects where bucket_id='business-documents';
+
+  select count(*)::int,coalesce(sum(coalesce((metadata->>'size')::bigint,0)),0)::bigint
+    into assets_count,assets_bytes
+  from storage.objects where bucket_id='business-assets';
+
+  return jsonb_build_object(
+    'documents_count',docs_count,
+    'documents_bytes',docs_bytes,
+    'assets_count',assets_count,
+    'assets_bytes',assets_bytes,
+    'total_bytes',docs_bytes+assets_bytes
+  );
+end;
+$function$;
+
+create or replace function public.ops_storage_usage()
+returns jsonb
+language sql
+security invoker
+set search_path = public
+as $function$
+  select private.ops_storage_usage_internal();
+$function$;
+
+revoke all on function private.ops_storage_usage_internal() from public,anon;
+grant execute on function private.ops_storage_usage_internal() to authenticated,service_role;
+revoke all on function public.ops_storage_usage() from public,anon;
+grant execute on function public.ops_storage_usage() to authenticated,service_role;
+
 commit;
