@@ -4,7 +4,7 @@ const O=window.TotusGestion;
 if(!O) return;
 O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.features;
-const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal}=O.core;
+const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal,askReason}=O.core;
 const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
 const qBounds=(y,q)=>{const sm=(q-1)*3+1,end=new Date(y,q*3,0);return{start:`${y}-${String(sm).padStart(2,'0')}-01`,end:`${y}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`}};
 const yearQEnd=(y,q)=>qBounds(y,q).end;
