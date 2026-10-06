@@ -1,5 +1,5 @@
 name: Totus Central QA
-# qa-revision: 16
+# qa-revision: 17
 
 on:
   workflow_dispatch:
@@ -12,6 +12,11 @@ on:
       - 'tests/**'
       - 'migrations/**'
       - '.github/workflows/totus-central-qa.yml'
+
+
+concurrency:
+  group: totus-central-qa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ui-smoke:
