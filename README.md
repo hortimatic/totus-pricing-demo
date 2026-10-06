@@ -28,4 +28,4 @@ Aplicación interna de Hortimatic / NewOldSmok.
 - Las pruebas de base usan transacciones con `ROLLBACK` cuando generan datos temporales.
 
 ## QA
-GitHub Actions no se ejecuta en cada commit. Se dispara únicamente mediante `.qa-trigger` o manualmente cuando existe un bloque listo para validar.
+GitHub Actions no se ejecuta en cada commit. Se lanza manualmente cuando existe un bloque listo para validar.
