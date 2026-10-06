@@ -244,7 +244,23 @@ window.__opsUploadDocumentFile=async function(file,entityId,d){
 window.opsPreviewDraft=async function(){const d=ensureDraft(),t=E.templates.find(x=>x.id===d.templateId)||{};const fake={...d,document_type:d.documentType,template_id:d.templateId,issue_date:d.date,due_date:d.dueDate,operation_date:d.operationDate,customer_name:d.customer,customer_tax_id:d.taxId,customer_address:d.address,customer_email:d.email,purchase_order_ref:d.poRef,terms_text:d.terms,footer_text:d.footer,display_number:null,design_snapshot:t};try{const blob=await makePdf(fake,O.invoiceDraftLines,true);dlBlob(blob,`vista_previa_${d.documentType}.pdf`)}catch(e){alert(e.message)}};
 async function uploadGenerated(blob,row){const name=(row.display_number||row.document_type||'documento').replaceAll('/','-')+'.pdf';const file=new File([blob],name,{type:'application/pdf'});const hash=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());const sha=[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('');const existing=O.documents.find(d=>d.sha256===sha);if(existing)return existing.id;const dt=String(row.issue_date||today()),year=dt.slice(0,4),month=dt.slice(5,7),q='T'+Math.floor((Number(month)-1)/3+1),store=O.stores.find(x=>x.id===row.store_id)?.code||'GENERAL',type=row.document_type==='proforma'?'PROFORMAS':'FACTURAS_EMITIDAS',party=String(row.customer_name||'SIN_CLIENTE').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'')||'SIN_CLIENTE';const path=`emitidos/${year}/${q}/${month}/${store}/${type}/${party}/${crypto.randomUUID()}_${name}`;let u=await sb.storage.from('business-documents').upload(path,file,{contentType:'application/pdf',upsert:false});if(u.error)throw u.error;let r=await sb.from('ops_documents').insert({store_id:row.store_id||null,doc_type:row.document_type==='proforma'?'proforma':'factura_emitida',document_date:row.issue_date,supplier_or_customer:row.customer_name||'',tax_id:row.customer_tax_id||'',invoice_number:row.display_number||'',category_code:'700',status:'archivada',storage_path:path,original_name:name,mime_type:'application/pdf',size_bytes:file.size,sha256:sha,linked_entity_type:'sales_invoice',linked_entity_id:row.id,notes:'Generado por Totus Central',uploaded_by:authSession.user.id}).select('id').single();if(r.error){await sb.storage.from('business-documents').remove([path]);throw r.error}return r.data.id}
 window.opsDocumentPdf=async function(id,saveServer=false){try{let row=O.invoices.find(x=>x.id===id);if(!row)return;if(row.generated_document_id&&!saveServer){const d=O.documents.find(x=>x.id===row.generated_document_id);if(d)return opsDownloadDoc(d.id)}const lines=O.invoiceLines.filter(x=>x.invoice_id===id).sort((a,b)=>a.sort_order-b.sort_order);const blob=await makePdf(row,lines,false);if(saveServer&&!row.generated_document_id){const did=await uploadGenerated(blob,row);await sb.from('ops_sales_invoices').update({generated_document_id:did}).eq('id',id);await window.opsLoadData(true)}dlBlob(blob,(row.display_number||row.document_type).replaceAll('/','-')+'.pdf')}catch(e){alert('No se pudo generar PDF: '+e.message)}};
-window.opsUploadTemplateLogo=async function(id){if(!manager())return;const input=document.getElementById('ops_tpl_logo'),file=input?.files?.[0];if(!file)return alert('Selecciona un logo.');if(file.size>2097152)return alert('El logo supera 2 MB.');if(!['image/png','image/jpeg','image/webp'].includes(file.type))return alert('Usa PNG, JPG o WebP.');const old=E.templates.find(t=>t.id===id);const ext=file.name.split('.').pop().toLowerCase();const path=`logos/${id}.${ext}`;if(old?.logo_path&&old.logo_path!==path)await sb.storage.from('business-assets').remove([old.logo_path]);const up=await sb.storage.from('business-assets').upload(path,file,{contentType:file.type,upsert:true});if(up.error)return alert(up.error.message);const {error}=await sb.from('ops_document_templates').update({logo_path:path,logo_name:file.name,logo_mime:file.type,logo_size_bytes:file.size,updated_at:new Date().toISOString()}).eq('id',id);if(error)return alert(error.message);await featureLoad(true);render()};
+window.opsUploadTemplateLogo=async function(id){
+ if(!manager())return alert('Solo administración o gerencia puede cambiar la imagen corporativa.');
+ const input=document.getElementById('ops_tpl_logo'),file=input?.files?.[0];
+ if(!file)return alert('Selecciona un logo.');
+ if(file.size>2097152)return alert('El logo supera 2 MB.');
+ if(!['image/png','image/jpeg','image/webp'].includes(file.type))return alert('Usa PNG, JPG o WebP.');
+ const tpl=E.templates.find(t=>t.id===id);if(!tpl)return alert('Plantilla no encontrada.');
+ const ext=file.name.split('.').pop().toLowerCase(),path=`logos/${id}.${ext}`;
+ try{
+  const up=await sb.storage.from('business-assets').upload(path,file,{contentType:file.type,upsert:true});
+  if(up.error)throw up.error;
+  const {error}=await sb.from('ops_document_templates').update({logo_path:path,logo_name:file.name,logo_mime:file.type,logo_size_bytes:file.size,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){if(!tpl.logo_path||tpl.logo_path!==path)await sb.storage.from('business-assets').remove([path]);throw error}
+  if(tpl.logo_path&&tpl.logo_path!==path)await sb.storage.from('business-assets').remove([tpl.logo_path]);
+  await featureLoad(true);render();
+ }catch(e){alert('No se pudo subir el logo: '+e.message)}
+};
 function configHtml(){
  const st=O.settings||{},tpl=E.templates.find(t=>t.id===E.templateId)||E.templates[0]||{};
  const used=N(E.storageUsage?.total_bytes);
@@ -279,6 +295,7 @@ window.opsDuplicateTemplate=async function(id){
  ['id','created_at','updated_at'].forEach(k=>delete row[k]);
  row.code='TPL-'+Date.now().toString(36).toUpperCase();
  row.name=name.trim();row.default_invoice=false;row.default_proforma=false;row.active=true;
+ row.logo_path=null;row.logo_name=null;row.logo_mime=null;row.logo_size_bytes=0;
  const {data,error}=await sb.from('ops_document_templates').insert(row).select('id').single();
  if(error)return alert('No se pudo duplicar: '+error.message);
  await featureLoad(true);E.templateId=data.id;render();
