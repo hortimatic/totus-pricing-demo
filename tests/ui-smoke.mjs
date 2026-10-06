@@ -178,7 +178,7 @@ await field('Título proforma').waitFor();
 
 // Responsive smoke.
 await page.setViewportSize({width:390,height:844});
-await page.getByRole('button',{name:'Inicio',exact:true}).click();await heading('Totus Central');
+await page.locator('.app-home-logo').click();await heading('Totus Central');
 const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
 assert(overflow<=8,'Desbordamiento global móvil: '+overflow+'px');
 
