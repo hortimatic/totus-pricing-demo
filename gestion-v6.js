@@ -127,7 +127,7 @@ function headerHtml(){
 }
 function managementHtml(){
  if(!O.loaded)return `<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>Preparando ${sectionMeta()[0].toLowerCase()}…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando los datos necesarios…</div>`;
- const moduleBody=window.TotusGestionExt?.body?.(O.tab);
+ const moduleBody=window.TotusGestionFeatures?.body?.(O.tab);
  let body=moduleBody??'';
  if(moduleBody==null){
   if(O.tab==='cajas')body=closingsHtml();
@@ -432,7 +432,7 @@ window.goOps=async function(tab='resumen'){
  render();
  try{
    await load();
-   await window.TotusGestionExt?.load?.();
+   await window.TotusGestionFeatures?.load?.();
    if(O.tab==='cajas'&&(!O.closeDraft?.storeId||!O.stores.some(s=>s.id===O.closeDraft.storeId)))O.closeDraft=newClosingDraft();
    if(O.tab==='gastos'&&(!O.expenseDraft?.storeId||!O.stores.some(s=>s.id===O.expenseDraft.storeId))){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
    render();
