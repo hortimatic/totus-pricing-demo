@@ -218,88 +218,79 @@ function managementHtml(){
 
 function newClosingDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
- return {id:null,storeId:sid,date:isoToday(),card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:'',notes:'',status:'cerrado',drawers:{}};
+ return {id:null,storeId:sid,date:isoToday(),mode:'quick',totalSales:'',card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:'',notes:'',status:'cerrado',drawers:{}};
 }
 function closingDrawerState(draft,drawer){
  if(draft.drawers[drawer.id])return draft.drawers[drawer.id];
  let opening=0;
  const prev=O.closings.filter(c=>c.store_id===draft.storeId&&c.business_date<draft.date).sort((a,b)=>b.business_date.localeCompare(a.business_date))[0];
- if(prev){
-   const row=O.closingDrawers.find(x=>x.closing_id===prev.id&&x.drawer_id===drawer.id);
-   if(row)opening=n(row.closing_cash);
- }
+ if(prev){const row=O.closingDrawers.find(x=>x.closing_id===prev.id&&x.drawer_id===drawer.id);if(row)opening=n(row.closing_cash)}
  return draft.drawers[drawer.id]={opening:String(opening||''),closing:''};
 }
 function closeCalc(){
- const d=O.closeDraft||newClosingDraft();
- const ds=O.drawers.filter(x=>x.store_id===d.storeId);
- let opening=0,closing=0;
- ds.forEach(dr=>{const x=closingDrawerState(d,dr);opening+=n(x.opening);closing+=n(x.closing)});
- const withdrawals=n(d.withdrawals),cashExpenses=n(d.cashExpenses);
- const cashSales=closing+withdrawals+cashExpenses-opening;
- const total=cashSales+n(d.card)+n(d.bizum)+n(d.online)+n(d.other);
- return {opening,closing,withdrawals,cashExpenses,cashSales,total};
+ const d=O.closeDraft||newClosingDraft(),ds=O.drawers.filter(x=>x.store_id===d.storeId);
+ let opening=0,closing=0;ds.forEach(dr=>{const x=closingDrawerState(d,dr);opening+=n(x.opening);closing+=n(x.closing)});
+ const withdrawals=n(d.withdrawals),cashExpenses=n(d.cashExpenses),card=n(d.card),bizum=n(d.bizum),online=n(d.online),other=n(d.other);
+ if((d.mode||'quick')==='quick'){
+  const total=n(d.totalSales),cashSales=total-card-bizum-online-other;
+  return{opening,closing,withdrawals,cashExpenses,cashSales,total,card,bizum,online,other};
+ }
+ const cashSales=closing+withdrawals+cashExpenses-opening,total=cashSales+card+bizum+online+other;
+ return{opening,closing,withdrawals,cashExpenses,cashSales,total,card,bizum,online,other};
 }
 function closingsHtml(){
  if(!O.closeDraft)O.closeDraft=newClosingDraft();
- const d=O.closeDraft,c=closeCalc(),drawers=O.drawers.filter(x=>x.store_id===d.storeId);
- const pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
- const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'';
+ const d=O.closeDraft,c=closeCalc(),drawers=O.drawers.filter(x=>x.store_id===d.storeId),pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
+ const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'',quick=(d.mode||'quick')==='quick';
  return `<div class="ops-card">
-  <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario</h3>${infoButton('cajas','Cómo funciona el cierre de caja')}</div><div class="small">Introduce cobros y dinero físico; Totus calcula automáticamente la venta en efectivo y el total del día.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
-  ${locked?'<div class="ops-note warn">Este cierre está cerrado. Como encargado puedes consultarlo, pero solo administración o gerencia puede modificarlo.</div>':''}
-  <div class="invoice-section-title">1 · Día y establecimiento</div>
+  <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario</h3>${infoButton('cajas','Cómo funciona el cierre de caja')}</div><div class="small">Modo rápido para el trabajo habitual; abre opciones avanzadas solo cuando necesites controlar caja física, Bizum, online u otras entradas.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}${manager()&&d.id&&d.status==='cerrado'?'<button class="ghost" onclick="opsReopenClosing()">Reabrir</button>':''}${manager()&&d.id?'<button class="danger" onclick="opsDeleteClosing()">Eliminar</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
+  ${locked?'<div class="ops-note warn">Cierre cerrado. Puedes consultarlo; administración o gerencia pueden reabrirlo o corregirlo con trazabilidad.</div>':''}
   <div class="ops-form">
    <div><label>Establecimiento</label><select aria-label="Establecimiento del cierre" onchange="opsCloseField('storeId',this.value,true)" ${dis}>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
    <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
+   <div><label>Modo</label><select aria-label="Modo de cierre" onchange="opsCloseField('mode',this.value,true)" ${dis}><option value="quick" ${quick?'selected':''}>Rápido</option><option value="physical" ${!quick?'selected':''}>Caja física avanzada</option></select></div>
   </div>
-  <div class="invoice-section-title">2 · Cobros del día</div>
+  <div class="invoice-section-title">Ventas del día</div>
   <div class="ops-form">
+   <div><label>Total vendido</label><input inputmode="decimal" value="${h(d.totalSales)}" oninput="opsCloseField('totalSales',this.value)" ${quick?'':'disabled'} ${dis}></div>
    <div><label>Tarjeta</label><input inputmode="decimal" value="${h(d.card)}" oninput="opsCloseField('card',this.value)" ${dis}></div>
-   <div><label>Bizum</label><input inputmode="decimal" value="${h(d.bizum)}" oninput="opsCloseField('bizum',this.value)" ${dis}></div>
-   <div><label>Pedidos online</label><input inputmode="decimal" value="${h(d.online)}" oninput="opsCloseField('online',this.value)" ${dis}></div>
-   <div><label>Otras entradas</label><input inputmode="decimal" value="${h(d.other)}" oninput="opsCloseField('other',this.value)" ${dis}></div>
+   <div><label>Salida en metálico</label><input inputmode="decimal" value="${h(d.withdrawals)}" oninput="opsCloseField('withdrawals',this.value)" ${dis}></div>
+   <div><label>Efectivo calculado</label><input value="${h(String(c.cashSales.toFixed(2)).replace('.',','))}" disabled></div>
   </div>
-  <div class="invoice-section-title">3 · Caja física ${infoButton('cajas','Ayuda sobre efectivo, salidas y caja final')}</div>
-  <div class="ops-form">
-   ${drawers.map(dr=>{const x=closingDrawerState(d,dr);return `<div><label>${h(dr.name)} · apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div><div><label>${h(dr.name)} · queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>`}).join('')}
-   <div><label>Salida / retirada de caja</label><input inputmode="decimal" value="${h(d.withdrawals)}" oninput="opsCloseField('withdrawals',this.value)" ${dis}></div>
-   <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(d.cashExpenses)}" oninput="opsCloseField('cashExpenses',this.value)" ${dis}></div>
+  <details class="ops-advanced" ${quick?'':'open'}><summary>Opciones avanzadas</summary><div class="ops-form" style="margin-top:12px">
+   <div><label>Bizum</label><input inputmode="decimal" value="${h(d.bizum)}" oninput="opsCloseField('bizum',this.value)" ${dis}></div><div><label>Pedidos online</label><input inputmode="decimal" value="${h(d.online)}" oninput="opsCloseField('online',this.value)" ${dis}></div><div><label>Otras entradas</label><input inputmode="decimal" value="${h(d.other)}" oninput="opsCloseField('other',this.value)" ${dis}></div><div><label>Gastos desde caja</label><input inputmode="decimal" value="${h(d.cashExpenses)}" oninput="opsCloseField('cashExpenses',this.value)" ${dis}></div>
+   ${!quick?drawers.map(dr=>{const x=closingDrawerState(d,dr);return `<div><label>${h(dr.name)} · apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div><div><label>${h(dr.name)} · caja final</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>`}).join(''):''}
    <div class="span4"><label>Observaciones</label><textarea oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea></div>
-  </div>
-  <div class="ops-close-summary">
-   <div><small>Apertura total</small><b id="ops_close_open">${eur(c.opening)}</b></div>
-   <div><small>Venta efectivo calculada</small><b id="ops_close_cashsales">${eur(c.cashSales)}</b></div>
-   <div><small>Caja final</small><b id="ops_close_end">${eur(c.closing)}</b></div>
-   <div><small>Ventas del día</small><b id="ops_close_total">${eur(c.total)}</b></div>
-  </div>
-  <div class="ops-note" style="margin-top:10px">Efectivo vendido = caja final + retiradas + gastos pagados desde caja − apertura. Tarjeta, Bizum, online y otras entradas se suman aparte.</div>
+  </div></details>
+  <div class="ops-close-summary"><div><small>Total vendido</small><b id="ops_close_total">${eur(c.total)}</b></div><div><small>Tarjeta</small><b>${eur(c.card)}</b></div><div><small>Salida metálico</small><b>${eur(c.withdrawals)}</b></div><div><small>Efectivo calculado</small><b id="ops_close_cashsales">${eur(c.cashSales)}</b></div></div>
  </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Los cierres importados se conservan como histórico y los modernos siguen la fórmula actual.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Salida</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
+ <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Tarjeta</th><th>Salida metálico</th><th>Total venta</th><th>Modo</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num"><b>${eur(n(row.reported_total_sales??(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))))}</b></td><td>${h(row.entry_mode||'histórico')}</td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
  </div>`;
 }
-window.opsCloseField=function(k,v,rerender=false){ if(!O.closeDraft)O.closeDraft=newClosingDraft();O.closeDraft[k]=v;if(rerender){O.closeDraft.drawers={};render()}else updateCloseSummary(); };
-window.opsDrawerField=function(id,k,v){if(!O.closeDraft)O.closeDraft=newClosingDraft();const dr=O.drawers.find(x=>x.id===id);const x=closingDrawerState(O.closeDraft,dr);x[k]=v;updateCloseSummary();};
-function updateCloseSummary(){const c=closeCalc();[['ops_close_open',c.opening],['ops_close_cashsales',c.cashSales],['ops_close_end',c.closing],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)});}
+window.opsCloseField=function(k,v,rerender=false){if(!O.closeDraft)O.closeDraft=newClosingDraft();O.closeDraft[k]=v;if(k==='mode'&&v==='quick')O.closeDraft.drawers={};if(rerender)render();else updateCloseSummary()};
+window.opsDrawerField=function(id,k,v){if(!O.closeDraft)return;const dr=O.drawers.find(x=>x.id===id);const x=closingDrawerState(O.closeDraft,dr);x[k]=v;updateCloseSummary()};
+function updateCloseSummary(){const c=closeCalc();[['ops_close_cashsales',c.cashSales],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)})}
 window.opsNewClosing=function(){O.closeDraft=newClosingDraft();render()};
 window.opsEditClosing=function(id){
- const c=O.closings.find(x=>x.id===id); if(!c)return;
- const drawers={};O.closingDrawers.filter(x=>x.closing_id===id).forEach(x=>drawers[x.drawer_id]={opening:String(x.opening_cash??''),closing:String(x.closing_cash??'')});
- O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,card:String(c.card_sales||''),bizum:String(c.bizum_sales||''),online:String(c.online_sales||''),other:String(c.other_income||''),withdrawals:String(c.cash_withdrawals||''),cashExpenses:String(c.cash_expenses_declared||''),notes:c.notes||'',status:c.status,drawers};render();window.scrollTo({top:0,behavior:'smooth'});
+ const c=O.closings.find(x=>x.id===id);if(!c)return;const drawers={};O.closingDrawers.filter(x=>x.closing_id===id).forEach(x=>drawers[x.drawer_id]={opening:String(x.opening_cash??''),closing:String(x.closing_cash??'')});
+ O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,mode:c.entry_mode||'physical',totalSales:String(c.reported_total_sales??(n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income))),card:String(c.card_sales||''),bizum:String(c.bizum_sales||''),online:String(c.online_sales||''),other:String(c.other_income||''),withdrawals:String(c.cash_withdrawals||''),cashExpenses:String(c.cash_expenses_declared||''),notes:c.notes||'',status:c.status,drawers};render();window.scrollTo({top:0,behavior:'smooth'});
 };
+window.opsReopenClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Reabrir cierre','El cierre volverá a borrador para poder corregirlo.','Reabrir');if(!reason)return;const {error}=await sb.rpc('ops_set_closing_status_controlled',{p_closing_id:d.id,p_status:'borrador',p_reason:reason});if(error)return alert(error.message);await load(true);window.opsEditClosing(d.id)};
+window.opsDeleteClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Eliminar cierre',`Eliminarás el cierre de ${storeName(d.storeId)} del ${dmy(d.date)}. Se conservará snapshot administrativo.`,'Eliminar cierre');if(!reason)return;const {error}=await sb.rpc('ops_delete_closing_controlled',{p_closing_id:d.id,p_reason:reason});if(error)return alert(error.message);await load(true);O.closeDraft=newClosingDraft();render()};
 window.opsSaveClosing=async function(status='cerrado'){
- if(O.saving)return; const d=O.closeDraft,c=closeCalc(); if(!d.storeId||!d.date){alert('Tienda y fecha son obligatorias.');return}
- if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date)){alert('Ya existe un cierre para esa tienda y fecha. Ábrelo desde el histórico en lugar de crear otro.');return}
- const ds=O.drawers.filter(x=>x.store_id===d.storeId); if(!ds.length){alert('Esta tienda no tiene cajas configuradas.');return}
- if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()==='')){alert('Indica cuánto queda en cada caja.');return}
+ if(O.saving)return;const d=O.closeDraft,c=closeCalc();if(!d.storeId||!d.date)return alert('Tienda y fecha son obligatorias.');
+ if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date))return alert('Ya existe un cierre para esa tienda y fecha.');
+ const quick=(d.mode||'quick')==='quick',ds=O.drawers.filter(x=>x.store_id===d.storeId);
+ if(quick&&String(d.totalSales).trim()==='')return alert('Indica el total vendido.');
+ if(quick&&c.cashSales<0)return alert('El total vendido no puede ser menor que los cobros no efectivos.');
+ if(!quick&&(!ds.length||ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()==='')))return alert('Completa la caja física final.');
  O.saving=true;
  try{
-   const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,card_sales:n(d.card),bizum_sales:n(d.bizum),online_sales:n(d.online),other_income:n(d.other),cash_withdrawals:n(d.withdrawals),cash_expenses_declared:n(d.cashExpenses),notes:d.notes||'',status};
-   const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),notes:''}});
-   const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
-   await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total});
-   await load(true); O.closeDraft=newClosingDraft(); render();
+  const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,entry_mode:d.mode||'quick',reported_total_sales:quick?n(d.totalSales):c.total,card_sales:n(d.card),bizum_sales:n(d.bizum),online_sales:n(d.online),other_income:n(d.other),cash_withdrawals:n(d.withdrawals),cash_expenses_declared:n(d.cashExpenses),notes:d.notes||'',status};
+  const drawerRows=quick?[]:ds.map(dr=>{const x=closingDrawerState(d,dr);return{drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),notes:''}});
+  const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
+  await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,modo:d.mode});await load(true);O.closeDraft=newClosingDraft();render();
  }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
 };
 
