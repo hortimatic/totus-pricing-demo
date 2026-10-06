@@ -220,105 +220,158 @@ function managementHtml(){
 }
 
 function newClosingDraft(){
- const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
- return {id:null,storeId:sid,date:isoToday(),card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:'',notes:'',status:'cerrado',drawers:{}};
+  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
+  return {id:null,storeId:sid,date:isoToday(),notes:'',status:'cerrado',drawers:{},legacyAllocation:false};
 }
 function closingDrawerState(draft,drawer){
- if(draft.drawers[drawer.id])return draft.drawers[drawer.id];
- let opening=0;
- const prev=O.closings.filter(c=>c.store_id===draft.storeId&&c.business_date<draft.date).sort((a,b)=>b.business_date.localeCompare(a.business_date))[0];
- if(prev){
-   const row=O.closingDrawers.find(x=>x.closing_id===prev.id&&x.drawer_id===drawer.id);
-   if(row)opening=n(row.closing_cash);
- }
- return draft.drawers[drawer.id]={opening:String(opening||''),closing:''};
+  if(draft.drawers[drawer.id])return draft.drawers[drawer.id];
+  let opening=0;
+  const prev=O.closings.filter(c=>c.store_id===draft.storeId&&c.business_date<draft.date).sort((a,b)=>b.business_date.localeCompare(a.business_date))[0];
+  if(prev){
+    const row=O.closingDrawers.find(x=>x.closing_id===prev.id&&x.drawer_id===drawer.id);
+    if(row)opening=n(row.closing_cash);
+  }
+  return draft.drawers[drawer.id]={
+    opening:String(opening||''),closing:'',
+    card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:''
+  };
+}
+function drawerCalc(draft,drawer){
+  const x=closingDrawerState(draft,drawer);
+  const opening=n(x.opening),closing=n(x.closing),withdrawals=n(x.withdrawals),cashExpenses=n(x.cashExpenses);
+  const cashSales=closing+withdrawals+cashExpenses-opening;
+  const card=n(x.card),bizum=n(x.bizum),online=n(x.online),other=n(x.other);
+  const total=cashSales+card+bizum+online+other;
+  return {opening,closing,withdrawals,cashExpenses,cashSales,card,bizum,online,other,total};
 }
 function closeCalc(){
- const d=O.closeDraft||newClosingDraft(),ds=O.drawers.filter(x=>x.store_id===d.storeId);
- let opening=0,closing=0;
- ds.forEach(dr=>{const x=closingDrawerState(d,dr);opening+=n(x.opening);closing+=n(x.closing)});
- const withdrawals=n(d.withdrawals),cashExpenses=n(d.cashExpenses);
- const cashSales=closing+withdrawals+cashExpenses-opening;
- const card=n(d.card),bizum=n(d.bizum),online=n(d.online),other=n(d.other);
- const total=cashSales+card+bizum+online+other;
- return {opening,closing,withdrawals,cashExpenses,cashSales,card,bizum,online,other,total};
+  const d=O.closeDraft||newClosingDraft(),ds=O.drawers.filter(x=>x.store_id===d.storeId);
+  const t={opening:0,closing:0,withdrawals:0,cashExpenses:0,cashSales:0,card:0,bizum:0,online:0,other:0,total:0};
+  ds.forEach(dr=>{const x=drawerCalc(d,dr);Object.keys(t).forEach(k=>t[k]+=n(x[k]))});
+  return t;
+}
+function drawerClosingHtml(d,dr,dis){
+  const x=closingDrawerState(d,dr),c=drawerCalc(d,dr);
+  return `<div class="ops-drawer-card">
+   <div class="section-head"><div><div class="eyebrow">Caja física</div><h4>${h(dr.name)}</h4></div><div class="ops-drawer-total"><small>Total caja</small><b id="ops_drawer_total_${dr.id}">${eur(c.total)}</b></div></div>
+   <div class="ops-form">
+    <div><label>Apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div>
+    <div><label>Queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>
+    <div><label>Tarjeta</label><input inputmode="decimal" value="${h(x.card)}" oninput="opsDrawerField('${dr.id}','card',this.value)" ${dis}></div>
+    <div><label>Bizum</label><input inputmode="decimal" value="${h(x.bizum)}" oninput="opsDrawerField('${dr.id}','bizum',this.value)" ${dis}></div>
+    <div><label>Pedidos online</label><input inputmode="decimal" value="${h(x.online)}" oninput="opsDrawerField('${dr.id}','online',this.value)" ${dis}></div>
+    <div><label>Otros pagos / entradas</label><input inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
+    <div><label>Salida / retirada</label><input inputmode="decimal" value="${h(x.withdrawals)}" oninput="opsDrawerField('${dr.id}','withdrawals',this.value)" ${dis}></div>
+    <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(x.cashExpenses)}" oninput="opsDrawerField('${dr.id}','cashExpenses',this.value)" ${dis}></div>
+   </div>
+   <div class="ops-close-summary compact">
+    <div><small>Efectivo vendido</small><b id="ops_drawer_cash_${dr.id}">${eur(c.cashSales)}</b></div>
+    <div><small>Tarjeta</small><b id="ops_drawer_card_${dr.id}">${eur(c.card)}</b></div>
+    <div><small>Otros cobros</small><b id="ops_drawer_other_${dr.id}">${eur(c.bizum+c.online+c.other)}</b></div>
+    <div><small>Cierre metálico</small><b id="ops_drawer_close_${dr.id}">${eur(c.closing)}</b></div>
+   </div>
+  </div>`;
 }
 function closingsHtml(){
- if(!O.closeDraft)O.closeDraft=newClosingDraft();
- const d=O.closeDraft,c=closeCalc(),drawers=O.drawers.filter(x=>x.store_id===d.storeId);
- const pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
- const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'';
- return `<div class="ops-card">
-  <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario</h3>${infoButton('cajas','Cómo funciona el cierre de caja')}</div><div class="small">Cada tienda usa sus cajas reales. Totus calcula el efectivo vendido y suma aparte tarjeta, Bizum, online y otras entradas.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}${manager()&&d.id&&d.status==='cerrado'?'<button class="ghost" onclick="opsReopenClosing()">Reabrir</button>':''}${manager()&&d.id?'<button class="danger" onclick="opsDeleteClosing()">Eliminar</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
-  ${locked?'<div class="ops-note warn">Cierre cerrado. Puedes consultarlo; administración o gerencia pueden reabrirlo o corregirlo con trazabilidad.</div>':''}
+  if(!O.closeDraft)O.closeDraft=newClosingDraft();
+  const d=O.closeDraft,c=closeCalc(),drawers=O.drawers.filter(x=>x.store_id===d.storeId);
+  const pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
+  const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'';
+  return `<div class="ops-card">
+   <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario por cajas</h3>${infoButton('cajas','Cada caja se abre y se cierra por separado. El total de tienda es la suma de todas.')}</div><div class="small">Registra cada caja física de forma independiente. Totus suma después efectivo, tarjeta, Bizum, online, otros cobros, retiradas y gastos para obtener el cierre total de la tienda.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}${manager()&&d.id&&d.status==='cerrado'?'<button class="ghost" onclick="opsReopenClosing()">Reabrir</button>':''}${manager()&&d.id?'<button class="danger" onclick="opsDeleteClosing()">Eliminar</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
+   ${locked?'<div class="ops-note warn">Cierre cerrado. Puedes consultarlo; administración o gerencia pueden reabrirlo o corregirlo con trazabilidad.</div>':''}
+   ${d.legacyAllocation?'<div class="ops-note warn"><b>Cierre anterior al desglose por caja.</b> Los cobros no efectivos históricos se muestran asignados a la primera caja solo para conservar el total. Puedes corregir el reparto si conoces el dato real.</div>':''}
 
-  <div class="invoice-section-title">1 · Día y establecimiento</div>
-  <div class="ops-form">
-   <div><label>Establecimiento</label><select aria-label="Establecimiento del cierre" onchange="opsCloseField('storeId',this.value,true)" ${dis}>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
-   <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
+   <div class="invoice-section-title">1 · Día y establecimiento</div>
+   <div class="ops-form">
+    <div><label>Establecimiento</label><select aria-label="Establecimiento del cierre" onchange="opsCloseField('storeId',this.value,true)" ${dis}>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
+    <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
+   </div>
+
+   <div class="invoice-section-title">2 · Cajas físicas</div>
+   <div class="ops-note" style="margin-bottom:10px"><b>${h(storeName(d.storeId))}</b> · ${drawers.length} ${drawers.length===1?'caja configurada':'cajas configuradas'}. Cada caja lleva su propio cierre completo.</div>
+   <div class="ops-drawers-grid">${drawers.map(dr=>drawerClosingHtml(d,dr,dis)).join('')}</div>
+
+   <div class="invoice-section-title">3 · Cierre total de la tienda</div>
+   <div class="ops-close-summary">
+    <div><small>Apertura total</small><b id="ops_close_open">${eur(c.opening)}</b></div>
+    <div><small>Efectivo vendido</small><b id="ops_close_cashsales">${eur(c.cashSales)}</b></div>
+    <div><small>Tarjeta total</small><b id="ops_close_card">${eur(c.card)}</b></div>
+    <div><small>Bizum total</small><b id="ops_close_bizum">${eur(c.bizum)}</b></div>
+    <div><small>Online total</small><b id="ops_close_online">${eur(c.online)}</b></div>
+    <div><small>Otros pagos</small><b id="ops_close_other">${eur(c.other)}</b></div>
+    <div><small>Retiradas</small><b id="ops_close_withdrawals">${eur(c.withdrawals)}</b></div>
+    <div><small>Gastos caja</small><b id="ops_close_cash_expenses">${eur(c.cashExpenses)}</b></div>
+    <div><small>Metálico final</small><b id="ops_close_end">${eur(c.closing)}</b></div>
+    <div><small>Ventas del día</small><b id="ops_close_total">${eur(c.total)}</b></div>
+   </div>
+   <div class="ops-note" style="margin-top:10px">El total de tienda es la suma de todas las cajas. En cada caja: efectivo vendido = metálico final + retiradas + gastos pagados desde caja − apertura.</div>
+   <div class="invoice-section-title">4 · Observaciones</div>
+   <textarea oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea>
   </div>
 
-  <div class="invoice-section-title">2 · Plataformas y formas de cobro</div>
-  <div class="ops-form">
-   <div><label>Tarjeta</label><input inputmode="decimal" value="${h(d.card)}" oninput="opsCloseField('card',this.value)" ${dis}></div>
-   <div><label>Bizum</label><input inputmode="decimal" value="${h(d.bizum)}" oninput="opsCloseField('bizum',this.value)" ${dis}></div>
-   <div><label>Pedidos online</label><input inputmode="decimal" value="${h(d.online)}" oninput="opsCloseField('online',this.value)" ${dis}></div>
-   <div><label>Otras entradas</label><input inputmode="decimal" value="${h(d.other)}" oninput="opsCloseField('other',this.value)" ${dis}></div>
-  </div>
-
-  <div class="invoice-section-title">3 · Cajas físicas ${infoButton('cajas','Ayuda sobre aperturas, efectivo y cierre')}</div>
-  <div class="ops-note" style="margin-bottom:10px"><b>${h(storeName(d.storeId))}</b> · ${drawers.length} ${drawers.length===1?'caja configurada':'cajas configuradas'}.</div>
-  <div class="ops-form">
-   ${drawers.map(dr=>{const x=closingDrawerState(d,dr);return `<div><label>${h(dr.name)} · apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div><div><label>${h(dr.name)} · queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>`}).join('')}
-   <div><label>Salida / retirada de caja</label><input inputmode="decimal" value="${h(d.withdrawals)}" oninput="opsCloseField('withdrawals',this.value)" ${dis}></div>
-   <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(d.cashExpenses)}" oninput="opsCloseField('cashExpenses',this.value)" ${dis}></div>
-   <div class="span4"><label>Observaciones</label><textarea oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea></div>
-  </div>
-
-  <div class="invoice-section-title">4 · Resumen calculado</div>
-  <div class="ops-close-summary">
-   <div><small>Apertura total</small><b id="ops_close_open">${eur(c.opening)}</b></div>
-   <div><small>Venta efectivo</small><b id="ops_close_cashsales">${eur(c.cashSales)}</b></div>
-   <div><small>Tarjeta</small><b id="ops_close_card">${eur(c.card)}</b></div>
-   <div><small>Bizum</small><b id="ops_close_bizum">${eur(c.bizum)}</b></div>
-   <div><small>Online</small><b id="ops_close_online">${eur(c.online)}</b></div>
-   <div><small>Caja final</small><b id="ops_close_end">${eur(c.closing)}</b></div>
-   <div><small>Ventas del día</small><b id="ops_close_total">${eur(c.total)}</b></div>
-  </div>
-  <div class="ops-note" style="margin-top:10px">Venta en efectivo = caja final + retiradas + gastos pagados desde caja − apertura. Tarjeta, Bizum, online y otras entradas se suman después.</div>
- </div>
-
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Desglose completo por forma de cobro y caja.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Otras</th><th>Salida</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.other_income)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
- </div>`;
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Totales diarios de tienda, obtenidos de la suma de sus cajas.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
+  ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Apertura</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Otras</th><th>Salida</th><th>Gastos caja</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.opening_cash)}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.other_income)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.cash_expenses_declared)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
+  </div>`;
 }
 window.opsCloseField=function(k,v,rerender=false){
- if(!O.closeDraft)O.closeDraft=newClosingDraft();O.closeDraft[k]=v;
- if(rerender){O.closeDraft.drawers={};render()}else updateCloseSummary();
+  if(!O.closeDraft)O.closeDraft=newClosingDraft();O.closeDraft[k]=v;
+  if(rerender){O.closeDraft.drawers={};O.closeDraft.legacyAllocation=false;render()}else updateCloseSummary();
 };
-window.opsDrawerField=function(id,k,v){if(!O.closeDraft)O.closeDraft=newClosingDraft();const dr=O.drawers.find(x=>x.id===id);const x=closingDrawerState(O.closeDraft,dr);x[k]=v;updateCloseSummary()};
-function updateCloseSummary(){const c=closeCalc();[['ops_close_open',c.opening],['ops_close_cashsales',c.cashSales],['ops_close_card',c.card],['ops_close_bizum',c.bizum],['ops_close_online',c.online],['ops_close_end',c.closing],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)})}
+window.opsDrawerField=function(id,k,v){
+  if(!O.closeDraft)O.closeDraft=newClosingDraft();
+  const dr=O.drawers.find(x=>x.id===id),x=closingDrawerState(O.closeDraft,dr);x[k]=v;
+  updateCloseSummary();
+};
+function updateCloseSummary(){
+  const c=closeCalc();
+  [['ops_close_open',c.opening],['ops_close_cashsales',c.cashSales],['ops_close_card',c.card],['ops_close_bizum',c.bizum],['ops_close_online',c.online],['ops_close_other',c.other],['ops_close_withdrawals',c.withdrawals],['ops_close_cash_expenses',c.cashExpenses],['ops_close_end',c.closing],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)});
+  O.drawers.filter(x=>x.store_id===O.closeDraft?.storeId).forEach(dr=>{const x=drawerCalc(O.closeDraft,dr);[['ops_drawer_total_'+dr.id,x.total],['ops_drawer_cash_'+dr.id,x.cashSales],['ops_drawer_card_'+dr.id,x.card],['ops_drawer_other_'+dr.id,x.bizum+x.online+x.other],['ops_drawer_close_'+dr.id,x.closing]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)})});
+}
 window.opsNewClosing=function(){O.closeDraft=newClosingDraft();render()};
 window.opsEditClosing=function(id){
- const c=O.closings.find(x=>x.id===id);if(!c)return;
- const drawers={};O.closingDrawers.filter(x=>x.closing_id===id).forEach(x=>drawers[x.drawer_id]={opening:String(x.opening_cash??''),closing:String(x.closing_cash??'')});
- O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,card:String(c.card_sales||''),bizum:String(c.bizum_sales||''),online:String(c.online_sales||''),other:String(c.other_income||''),withdrawals:String(c.cash_withdrawals||''),cashExpenses:String(c.cash_expenses_declared||''),notes:c.notes||'',status:c.status,drawers};render();window.scrollTo({top:0,behavior:'smooth'});
+  const c=O.closings.find(x=>x.id===id);if(!c)return;
+  const rows=O.closingDrawers.filter(x=>x.closing_id===id),drawers={};
+  let hasBreakdown=false;
+  rows.forEach(x=>{
+    const broken=[x.card_sales,x.bizum_sales,x.online_sales,x.other_income,x.cash_withdrawals,x.cash_expenses_declared].some(v=>v!==null&&v!==undefined);
+    if(broken)hasBreakdown=true;
+    drawers[x.drawer_id]={
+      opening:String(x.opening_cash??''),closing:String(x.closing_cash??''),
+      card:String(x.card_sales??''),bizum:String(x.bizum_sales??''),online:String(x.online_sales??''),other:String(x.other_income??''),
+      withdrawals:String(x.cash_withdrawals??''),cashExpenses:String(x.cash_expenses_declared??'')
+    };
+  });
+  let legacyAllocation=false;
+  if(rows.length&&!hasBreakdown){
+    const first=drawers[rows[0].drawer_id];
+    if(first){
+      first.card=String(c.card_sales||'');first.bizum=String(c.bizum_sales||'');first.online=String(c.online_sales||'');first.other=String(c.other_income||'');
+      first.withdrawals=String(c.cash_withdrawals||'');first.cashExpenses=String(c.cash_expenses_declared||'');
+      legacyAllocation=!!(n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income)+n(c.cash_withdrawals)+n(c.cash_expenses_declared));
+    }
+  }
+  O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,notes:c.notes||'',status:c.status,drawers,legacyAllocation};render();window.scrollTo({top:0,behavior:'smooth'});
 };
 window.opsReopenClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Reabrir cierre','El cierre volverá a borrador para poder corregirlo.','Reabrir');if(!reason)return;const {error}=await sb.rpc('ops_set_closing_status_controlled',{p_closing_id:d.id,p_status:'borrador',p_reason:reason});if(error)return alert(error.message);await load(true);window.opsEditClosing(d.id)};
 window.opsDeleteClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Eliminar cierre',`Eliminarás el cierre de ${storeName(d.storeId)} del ${dmy(d.date)}. Se conservará snapshot administrativo.`,'Eliminar cierre');if(!reason)return;const {error}=await sb.rpc('ops_delete_closing_controlled',{p_closing_id:d.id,p_reason:reason});if(error)return alert(error.message);await load(true);O.closeDraft=newClosingDraft();render()};
 window.opsSaveClosing=async function(status='cerrado'){
- if(O.saving)return;const d=O.closeDraft,c=closeCalc();if(!d.storeId||!d.date)return alert('Tienda y fecha son obligatorias.');
- if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date))return alert('Ya existe un cierre para esa tienda y fecha. Ábrelo desde el histórico.');
- const ds=O.drawers.filter(x=>x.store_id===d.storeId);if(!ds.length)return alert('Esta tienda no tiene cajas configuradas.');
- if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()===''))return alert('Indica cuánto queda en cada caja.');
- O.saving=true;
- try{
-   const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,card_sales:n(d.card),bizum_sales:n(d.bizum),online_sales:n(d.online),other_income:n(d.other),cash_withdrawals:n(d.withdrawals),cash_expenses_declared:n(d.cashExpenses),notes:d.notes||'',status};
-   const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),notes:''}});
-   const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
-   await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total});
-   await load(true);O.closeDraft=newClosingDraft();render();
- }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
+  if(O.saving)return;const d=O.closeDraft,c=closeCalc();if(!d.storeId||!d.date)return alert('Tienda y fecha son obligatorias.');
+  if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date))return alert('Ya existe un cierre para esa tienda y fecha. Ábrelo desde el histórico.');
+  const ds=O.drawers.filter(x=>x.store_id===d.storeId);if(!ds.length)return alert('Esta tienda no tiene cajas configuradas.');
+  if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()===''))return alert('Indica cuánto queda en cada caja.');
+  O.saving=true;
+  try{
+    const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,notes:d.notes||'',status,entry_mode:'physical'};
+    const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{
+      drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),
+      card_sales:n(x.card),bizum_sales:n(x.bizum),online_sales:n(x.online),other_income:n(x.other),
+      cash_withdrawals:n(x.withdrawals),cash_expenses_declared:n(x.cashExpenses),notes:''
+    }});
+    const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
+    await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,cajas:drawerRows.length});
+    await load(true);O.closeDraft=newClosingDraft();render();
+  }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
 };
 
 function defaultExpenseLine(){
