@@ -2,7 +2,7 @@
 'use strict';
 const O=window.TotusGestion;
 if(!O) return;
-O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
+O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.features;
 const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal}=O.core;
 const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
@@ -13,12 +13,13 @@ const reportDate=v=>{const x=String(v||'');return /^\d{4}-\d{2}-\d{2}$/.test(x)?
 const euro=v=>eur(Number(v)||0);
 async function featureLoad(force=false){
  if(E.loaded&&!force)return;
- const [customers,templates,legacy,hist,gestor,summary,storage]=await Promise.all([
+ const [customers,templates,legacy,hist,gestor,summary,auditRows,revisionRows,backupRows,storage]=await Promise.all([
    all('ops_customers','name',true),all('ops_document_templates','name',true),all('ops_legacy_daily_rows','row_date',true),
    all('ops_historical_income_periods','period_start',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),
+   manager()?all('ops_audit_log','created_at',false):Promise.resolve([]),manager()?all('ops_entity_revisions','created_at',false):Promise.resolve([]),admin()?all('ops_backup_archives','created_at',false):Promise.resolve([]),
    sb.rpc('ops_storage_usage').then(r=>r.error?null:r.data).catch(()=>null)
  ]);
- E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;
+ E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;E.auditRows=auditRows;E.revisionRows=revisionRows;E.backupRows=backupRows;
  E.storageUsage=storage||{documents_count:O.documents.length,documents_bytes:sum(O.documents,d=>N(d.size_bytes)),assets_count:templates.filter(t=>N(t.logo_size_bytes)>0).length,assets_bytes:sum(templates,t=>N(t.logo_size_bytes)),total_bytes:sum(O.documents,d=>N(d.size_bytes))+sum(templates,t=>N(t.logo_size_bytes))};
  E.loaded=true;
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
@@ -758,6 +759,56 @@ window.opsGestorPack=async function(){
  dlBlob(await z.generateAsync({type:'blob'}),`PAQUETE_GESTOR_${O.reportFrom}_${O.reportTo}.zip`);
 };
 function reportsHtml(){return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Descargas</div><div class="ops-title-line"><h3>Informes, Excel diario y gestoría</h3>${infoButton('informes','Ayuda sobre informes')}</div><div class="small">Orden cronológico y columnas alineadas con tus hojas y los informes de gestoría.</div></div></div><div class="ops-filters"><div><label>Desde</label><input type="date" value="${H(O.reportFrom)}" onchange="opsReportField('from',this.value)"></div><div><label>Hasta</label><input type="date" value="${H(O.reportTo)}" onchange="opsReportField('to',this.value)"></div></div><div class="ops-grid-3" style="margin-top:14px"><div class="ops-card"><h4>Gastos · formato gestoría</h4><p class="small">Orden, fecha, factura, identificación, concepto, IVA, RE, IRPF y retenciones.</p><button class="secondary" onclick="opsDownloadManagerExpenses()">Descargar XLSX</button></div><div class="ops-card"><h4>Ingresos · formato gestoría</h4><p class="small">Resumen mensual por Azuqueca/Hortimatic y Alcalá/NewOldSmok.</p><button class="secondary" onclick="opsDownloadManagerIncome()">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario Hortimatic</h4><p class="small">12 hojas: Día · Gastos · Precio · Tarjeta · Salida de caja.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='HORTIMATIC')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario NewOldSmok</h4><p class="small">Misma estructura que tu libro actual.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='NEWOLDSMOK')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Libro completo Totus</h4><p class="small">Resumen, cierres, gastos y facturación en un único Excel.</p><button class="secondary" onclick="opsManagementWorkbook()">Descargar XLSX</button></div><div class="ops-card"><h4>Informe fiscal</h4><p class="small">130, 111, 115, resultado y RETA orientativo.</p><button class="secondary" onclick="opsFiscalPdf()">Descargar PDF</button></div><div class="ops-card"><h4>Documentos</h4><p class="small">Archivos de la franja seleccionada ordenados por fecha.</p><button class="secondary" onclick="opsZipReportDocs()">Descargar ZIP</button></div><div class="ops-card report-card featured"><div class="ops-title-line"><h4>Paquete gestor</h4>${infoButton('informes.gestor','Qué incluye el paquete')}</div><p class="small">Carpetas 01_INGRESOS · 02_GASTOS · 03_DIARIOS · 04_RESUMEN · 05_DOCUMENTOS, con un LEEME y sin gastos internos.</p><button class="primary" onclick="opsGestorPack()">Preparar paquete gestor</button></div></div></div>`}
+
+function adminLogHtml(){
+ if(!manager())return '<div class="ops-card">Sin acceso.</div>';
+ const merged=[
+  ...E.auditRows.map(x=>({ts:x.created_at,kind:'Actividad',user:x.user_email||'—',area:x.area||'',action:x.action||'',entity:x.entity_id||'',detail:x.detail||{}})),
+  ...E.revisionRows.map(x=>({ts:x.created_at,kind:'Revisión',user:x.user_email||'—',area:x.entity_type||'',action:x.action||'',entity:x.entity_id||'',detail:{motivo:x.reason,...(x.metadata||{})}}))
+ ].sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,500);
+ return `${window.adminStripHtml?window.adminStripHtml('log'):''}<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trazabilidad</div><h3>Log general</h3><div class="small">Actividad operativa y cambios administrativos sensibles en un único historial.</div></div><button class="secondary" onclick="opsExportAdminLog()">Exportar CSV</button></div>${merged.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Usuario</th><th>Área</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>${merged.map(x=>`<tr><td>${H(new Date(x.ts).toLocaleString('es-ES'))}</td><td>${H(x.kind)}</td><td>${H(x.user)}</td><td>${H(x.area)}</td><td><b>${H(x.action)}</b></td><td><div class="ops-tiny">${H(JSON.stringify(x.detail))}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">Aún no hay actividad registrada.</div>'}</div>`;
+}
+window.opsExportAdminLog=function(){
+ const rows=[['Fecha','Tipo','Usuario','Área','Acción','Entidad','Detalle']];
+ E.auditRows.forEach(x=>rows.push([x.created_at,'Actividad',x.user_email||'',x.area||'',x.action||'',x.entity_id||'',JSON.stringify(x.detail||{})]));
+ E.revisionRows.forEach(x=>rows.push([x.created_at,'Revisión',x.user_email||'',x.entity_type||'',x.action||'',x.entity_id||'',JSON.stringify({motivo:x.reason,...(x.metadata||{})})]));
+ rows.splice(1,rows.length-1,...rows.slice(1).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))));
+ const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(';')).join('\n');
+ dlBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`Totus_log_${today()}.csv`);
+};
+
+const BACKUP_TABLES=['ops_business_settings','ops_stores','ops_cash_drawers','ops_daily_closings','ops_daily_closing_drawers','ops_expense_categories','ops_suppliers','ops_personnel','ops_expenses','ops_expense_lines','ops_customers','ops_document_templates','ops_invoice_series','ops_sales_invoices','ops_sales_invoice_lines','ops_documents','ops_tax_payments','ops_fiscal_adjustments','ops_income_adjustments','ops_historical_income_periods','ops_legacy_daily_rows','ops_gestor_source_rows','ops_gestor_quarter_summary','ops_reconciliation_notes','ops_reta_brackets','ops_entity_revisions'];
+async function buildBackupBlob(){
+ if(!admin())throw new Error('Solo administración puede generar copias.');
+ const zip=new JSZip(),manifest={format:'totusbackup',version:1,created_at:new Date().toISOString(),app:'Totus Central',tables:{},files:[]};
+ for(const table of BACKUP_TABLES){
+  const rows=await all(table);manifest.tables[table]=rows.length;zip.file('data/'+table+'.json',JSON.stringify(rows));
+ }
+ const storageSets=[['business-documents',O.documents.map(d=>({path:d.storage_path,name:d.original_name}))],['business-assets',E.templates.filter(t=>t.logo_path).map(t=>({path:t.logo_path,name:t.logo_name||'logo'}))]];
+ for(const [bucket,items] of storageSets){for(const item of items){if(!item.path)continue;const {data,error}=await sb.storage.from(bucket).download(item.path);if(error)throw new Error('No se pudo incluir '+item.path+': '+error.message);zip.file('storage/'+bucket+'/'+item.path,data);manifest.files.push({bucket,path:item.path,size:data.size})}}
+ zip.file('manifest.json',JSON.stringify(manifest,null,2));
+ return{blob:await zip.generateAsync({type:'blob'}),manifest};
+}
+window.opsCreateBackup=async function(){
+ try{
+  const {blob,manifest}=await buildBackupBlob(),name=`Totus_${today()}_${new Date().toTimeString().slice(0,8).replaceAll(':','')}.totusbackup`;
+  const buf=await blob.arrayBuffer(),sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf))).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const path=`${O.year}/${crypto.randomUUID()}_${name}`;
+  const up=await sb.storage.from('totus-backups').upload(path,blob,{contentType:'application/octet-stream',upsert:false});if(up.error)throw up.error;
+  const ins=await sb.from('ops_backup_archives').insert({file_path:path,file_name:name,file_size:blob.size,sha256:sha,format_version:manifest.version,created_by:authSession?.user?.id||null}).select().single();if(ins.error){await sb.storage.from('totus-backups').remove([path]);throw ins.error}
+  dlBlob(blob,name);await audit('backup','crear',ins.data.id,{archivo:name,tamano:blob.size});await featureLoad(true);render();
+ }catch(e){alert('No se pudo crear la copia: '+e.message)}
+};
+window.opsDownloadBackup=async function(id){const b=E.backupRows.find(x=>x.id===id);if(!b)return;const {data,error}=await sb.storage.from('totus-backups').download(b.file_path);if(error)return alert(error.message);dlBlob(data,b.file_name)};
+window.opsDeleteBackup=async function(id){const b=E.backupRows.find(x=>x.id===id);if(!b)return;const reason=await O.core.askReason('Eliminar copia',`Se eliminará la copia ${b.file_name}.`,'Eliminar copia');if(!reason)return;const rm=await sb.storage.from('totus-backups').remove([b.file_path]);if(rm.error)return alert(rm.error.message);const del=await sb.from('ops_backup_archives').delete().eq('id',id);if(del.error)return alert(del.error.message);await audit('backup','eliminar',id,{archivo:b.file_name,motivo:reason});await featureLoad(true);render()};
+window.opsValidateBackupUpload=async function(){
+ const file=document.getElementById('ops_backup_file')?.files?.[0];if(!file)return alert('Selecciona una copia .totusbackup.');
+ try{const zip=await JSZip.loadAsync(file),mf=zip.file('manifest.json');if(!mf)throw new Error('No contiene manifest.json');const manifest=JSON.parse(await mf.async('string'));if(manifest.format!=='totusbackup'||manifest.version!==1)throw new Error('Formato de copia no compatible');const missing=BACKUP_TABLES.filter(t=>!zip.file('data/'+t+'.json'));openOpsModal('Copia validada',`<div class="ops-help-copy"><b>${H(file.name)}</b><br>Creada: ${H(manifest.created_at||'—')}<br>Tablas: ${Object.keys(manifest.tables||{}).length}<br>Archivos: ${(manifest.files||[]).length}<br>${missing.length?'<span class="badge warnb">Faltan tablas: '+H(missing.join(', '))+'</span>':'<span class="badge ok">Estructura completa</span>'}</div><div class="ops-note warn" style="margin-top:12px">La restauración destructiva se habilitará solo cuando la validación integral y la copia previa automática estén verificadas.</div>`) }catch(e){alert('Copia no válida: '+e.message)}
+};
+function adminBackupHtml(){
+ if(!admin())return '<div class="ops-card">Solo administración.</div>';
+ return `${window.adminStripHtml?window.adminStripHtml('backup'):''}<div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Copia portátil</div><h3>Backup completo</h3><div class="small">Datos + documentos + recursos corporativos en un único .totusbackup.</div></div><button class="primary" onclick="opsCreateBackup()">Crear y descargar copia</button></div><div class="ops-note">La copia también se guarda de forma privada en Supabase y registra SHA-256.</div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Validación</div><h3>Comprobar una copia</h3></div><button class="secondary" onclick="opsValidateBackupUpload()">Validar archivo</button></div><input id="ops_backup_file" type="file" accept=".totusbackup,application/octet-stream"></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Histórico</div><h3>Copias guardadas</h3></div></div>${E.backupRows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Archivo</th><th>Tamaño</th><th>SHA-256</th><th></th></tr></thead><tbody>${E.backupRows.map(b=>`<tr><td>${H(new Date(b.created_at).toLocaleString('es-ES'))}</td><td><b>${H(b.file_name)}</b></td><td>${(N(b.file_size)/1048576).toFixed(1).replace('.',',')} MB</td><td><code>${H(String(b.sha256).slice(0,16))}…</code></td><td><div class="ops-actions"><button class="ghost" onclick="opsDownloadBackup('${b.id}')">Descargar</button><button class="danger" onclick="opsDeleteBackup('${b.id}')">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">Aún no hay copias guardadas.</div>'}</div>`;
+}
 function bodyForTab(tab){
  if(!E.loaded)return null;
  if(tab==='resumen')return dashboardHtml();
@@ -766,6 +817,8 @@ function bodyForTab(tab){
  if(tab==='fiscal')return fiscalProjectionHtml();
  if(tab==='informes')return reportsHtml();
  if(tab==='config')return (window.adminStripHtml?window.adminStripHtml('config'):'')+configHtml();
+ if(tab==='log')return adminLogHtml();
+ if(tab==='backup')return adminBackupHtml();
  return null;
 }
 window.TotusGestionFeatures={load:featureLoad,body:bodyForTab};
