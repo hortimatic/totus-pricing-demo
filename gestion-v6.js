@@ -282,7 +282,7 @@ function expensesHtml(){
  <div class="ops-totalbox"><div><small>Base + IVA + RE</small><b>${eur(t.accounting)}</b></div><div><small>Retenciones</small><b>${eur(t.withholding)}</b></div><div><small>A pagar proveedor</small><b>${eur(t.payable)}</b></div><div><small>Pagado indicado</small><b>${d.amountPaid!==''?eur(n(d.amountPaid)):eur(t.payable)}</b></div></div>
  </div>
  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3></div><button class="secondary" onclick="opsExportExpenses()">CSV gestoría</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()&&e.source==='manual'?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
  </div>`;
 }
 function expenseLineHtml(l,i){
@@ -361,6 +361,20 @@ async function uploadDoc(file,meta,linkedType='',linkedId=null){
  const {data,error}=await sb.from('ops_documents').insert(row).select('id').single();if(error){await sb.storage.from('business-documents').remove([path]);throw error}
  return data.id;
 }
+window.opsDeleteExpense=async function(id){
+ if(!manager())return alert('Solo administración o gerencia puede eliminar gastos.');
+ const e=O.expenses.find(x=>x.id===id);if(!e)return;
+ if(e.source!=='manual')return alert('Los gastos importados no se eliminan desde la aplicación.');
+ if(!confirm('¿Eliminar este gasto manual? Esta acción quitará también su desglose.'))return;
+ if(!confirm('Confirmación final: ¿seguro que quieres eliminarlo definitivamente?'))return;
+ try{
+  const {data,error}=await sb.rpc('ops_delete_manual_expense',{p_expense_id:id});if(error)throw error;
+  if(data?.storage_path){const rm=await sb.storage.from('business-documents').remove([data.storage_path]);if(rm.error)console.warn('No se pudo limpiar el archivo físico:',rm.error.message)}
+  await audit('gastos','eliminar',id,{proveedor:e.supplier_name,fecha:e.expense_date});
+  await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
+ }catch(err){alert('No se pudo eliminar el gasto: '+err.message)}
+};
+
 window.opsSaveExpense=async function(){
  if(O.saving)return;const d=O.expenseDraft;if(!d.date||!d.supplier){alert('Fecha y proveedor son obligatorios.');return}
  if(!O.expenseDraftLines.length||O.expenseDraftLines.every(l=>String(l.base).trim()==='')){alert('Añade al menos una línea con base.');return}
