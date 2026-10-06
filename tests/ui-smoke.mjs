@@ -50,9 +50,9 @@ function out(body,status=200,headers={}){return {status,contentType:'application
 
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
-const dialogs=[];
+const dialogs=[],pageErrors=[];
 page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss()});
-page.on('pageerror',e=>console.error('PAGEERROR',e.message));
+page.on('pageerror',e=>{pageErrors.push(e.stack||e.message);console.error('PAGEERROR',e.stack||e.message)});
 await page.addInitScript(({key,session})=>localStorage.setItem(key,JSON.stringify(session)),{key:`sb-${project}-auth-token`,session});
 
 await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
@@ -184,6 +184,7 @@ assert(overflow<=8,'Desbordamiento global móvil: '+overflow+'px');
 
 // No unexpected JS dialogs/errors should have fired during non-destructive smoke.
 assert(!dialogs.some(x=>/no se pudo|error/i.test(x)),'Se detectó diálogo de error: '+dialogs.join(' | '));
+assert(pageErrors.length===0,'Errores JavaScript en navegador: '+pageErrors.join('\n---\n'));
 
-console.log(JSON.stringify({ok:true,modules:['Pricing','Cajas','Gastos','Facturación','Documentos','Fiscalidad','Informes','Administración'],dialogs},null,2));
+console.log(JSON.stringify({ok:true,modules:['Pricing','Cajas','Gastos','Facturación','Documentos','Fiscalidad','Informes','Administración'],dialogs,pageErrors},null,2));
 await browser.close();
