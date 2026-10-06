@@ -561,44 +561,54 @@ function fiscalProjectionHtml(){
  </div>`;
 }
 function managerExpenseRows(from,to){
- const headers=['Orden','Fecha','Nºfra.rec.','Nºfra.proveedor','Rt','Identificación','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
- const rows=[];
- E.gestorRows.filter(r=>inRange(r.expense_date,from,to)).forEach(r=>rows.push([
-   N(r.order_no),reportDate(r.expense_date),r.received_invoice_ref||'',r.supplier_invoice_no||'','',
-   (r.supplier_tax_id+' '+r.supplier_name).trim(),r.concept_text,
-   N(r.base_vat),N(r.vat_rate),N(r.vat_amount),N(r.re_base),N(r.re_rate),N(r.re_amount),
-   N(r.imputable_irpf),N(r.withholding_base),N(r.withholding_rate),N(r.withholding_amount)
- ]));
- const lineMap=new Map();
- O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
- let order=Math.max(0,...rows.map(r=>N(r[0])));
- O.expenses
-  .filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to)&&(e.source!=='importacion_excel'||e.fiscal_reviewed))
-  .sort((x,y)=>x.expense_date.localeCompare(y.expense_date)||String(x.invoice_number||'').localeCompare(String(y.invoice_number||'')))
-  .forEach(e=>(lineMap.get(e.id)||[]).forEach(l=>{
-    const c=O.categories.find(x=>x.id===l.category_id);
-    const deductible=l.deductible_irpf!==false&&!l.fixed_asset;
-    const idText=`${e.supplier_tax_id||''} ${e.supplier_name||''}`.trim();
-    const concept=(c?.name||l.description||'').toUpperCase();
-    const base=N(l.base_amount),vat=N(l.vat_amount),re=N(l.re_amount),tax=vat+re;
-    rows.push([
-      ++order,reportDate(e.expense_date),'',e.invoice_number||'','',idText,concept,
-      base,N(l.vat_rate),vat,N(l.re_base),N(l.re_rate),re,
-      deductible?base:0,N(l.withholding_base),N(l.withholding_rate),N(l.withholding_amount)
-    ]);
-    if(tax){
-      rows.push([
-        ++order,reportDate(e.expense_date),'',e.invoice_number||'','',idText,'IVA SOPORTADO(RECARGO - REAGYP)',
-        0,0,0,0,0,0,deductible?tax:0,0,0,0
-      ]);
-    }
-  }));
- const parseDate=x=>String(x).split('/').reverse().join('-');
- rows.sort((x,y)=>parseDate(x[1]).localeCompare(parseDate(y[1]))||N(x[0])-N(y[0]));
- const last=rows.length+1;
- const totalRow=['','','','','','','TOTAL ACUMULADO',
-  `=SUM(H2:H${last})`,'',`=SUM(J2:J${last})`,`=SUM(K2:K${last})`,'',`=SUM(M2:M${last})`,`=SUM(N2:N${last})`,`=SUM(O2:O${last})`,'',`=SUM(Q2:Q${last})`];
- return[headers,...rows,totalRow];
+  const headers=['Orden','Fecha','Nº fra. recibida','Nº fra. proveedor','Rt','NIF/CIF','Razón social','Concepto','Base IVA','% IVA','Cuota IVA','Base R.E.','% R.E.','Cuota R.E.','Imputable a IRPF','Base retención','% retención','Cuota retenida','Total factura','Neto pagado'];
+  const rows=[];
+  const source=E.gestorRows.filter(r=>inRange(r.expense_date,from,to)&&!r.tax_support_line);
+  const sourceGroups=new Map();
+  source.forEach(r=>{
+    const key=[r.expense_date,r.received_invoice_ref||'',r.supplier_invoice_no||'',r.supplier_tax_id||'',r.supplier_name||''].join('|');
+    if(!sourceGroups.has(key))sourceGroups.set(key,[]);
+    sourceGroups.get(key).push(r);
+  });
+  for(const group of sourceGroups.values()){
+    const gross=sum(group,r=>N(r.base_vat)+N(r.vat_amount)+N(r.re_amount));
+    const withheld=sum(group,r=>N(r.withholding_amount));
+    group.forEach((r,idx)=>rows.push([
+      N(r.order_no),reportDate(r.expense_date),r.received_invoice_ref||'',r.supplier_invoice_no||'','',
+      r.supplier_tax_id||'',r.supplier_name||'',r.concept_text,
+      N(r.base_vat),N(r.vat_rate),N(r.vat_amount),N(r.re_base),N(r.re_rate),N(r.re_amount),
+      N(r.base_vat)+N(r.vat_amount)+N(r.re_amount),N(r.withholding_base),N(r.withholding_rate),N(r.withholding_amount),
+      idx===0?gross:'',idx===0?gross-withheld:''
+    ]));
+  }
+  const lineMap=new Map();
+  O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
+  let order=Math.max(0,...rows.map(r=>N(r[0])));
+  O.expenses
+   .filter(e=>!e.management_only&&e.expense_date>='2026-07-01'&&inRange(e.expense_date,from,to)&&(e.source!=='importacion_excel'||e.fiscal_reviewed))
+   .sort((x,y)=>x.expense_date.localeCompare(y.expense_date)||String(x.invoice_number||'').localeCompare(String(y.invoice_number||'')))
+   .forEach(e=>{
+     const lines=lineMap.get(e.id)||[];
+     const gross=N(e.accounting_amount||e.gross_expense)||sum(lines,l=>N(l.base_amount)+N(l.vat_amount)+N(l.re_amount));
+     const withheld=sum(lines,l=>N(l.withholding_amount));
+     lines.forEach((l,idx)=>{
+       const cat=O.categories.find(x=>x.id===l.category_id);
+       const deductible=l.deductible_irpf!==false&&!l.fixed_asset;
+       const base=N(l.base_amount),vat=N(l.vat_amount),re=N(l.re_amount);
+       rows.push([
+         ++order,reportDate(e.expense_date),'',e.invoice_number||'','',e.supplier_tax_id||'',e.supplier_name||'',(cat?.name||l.description||'').toUpperCase(),
+         base,N(l.vat_rate),vat,N(l.re_base),N(l.re_rate),re,
+         deductible?base+vat+re:0,N(l.withholding_base),N(l.withholding_rate),N(l.withholding_amount),
+         idx===0?gross:'',idx===0?N(e.amount_paid||gross-withheld):''
+       ]);
+     });
+   });
+  const parseDate=x=>String(x).split('/').reverse().join('-');
+  rows.sort((x,y)=>parseDate(x[1]).localeCompare(parseDate(y[1]))||N(x[0])-N(y[0]));
+  const last=rows.length+1;
+  const totalRow=['','','','','','','','TOTAL ACUMULADO',
+   `=SUM(I2:I${last})`,'',`=SUM(K2:K${last})`,`=SUM(L2:L${last})`,'',`=SUM(N2:N${last})`,`=SUM(O2:O${last})`,`=SUM(P2:P${last})`,'',`=SUM(R2:R${last})`,`=SUM(S2:S${last})`,`=SUM(T2:T${last})`];
+  return[headers,...rows,totalRow];
 }
 function managerExpenseSummaryRows(from,to){
  const groups=new Map();
