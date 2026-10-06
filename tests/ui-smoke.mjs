@@ -17,7 +17,11 @@ const ids={
  drHh:'33333333-3333-4333-8333-333333333332',
  drNv:'33333333-3333-4333-8333-333333333333',
  seriesH:'44444444-4444-4444-8444-444444444441',
+ seriesHR:'44444444-4444-4444-8444-444444444443',
  seriesP:'44444444-4444-4444-8444-444444444442',
+ seriesN:'44444444-4444-4444-8444-444444444451',
+ seriesNR:'44444444-4444-4444-8444-444444444452',
+ seriesNP:'44444444-4444-4444-8444-444444444453',
  tpl:'55555555-5555-4555-8555-555555555555'
 };
 const fixtures={
@@ -34,7 +38,14 @@ const fixtures={
  ops_daily_closings:[],
  ops_cash_drawers:[{id:ids.drHv,store_id:ids.h,code:'VAPE',name:'Caja vape',active:true,sort_order:10},{id:ids.drHh,store_id:ids.h,code:'HEAD',name:'Caja head',active:true,sort_order:20},{id:ids.drNv,store_id:ids.n,code:'VAPE',name:'Caja vape',active:true,sort_order:10}],
  ops_daily_closing_drawers:[],
- ops_invoice_series:[{id:ids.seriesH,store_id:ids.h,year:2026,code:'H-2026',prefix:'H-2026-',next_number:1,padding:4,active:true,document_type:'factura',series_kind:'invoice'},{id:ids.seriesP,store_id:ids.h,year:2026,code:'HPF-2026',prefix:'HPF-2026-',next_number:1,padding:4,active:true,document_type:'proforma',series_kind:'invoice'}],
+ ops_invoice_series:[
+  {id:ids.seriesH,store_id:ids.h,year:2026,code:'H-2026',prefix:'H-2026-',next_number:1,padding:4,active:true,document_type:'factura',series_kind:'invoice'},
+  {id:ids.seriesHR,store_id:ids.h,year:2026,code:'RH-2026',prefix:'RH-2026-',next_number:1,padding:4,active:true,document_type:'factura',series_kind:'rectifying'},
+  {id:ids.seriesP,store_id:ids.h,year:2026,code:'HPF-2026',prefix:'HPF-2026-',next_number:1,padding:4,active:true,document_type:'proforma',series_kind:'invoice'},
+  {id:ids.seriesN,store_id:ids.n,year:2026,code:'N-2026',prefix:'N-2026-',next_number:1,padding:4,active:true,document_type:'factura',series_kind:'invoice'},
+  {id:ids.seriesNR,store_id:ids.n,year:2026,code:'RN-2026',prefix:'RN-2026-',next_number:1,padding:4,active:true,document_type:'factura',series_kind:'rectifying'},
+  {id:ids.seriesNP,store_id:ids.n,year:2026,code:'NPF-2026',prefix:'NPF-2026-',next_number:1,padding:4,active:true,document_type:'proforma',series_kind:'invoice'}
+ ],
  ops_sales_invoices:[],ops_sales_invoice_lines:[],ops_tax_payments:[],
  ops_reta_brackets:[{id:1,year:2026,bracket_order:1,min_net_monthly:null,max_net_monthly:670,min_inclusive:false,max_inclusive:true,min_base:653.59,max_base:718.94},{id:2,year:2026,bracket_order:15,min_net_monthly:6000,max_net_monthly:null,min_inclusive:false,max_inclusive:true,min_base:1928.10,max_base:5101.20}],
  ops_fiscal_adjustments:[],ops_income_adjustments:[],ops_gestor_quarter_summary:[],ops_reconciliation_notes:[],
