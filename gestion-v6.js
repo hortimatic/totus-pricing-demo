@@ -433,8 +433,9 @@ async function uploadDoc(file,meta,linkedType='',linkedId=null){
  const sha=await fileSha256(file);
  const dup=O.documents.find(d=>d.sha256&&d.sha256===sha);
  if(dup&&!confirm('Este archivo parece estar ya guardado como "'+dup.original_name+'". ¿Subirlo otra vez?'))return dup.id;
- const dt=meta.document_date||isoToday(),year=dt.slice(0,4),q='T'+qtrFromDate(dt),sc=meta.store_id?(O.stores.find(s=>s.id===meta.store_id)?.code||'TIENDA'):'GENERAL';
- const path=[year,q,sc,crypto.randomUUID()+'_'+b64Safe(file.name)].join('/');
+ const dt=meta.document_date||isoToday(),year=dt.slice(0,4),month=dt.slice(5,7),q='T'+qtrFromDate(dt),sc=meta.store_id?(O.stores.find(s=>s.id===meta.store_id)?.code||'TIENDA'):'GENERAL';
+ const kind=b64Safe(meta.doc_type||'otro')||'otro',party=b64Safe(meta.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
+ const path=[year,q,month,sc,kind,party,crypto.randomUUID()+'_'+b64Safe(file.name)].join('/');
  const {error:upErr}=await sb.storage.from('business-documents').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});if(upErr)throw upErr;
  const row={store_id:meta.store_id||null,doc_type:meta.doc_type||'factura_recibida',document_date:dt,supplier_or_customer:meta.supplier_or_customer||'',tax_id:meta.tax_id||'',invoice_number:meta.invoice_number||'',category_code:meta.category_code||'',status:meta.status||'pendiente',storage_path:path,original_name:file.name,mime_type:file.type||'application/octet-stream',size_bytes:file.size,sha256:sha,linked_entity_type:linkedType,linked_entity_id:linkedId,notes:meta.notes||'',uploaded_by:authSession.user.id};
  const {data,error}=await sb.from('ops_documents').insert(row).select('id').single();if(error){await sb.storage.from('business-documents').remove([path]);throw error}
@@ -689,24 +690,56 @@ function incomeRows(from,to){
  return rows;
 }
 window.opsExportIncome=function(){csvDownload(`ingresos_gestoria_${O.reportFrom}_${O.reportTo}.csv`,incomeRows(O.reportFrom,O.reportTo))};
-async function zipDocs(docs,zip,folder='documentos'){
+function docArchiveFolder(d,root='04_DOCUMENTOS'){
+ const dt=d.document_date||'sin_fecha',year=dt.slice(0,4)||'SIN_ANO',month=dt.slice(5,7)||'SIN_MES';
+ const q=dt&&dt.length>=7?'T'+qtrFromDate(dt):'SIN_TRIMESTRE';
+ const store=d.store_id?(O.stores.find(s=>s.id===d.store_id)?.code||'TIENDA'):'GENERAL';
+ const type=b64Safe(d.doc_type||'otro')||'otro';
+ const party=b64Safe(d.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
+ return [root,year,q,month,store,type,party].join('/');
+}
+async function zipDocs(docs,zip,root='04_DOCUMENTOS'){
  let done=0;
- for(const d of docs){
+ const sorted=[...docs].sort((a,b)=>String(a.document_date||'').localeCompare(String(b.document_date||''))||String(a.supplier_or_customer||'').localeCompare(String(b.supplier_or_customer||'')));
+ for(const d of sorted){
   const {data,error}=await sb.storage.from('business-documents').download(d.storage_path);if(error)continue;
-  const name=`${d.document_date||'sin_fecha'}_${b64Safe(d.supplier_or_customer||'documento')}_${b64Safe(d.invoice_number||'')}_${b64Safe(d.original_name)}`;
-  zip.file(folder+'/'+name,data);done++;
+  const inv=b64Safe(d.invoice_number||'SIN_NUMERO')||'SIN_NUMERO';
+  const original=b64Safe(d.original_name||'documento')||'documento';
+  const name=`${d.document_date||'sin_fecha'}_${inv}_${original}`;
+  zip.file(docArchiveFolder(d,root)+'/'+name,data);done++;
  }
  return done;
 }
-window.opsZipFilteredDocs=async function(){if(!window.JSZip){alert('ZIP no disponible.');return}const docs=O.documents.filter(docMatches);if(!docs.length){alert('No hay documentos con esos filtros.');return}const z=new JSZip();await zipDocs(docs,z);dlBlob(await z.generateAsync({type:'blob'}),`documentos_filtrados_${isoToday()}.zip`)};
-window.opsZipReportDocs=async function(){if(!window.JSZip)return alert('ZIP no disponible.');const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));if(!docs.length)return alert('No hay documentos en esa franja.');const z=new JSZip();await zipDocs(docs,z);dlBlob(await z.generateAsync({type:'blob'}),`documentos_${O.reportFrom}_${O.reportTo}.zip`)};
+window.opsZipFilteredDocs=async function(){
+ if(!window.JSZip){alert('ZIP no disponible.');return}
+ const docs=O.documents.filter(docMatches);if(!docs.length){alert('No hay documentos con esos filtros.');return}
+ const z=new JSZip();
+ await zipDocs(docs,z,'DOCUMENTOS');
+ dlBlob(await z.generateAsync({type:'blob'}),`documentos_filtrados_${isoToday()}.zip`);
+};
+window.opsZipReportDocs=async function(){
+ if(!window.JSZip)return alert('ZIP no disponible.');
+ const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));
+ if(!docs.length)return alert('No hay documentos en esa franja.');
+ const z=new JSZip();
+ await zipDocs(docs,z,'DOCUMENTOS');
+ dlBlob(await z.generateAsync({type:'blob'}),`documentos_${O.reportFrom}_${O.reportTo}.zip`);
+};
 window.opsGestorPack=async function(){
  if(!window.JSZip)return alert('ZIP no disponible.');
  const z=new JSZip(),toCsv=rows=>'\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
- z.file(`cierres_${O.reportFrom}_${O.reportTo}.csv`,toCsv(closingRows(O.reportFrom,O.reportTo)));
- z.file(`gastos_gestoria_${O.reportFrom}_${O.reportTo}.csv`,toCsv(expenseRows(O.reportFrom,O.reportTo)));
- z.file(`ingresos_gestoria_${O.reportFrom}_${O.reportTo}.csv`,toCsv(incomeRows(O.reportFrom,O.reportTo)));
- const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));await zipDocs(docs,z,'facturas_documentos');
+ const base=`GESTORIA_${O.reportFrom}_${O.reportTo}`;
+ z.file(base+`/01_INGRESOS/INGRESOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(incomeRows(O.reportFrom,O.reportTo)));
+ z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}.csv`,toCsv(expenseRows(O.reportFrom,O.reportTo)));
+ z.file(base+`/03_CIERRES/CASH_CIERRES_${O.reportFrom}_${O.reportTo}.csv`,toCsv(closingRows(O.reportFrom,O.reportTo)));
+ const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));
+ await zipDocs(docs,z,base+'/04_DOCUMENTOS');
+ z.file(base+'/00_LEEME.txt',
+   'Paquete generado por Totus Central.\r\n'+
+   'Orden: 01 INGRESOS · 02 GASTOS · 03 CIERRES · 04 DOCUMENTOS.\r\n'+
+   'Los CSV de ingresos y gastos respetan la estructura de trabajo facilitada por la gestoría.\r\n'+
+   'Los documentos se ordenan por año > trimestre > mes > establecimiento > tipo > proveedor/cliente.\r\n'+
+   'Periodo: '+O.reportFrom+' a '+O.reportTo+'\r\n');
  dlBlob(await z.generateAsync({type:'blob'}),`paquete_gestor_${O.reportFrom}_${O.reportTo}.zip`);
 };
 window.opsFiscalPdf=function(){
