@@ -3,7 +3,7 @@
 Fecha: 2026-10-06
 Rama probada: `desarrollo-v6`
 Commit UI QA de referencia: `2feb390a56344d757c753a1e5837f4cabf055431`
-HEAD documentado: pendiente de QA final tras limpieza estructural
+HEAD documentado: `13a8dc56c9cad0785db419d2ccafee93b80c8965`
 Producción: `main` NO modificada.
 
 ## Navegación
@@ -92,7 +92,7 @@ Probado en ambos buckets privados:
 ## Navegador
 GitHub Actions / Playwright:
 - workflow: Totus Central QA
-- resultado del commit de referencia: SUCCESS
+- resultado final saneado: SUCCESS (run 55)
 - módulos recorridos: Pricing, Cajas, Gastos, Facturación, Documentos, Fiscalidad, Informes, Administración
 - cálculo Pricing con coma decimal y conservación de foco
 - cálculo de caja
@@ -130,7 +130,7 @@ Pruebas:
 - RLS real con Davinia / rol gerente: creación de borrador permitida dentro de transacción con ROLLBACK
 - RLS real con Óscar / rol encargado: INSERT bloqueado por RLS
 - UI encargado: Facturación en modo consulta, sin botones de creación/guardado
-- GitHub Actions · Totus Central QA · run 27: SUCCESS
+- GitHub Actions · Totus Central QA · run 55: SUCCESS
 - Commit QA: `2feb390a56344d757c753a1e5837f4cabf055431`
 - El commit posterior solo versiona la migración SQL y no modifica JS/CSS/tests.
 
@@ -163,7 +163,7 @@ Coherencia de series:
 - factura externa válida y proforma -> factura: probadas con transacción y ROLLBACK
 
 QA navegador ampliada:
-- GitHub Actions run 36: SUCCESS
+- GitHub Actions run 55: SUCCESS
 - cálculo Pricing y normalización decimal
 - guardado de cierre con dos cajas
 - guardado de gasto con factura PDF adjunta
@@ -212,3 +212,15 @@ La rama `main` sigue siendo la versión de producción anterior. No mezclar/prom
 - informes contrastados de nuevo con los originales de gestoría y diarios 2026
 - gastos nuevos exportan concepto + fila separada `IVA SOPORTADO (RECARGO - REAGYP)` cuando corresponde
 - diarios recuperan formato `Día | Gastos | Precio | Tarjeta | Salida de caja`
+
+
+## Cierre final · 2026-10-06
+- QA final saneada: **SUCCESS**, GitHub Actions run 55.
+- GitHub Actions queda en `workflow_dispatch` únicamente: no se ejecuta con cada commit y no genera una cadena de avisos por cambios intermedios.
+- eliminado `.qa-trigger` temporal.
+- fixtures de QA anonimizadas.
+- descarga documental probada contra la llamada real a Supabase Storage en la simulación.
+- informes de gestoría contrastados con los documentos originales facilitados:
+  - gastos: columnas fiscales, fecha `DD/MM/AAAA`, fila separada de IVA/RE, total acumulado y desglose por conceptos;
+  - ingresos: agrupación mensual por establecimiento, columnas equivalentes y total acumulado;
+  - diarios: 12 hojas y estructura `Día | Gastos | Precio | Tarjeta | Salida de caja`.
