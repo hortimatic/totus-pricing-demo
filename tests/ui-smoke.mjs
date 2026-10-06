@@ -84,8 +84,22 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    if(method==='GET') return route.fulfill(out(fixtures[table]||[]));
    let body={};try{body=req.postDataJSON()}catch{}
    if(method==='POST'){
-     const row=Array.isArray(body)?body[0]:(body||{});
-     return route.fulfill(out({...row,id:row.id||crypto.randomUUID()}));
+     const input=Array.isArray(body)?body:[body||{}];
+     const made=input.map(row=>({...row,id:row.id||crypto.randomUUID(),created_at:row.created_at||new Date().toISOString()}));
+     if(Array.isArray(fixtures[table])) fixtures[table].push(...made);
+     const wantsObject=(req.headers()['accept']||'').includes('vnd.pgrst.object');
+     return route.fulfill(out(wantsObject?made[0]:made));
+   }
+   if(method==='PATCH'){
+     const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
+     if(id&&Array.isArray(fixtures[table])){const row=fixtures[table].find(x=>x.id===id);if(row)Object.assign(row,body)}
+     const wantsObject=(req.headers()['accept']||'').includes('vnd.pgrst.object');
+     return route.fulfill(out(wantsObject?(fixtures[table]?.find(x=>x.id===id)||body):[]));
+   }
+   if(method==='DELETE'){
+     const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
+     if(id&&Array.isArray(fixtures[table])){const ix=fixtures[table].findIndex(x=>x.id===id);if(ix>=0)fixtures[table].splice(ix,1)}
+     return route.fulfill(out([]));
    }
    return route.fulfill(out({}));
  }
