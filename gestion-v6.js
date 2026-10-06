@@ -197,12 +197,15 @@ function sectionMeta(tab=O.tab){
   documentos:['Documentos','Archivo digital','Facturas y documentos ordenados, localizables y descargables.'],
   fiscal:['Fiscalidad','Control trimestral','IRPF, retenciones, previsiones y tramo RETA.'],
   informes:['Informes','Descargas','Informes por fechas y paquete preparado para gestoría.'],
-  config:['Configuración','Administración','Empresa, tiendas, cajas, criterios fiscales y almacenamiento.']
+  config:['Configuración','Administración','Empresa, criterios fiscales, RETA y almacenamiento.'],
+  log:['Log','Administración','Historial de actividad y revisiones administrativas.'],
+  backup:['Backup','Administración','Copias portátiles, validación y recuperación.']
  })[tab]||['Gestión','',''];
 }
 function headerHtml(){
- const m=sectionMeta();
- return `<div class="head"><div><div class="eyebrow">${m[1]}</div><div class="ops-title-line"><h1>${m[0]}</h1>${infoButton(O.tab,'Información sobre '+m[0])}</div><p>${m[2]}</p></div><div class="ops-filters"><div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div><div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div><div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div></div></div>`;
+ const m=sectionMeta(),showYear=['resumen','cajas','gastos','facturas','fiscal'].includes(O.tab),showQuarter=['resumen','cajas','gastos','fiscal'].includes(O.tab),showStore=['resumen','cajas','gastos','facturas'].includes(O.tab);
+ const filters=(showYear||showQuarter||showStore)?`<div class="ops-filters">${showYear?`<div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div>`:''}${showQuarter?`<div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div>`:''}${showStore?`<div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div>`:''}</div>`:'';
+ return `<div class="head"><div><div class="eyebrow">${m[1]}</div><div class="ops-title-line"><h1>${m[0]}</h1>${infoButton(O.tab,'Información sobre '+m[0])}</div><p>${m[2]}</p></div>${filters}</div>`;
 }
 function managementHtml(){
  if(!O.loaded)return `<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>Preparando ${sectionMeta()[0].toLowerCase()}…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando los datos necesarios…</div>`;
