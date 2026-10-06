@@ -20,6 +20,7 @@ const E=v=>eur(v);
 const today=()=>new Date().toISOString().slice(0,10);
 const addDays=(iso,days)=>{const d=new Date((iso||today())+'T12:00:00');d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)};
 const roleManager=()=>['admin','gerente'].includes(currentRole());
+const roleAdmin=()=>currentRole()==='admin';
 const fmtDate=v=>{if(!v)return'—';const [y,m,d]=String(v).slice(0,10).split('-');return `${d}/${m}/${y}`};
 const dataUrlFromBlob=blob=>new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)});
 const slug=s=>String(s||'doc').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^_+|_+$/g,'');
@@ -464,18 +465,18 @@ window.billUploadLogo=async function(){
 function seriesHtml(){
  const inv=O.series.filter(s=>s.year===O.year&&(s.document_type||'factura')==='factura'),pro=B.proSeries.filter(s=>s.year===O.year);
  return `<div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Facturas</div><h3>Series ${O.year}</h3></div>${roleManager()?'<button class="secondary" onclick="billNewSeries(\'invoice\')">Añadir</button>':''}</div>${seriesTable(inv,'invoice')}</div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Proformas</div><h3>Series ${O.year}</h3></div>${roleManager()?'<button class="secondary" onclick="billNewSeries(\'proforma\')">Añadir</button>':''}</div>${seriesTable(pro,'proforma')}</div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Facturas</div><h3>Series ${O.year}</h3></div>${roleAdmin()?'<button class="secondary" onclick="billNewSeries(\'invoice\')">Añadir</button>':''}</div>${seriesTable(inv,'invoice')}</div>
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Proformas</div><h3>Series ${O.year}</h3></div>${roleAdmin()?'<button class="secondary" onclick="billNewSeries(\'proforma\')">Añadir</button>':''}</div>${seriesTable(pro,'proforma')}</div>
  </div>
  <div class="ops-note warn">Las facturas ordinarias y rectificativas deben mantener series separadas y numeración correlativa. Las proformas usan una secuencia independiente.</div>`;
 }
 function seriesTable(rows,type){
  if(!rows.length)return '<div class="ops-empty">Sin series para este año.</div>';
- return `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Código</th><th>Tienda</th><th>Tipo</th><th>Prefijo</th><th>Siguiente</th><th></th></tr></thead><tbody>${rows.map(s=>`<tr><td><b>${H(s.code)}</b></td><td>${H(storeName(s.store_id))}</td><td>${H(type==='proforma'?'Proforma':((s.series_kind||'invoice')==='rectifying'?'Rectificativa':'Factura'))}</td><td>${H(s.prefix)}</td><td>${String(s.next_number).padStart(s.padding,'0')}</td><td>${roleManager()?`<button class="secondary" onclick="billEditSeries('${type}','${s.id}')">Editar</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+ return `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Código</th><th>Tienda</th><th>Tipo</th><th>Prefijo</th><th>Siguiente</th><th></th></tr></thead><tbody>${rows.map(s=>`<tr><td><b>${H(s.code)}</b></td><td>${H(storeName(s.store_id))}</td><td>${H(type==='proforma'?'Proforma':((s.series_kind||'invoice')==='rectifying'?'Rectificativa':'Factura'))}</td><td>${H(s.prefix)}</td><td>${String(s.next_number).padStart(s.padding,'0')}</td><td>${roleAdmin()?`<button class="secondary" onclick="billEditSeries('${type}','${s.id}')">Editar</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
 }
-window.billNewSeries=type=>{if(!roleManager())return;const code=prompt('Código de la nueva serie:');if(!code)return;const prefix=prompt('Prefijo visible (ej. H-2027-):',code+'-');if(!prefix)return;const store=O.storeId==='all'?(O.stores[0]?.id||null):O.storeId;billSaveSeries(type,null,{code,prefix,store_id:store,year:O.year,next_number:1,padding:4,series_kind:'invoice'})};
+window.billNewSeries=type=>{if(!roleAdmin())return;const code=prompt('Código de la nueva serie:');if(!code)return;const prefix=prompt('Prefijo visible (ej. H-2027-):',code+'-');if(!prefix)return;const store=O.storeId==='all'?(O.stores[0]?.id||null):O.storeId;billSaveSeries(type,null,{code,prefix,store_id:store,year:O.year,next_number:1,padding:4,series_kind:'invoice'})};
 window.billEditSeries=(type,id)=>{
- if(!roleManager())return;const s=(type==='proforma'?B.proSeries:O.series).find(x=>x.id===id);if(!s)return;
+ if(!roleAdmin())return;const s=(type==='proforma'?B.proSeries:O.series).find(x=>x.id===id);if(!s)return;
  const prefix=prompt('Prefijo:',s.prefix);if(prefix===null)return;const next=prompt('Siguiente número:',s.next_number);if(next===null)return;const padding=prompt('Dígitos (relleno con ceros):',s.padding);if(padding===null)return;
  billSaveSeries(type,id,{...s,prefix,next_number:parseInt(next,10)||1,padding:parseInt(padding,10)||4});
 };
