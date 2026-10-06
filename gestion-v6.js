@@ -213,15 +213,24 @@ function retaEstimate(){
   return {monthly,computable,projectedIrpfNet,projectedReta,bracket,minQuota:bracket?n(bracket.min_base)*rate:0,maxQuota:bracket?n(bracket.max_base)*rate:0,actual:n(O.settings?.actual_reta_monthly)};
 }
 
-function navHtml(){
- const tabs=[['resumen','Resumen'],['cajas','Cajas'],['gastos','Gastos'],['facturas','Facturas'],['documentos','Documentos'],['fiscal','Fiscalidad'],['informes','Informes'],['config','Configuración']];
- return `<div class="ops-tabs">${tabs.map(([id,t])=>`<button class="${O.tab===id?'active':''}" onclick="opsTab('${id}')">${t}</button>`).join('')}</div>`;
+function sectionMeta(tab=O.tab){
+ return ({
+  resumen:['Resumen','Visión global','Ventas, gastos, resultado, fiscalidad y servidor.'],
+  cajas:['Cajas','Trabajo diario','Aperturas y cierres de Hortimatic y NewOldSmok.'],
+  gastos:['Gastos','Compras y pagos','Compras, proveedores, servicios y gastos internos o fiscales.'],
+  facturas:['Facturación','Ventas documentadas','Facturas, proformas, series, plantillas, logo y PDF.'],
+  documentos:['Documentos','Archivo digital','Facturas y documentos ordenados, localizables y descargables.'],
+  fiscal:['Fiscalidad','Control trimestral','IRPF, retenciones, previsiones y tramo RETA.'],
+  informes:['Informes','Descargas','Informes por fechas y paquete preparado para gestoría.'],
+  config:['Configuración','Administración','Empresa, tiendas, cajas, criterios fiscales y almacenamiento.']
+ })[tab]||['Gestión','',''];
 }
 function headerHtml(){
- return `<div class="head"><div><div class="eyebrow">Operativa y contabilidad</div><h1>Gestión</h1><p>Cajas, gastos, facturas, fiscalidad e informes de Hortimatic y NewOldSmok en un solo sitio.</p></div><div class="ops-filters"><div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div><div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div><div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div></div></div>`;
+ const m=sectionMeta();
+ return `<div class="head"><div><div class="eyebrow">${m[1]}</div><h1>${m[0]}</h1><p>${m[2]}</p></div><div class="ops-filters"><div><label>Año</label><select onchange="opsSetYear(this.value)">${[2025,2026,2027,2028].map(y=>`<option ${O.year==y?'selected':''}>${y}</option>`).join('')}</select></div><div><label>Trimestre</label><select onchange="opsSetQuarter(this.value)">${[1,2,3,4].map(q=>`<option value="${q}" ${O.quarter==q?'selected':''}>T${q}</option>`).join('')}</select></div><div><label>Establecimiento</label><select onchange="opsSetStore(this.value)"><option value="all">Ambos</option>${O.stores.map(s=>`<option value="${s.id}" ${O.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div></div></div>`;
 }
 function managementHtml(){
- if(!O.loaded)return `<div class="head"><div><div class="eyebrow">Gestión</div><h1>Preparando datos…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando cajas, gastos, documentos y fiscalidad…</div>`;
+ if(!O.loaded)return `<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>Preparando ${sectionMeta()[0].toLowerCase()}…</h1><p>Un momento.</p></div></div><div class="ops-card">Cargando los datos necesarios…</div>`;
  let body='';
  if(O.tab==='resumen')body=dashboardHtml();
  if(O.tab==='cajas')body=closingsHtml();
@@ -230,8 +239,8 @@ function managementHtml(){
  if(O.tab==='documentos')body=documentsHtml();
  if(O.tab==='fiscal')body=fiscalHtml();
  if(O.tab==='informes')body=reportsHtml();
- if(O.tab==='config')body=configHtml();
- return `<div class="ops-wrap">${headerHtml()}${navHtml()}${body}</div>`;
+ if(O.tab==='config')body=`${window.adminStripHtml?window.adminStripHtml('config'):''}${configHtml()}`;
+ return `<div class="ops-wrap">${headerHtml()}${body}</div>`;
 }
 window.opsManagementHtml=managementHtml;
 
@@ -805,16 +814,23 @@ window.opsSetYear=function(v){O.year=+v;O.reportFrom=`${O.year}-01-01`;O.reportT
 window.opsSetQuarter=function(v){O.quarter=+v;render()};
 window.opsSetStore=function(v){O.storeId=v;O.closeDraft=null;O.expenseDraft=null;O.invoiceDraft=null;render()};
 
-window.goOps=async function(){
+window.goOps=async function(tab='resumen'){
+ O.tab=tab||'resumen';
  state.page='management';state.familyId=null;state.productId=null;state.dirty=false;
+ if(O.tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();
+ if(O.tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
  render();
- try{await load();render()}catch(e){document.getElementById('main').innerHTML=`<div class="head"><div><div class="eyebrow">Gestión</div><h1>No se pudo cargar</h1><p>${h(e.message)}</p></div></div>`}
+ try{await load();render()}catch(e){document.getElementById('main').innerHTML=`<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>No se pudo cargar ${sectionMeta()[0].toLowerCase()}</h1><p>${h(e.message)}</p></div></div>`}
 };
 
 const pricingRender=render;
 render=function(){
  if(state.page==='management'){
-   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page==='management'));
+   document.querySelectorAll('.nav button').forEach(b=>{
+     const active=b.dataset.opsTab===O.tab || (b.dataset.page==='admin'&&O.tab==='config');
+     b.classList.toggle('active',active);
+   });
+   document.querySelector('.search')?.classList.add('hidden');
    document.getElementById('savebar')?.classList.add('hidden');
    const m=document.getElementById('main');if(m)m.innerHTML=managementHtml();
    return;
