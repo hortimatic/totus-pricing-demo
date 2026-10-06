@@ -48,3 +48,5 @@
  .portal-grid-modules{grid-template-columns:1fr}
  .app-nav{margin-top:4px}
 }
+
+.app-home-logo{cursor:pointer;user-select:none}.app-home-logo:focus-visible{outline:2px solid rgba(75,217,255,.65);outline-offset:4px;border-radius:8px}
