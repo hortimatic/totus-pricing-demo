@@ -1,5 +1,5 @@
 name: Totus Central QA
-# qa-revision: 6
+# qa-revision: 7
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
       - name: Install Playwright
         run: |
           npm init -y
-          npm install playwright
+          npm install playwright xlsx jszip
           npx playwright install --with-deps chromium
       - name: Start static server
         run: |
