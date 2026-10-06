@@ -122,7 +122,7 @@ function expenseLineMap(){ const m=new Map(); O.expenseLines.forEach(l=>{if(!m.h
 function expenseFor(from,to,store='all',onlyDeductible=true){
   const map=expenseLineMap();
   let total=0;
-  O.expenses.filter(e=>inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store)).forEach(e=>{
+  O.expenses.filter(e=>inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store)&&(!onlyDeductible||!e.management_only)).forEach(e=>{
     const lines=map.get(e.id)||[];
     if(lines.length){
       total+=sum(lines,l=>{
@@ -138,6 +138,16 @@ function expenseFor(from,to,store='all',onlyDeductible=true){
     .forEach(a=>total+=n(a.amount));
   return total;
 }
+function managementExpenseFor(from,to,store='all'){
+  return O.expenses
+    .filter(e=>inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store))
+    .reduce((a,e)=>a+n(e.accounting_amount||e.gross_expense||e.amount_paid),0);
+}
+function internalExpenseFor(from,to,store='all'){
+  return O.expenses
+    .filter(e=>e.management_only&&inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store))
+    .reduce((a,e)=>a+n(e.accounting_amount||e.gross_expense||e.amount_paid),0);
+}
 function retaPaid(from,to){
   const retaCat=O.categories.find(c=>c.code==='RETA');
   if(!retaCat)return 0;
@@ -148,7 +158,7 @@ function retaPaid(from,to){
   return total;
 }
 function taxWithheld(model,from,to){
-  const ids=new Set(O.expenses.filter(e=>inRange(e.expense_date,from,to)).map(e=>e.id));
+  const ids=new Set(O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)).map(e=>e.id));
   return sum(O.expenseLines.filter(l=>ids.has(l.expense_id)&&l.withholding_model===model),l=>n(l.withholding_amount));
 }
 function supportedWithholding(from,to){
@@ -227,13 +237,14 @@ window.opsManagementHtml=managementHtml;
 
 function dashboardHtml(){
  const pb=periodBounds(O.year,O.quarter,false),store=O.storeId;
- const inc=incomeFor(pb.start,pb.end,store),exp=expenseFor(pb.start,pb.end,store),benef=inc-exp;
+ const inc=incomeFor(pb.start,pb.end,store),exp=expenseFor(pb.start,pb.end,store),internal=internalExpenseFor(pb.start,pb.end,store),realExp=managementExpenseFor(pb.start,pb.end,store),benefFiscal=inc-exp,benefReal=inc-realExp;
  const f=fiscal(),r=retaEstimate(),usage=sum(O.documents,d=>n(d.size_bytes)),limit=n(O.settings?.storage_limit_bytes||1073741824),pct=limit?usage/limit*100:0;
  const recent=O.closings.filter(x=>x.business_date.startsWith(String(O.year))).slice(0,6);
  return `<div class="ops-kpis">
   <div class="ops-kpi"><small>Ingresos T${O.quarter}</small><strong>${eur(inc)}</strong><div class="sub">${store==='all'?'Ambos establecimientos':h(storeName(store))}</div></div>
-  <div class="ops-kpi"><small>Gastos deducibles T${O.quarter}</small><strong>${eur(exp)}</strong><div class="sub">Según registros fiscales</div></div>
-  <div class="ops-kpi ${benef>=0?'good':'bad'}"><small>Resultado T${O.quarter}</small><strong>${eur(benef)}</strong><div class="sub">Antes del cierre anual</div></div>
+  <div class="ops-kpi"><small>Gastos fiscales T${O.quarter}</small><strong>${eur(exp)}</strong><div class="sub">Los que entran en cálculo fiscal</div></div>
+  <div class="ops-kpi"><small>Gastos internos T${O.quarter}</small><strong>${eur(internal)}</strong><div class="sub">No se envían a gestoría</div></div>
+  <div class="ops-kpi ${benefReal>=0?'good':'bad'}"><small>Resultado real interno T${O.quarter}</small><strong>${eur(benefReal)}</strong><div class="sub">Ingresos menos todos los gastos registrados</div></div>
   <div class="ops-kpi warn"><small>Reserva fiscal estimada</small><strong>${eur(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div>
   <div class="ops-kpi"><small>RETA estimado</small><strong>${r.bracket?eur(r.minQuota)+'–'+eur(r.maxQuota):'—'}</strong><div class="sub">Rendimiento mensual ${eur(r.monthly)}</div></div>
  </div>
@@ -350,7 +361,7 @@ function defaultExpenseLine(){
 }
 function newExpenseDraft(){
  const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
- return {id:null,storeId:sid,date:isoToday(),supplier:'',taxId:'',invoice:'',documentKind:'factura',payment:'transferencia',paidStatus:'pagado',paidDate:isoToday(),amountPaid:'',notes:'',fiscalReviewed:false};
+ return {id:null,storeId:sid,date:isoToday(),supplier:'',taxId:'',invoice:'',documentKind:'factura',payment:'transferencia',paidStatus:'pagado',paidDate:isoToday(),amountPaid:'',notes:'',fiscalReviewed:false,managementOnly:false};
 }
 function expenseLineCalc(l){
  const base=n(l.base),vatRate=n(l.vat),reRate=n(l.re),wRate=n(l.withholding);
@@ -381,14 +392,15 @@ function expensesHtml(){
   <div><label>Fecha pago</label><input type="date" value="${h(d.paidDate)}" oninput="opsExpenseField('paidDate',this.value)"></div>
   <div><label>Importe realmente pagado</label><input inputmode="decimal" placeholder="${String(t.payable.toFixed(2)).replace('.',',')}" value="${h(d.amountPaid)}" oninput="opsExpenseField('amountPaid',this.value)"></div>
   <div class="span2"><label>Factura / documento adjunto</label><input id="ops_exp_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"></div>
+  <div class="span4 bill-check"><input id="ops_management_only" type="checkbox" ${d.managementOnly?'checked':''} onchange="opsExpenseField('managementOnly',this.checked,true)"><label for="ops_management_only">Solo control interno · no incluir en gestoría ni cálculo fiscal.</label></div>
   <div class="span4"><label>Notas</label><textarea oninput="opsExpenseField('notes',this.value)">${h(d.notes)}</textarea></div>
  </div>
- <div class="section-head" style="margin-top:16px"><div><h4>Desglose fiscal</h4><div class="small">Permite facturas con varios tipos de IVA, retenciones y recargo.</div></div><button class="secondary" onclick="opsAddExpenseLine()">Añadir línea</button></div>
+ <div class="section-head" style="margin-top:16px"><div><h4>${d.managementOnly?'Desglose interno':'Desglose fiscal'}</h4><div class="small">${d.managementOnly?'Se contará para rentabilidad real, pero quedará fuera de gestoría y fiscalidad.':'Permite facturas con varios tipos de IVA, retenciones y recargo.'}</div></div><div class="ops-actions"><button class="ghost" onclick="opsQuickInternal('warehouse')">Almacén 300 €</button><button class="ghost" onclick="opsQuickInternal('overtime')">Horas extra</button><button class="secondary" onclick="opsAddExpenseLine()">Añadir línea</button></div></div>
  <div class="ops-lines">${O.expenseDraftLines.map((l,i)=>expenseLineHtml(l,i)).join('')}</div>
  <div class="ops-totalbox"><div><small>Base + IVA + RE</small><b>${eur(t.accounting)}</b></div><div><small>Retenciones</small><b>${eur(t.withholding)}</b></div><div><small>A pagar proveedor</small><b>${eur(t.payable)}</b></div><div><small>Pagado indicado</small><b>${d.amountPaid!==''?eur(n(d.amountPaid)):eur(t.payable)}</b></div></div>
  </div>
  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3></div><button class="secondary" onclick="opsExportExpenses()">CSV gestoría</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
  </div>`;
 }
 function expenseLineHtml(l,i){
@@ -403,24 +415,36 @@ function expenseLineHtml(l,i){
   <div style="grid-column:1/-1" class="small">${h(cat?.aeat_group||'')} · Base ${eur(x.base)} · IVA ${eur(x.vat)} · RE ${eur(x.re)} · Ret. ${eur(x.withholding)} · <b>Imputable IRPF ${eur(x.imputable)}</b></div>
  </div>`;
 }
-window.opsExpenseField=(k,v)=>{O.expenseDraft[k]=v;};
+window.opsExpenseField=(k,v,rer=false)=>{O.expenseDraft[k]=v;if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}if(rer)render();};
 window.opsExpenseLineField=function(i,k,v,recalc=false){
  const l=O.expenseDraftLines[i]; if(!l)return;l[k]=v;
  if(k==='categoryId'){
   const c=category(v);
+  l.deductible=c?.deductible_default!==false;
   if(c?.code==='MERCH'){l.vat='21';l.re='5,2';l.withholding='0';l.model=''}
   else if(c?.code==='RENT'){l.vat='21';l.re='0';l.withholding='19';l.model='115'}
-  else if(['BANK','INSURANCE','RETA','PAYROLL','SOCIAL'].includes(c?.code)){l.vat='0';l.re='0'}
+  else if(['BANK','INSURANCE','RETA','PAYROLL','SOCIAL','INTERNAL_OVERTIME','INTERNAL_WAREHOUSE'].includes(c?.code)){l.vat='0';l.re='0';l.withholding='0';l.model=''}
+  if(['INTERNAL_OVERTIME','INTERNAL_WAREHOUSE'].includes(c?.code)) O.expenseDraft.managementOnly=true;
   l.fixed=!!c?.fixed_asset_default;
  }
  if(recalc)render();
 };
 window.opsAddExpenseLine=function(){O.expenseDraftLines.push(defaultExpenseLine());render()};
 window.opsRemoveExpenseLine=function(i){if(O.expenseDraftLines.length>1){O.expenseDraftLines.splice(i,1);render()}};
+window.opsQuickInternal=function(kind){
+ const d=O.expenseDraft||(O.expenseDraft=newExpenseDraft());
+ const code=kind==='warehouse'?'INTERNAL_WAREHOUSE':'INTERNAL_OVERTIME';
+ const c=O.categories.find(x=>x.code===code);
+ d.managementOnly=true;d.documentKind='otro';d.taxId='';d.invoice='';d.fiscalReviewed=false;d.payment='efectivo';d.paidStatus='pagado';d.paidDate=d.date||isoToday();
+ d.supplier=kind==='warehouse'?'Almacén':'Horas extra empleados';
+ O.expenseDraftLines=[{id:null,categoryId:c?.id||'',description:kind==='warehouse'?'Pago interno de almacén':'Horas extra / pago interno de personal',base:kind==='warehouse'?'300':'',vat:'0',re:'0',withholding:'0',model:'',deductible:false,fixed:false}];
+ d.amountPaid=kind==='warehouse'?'300':'';
+ render();
+};
 window.opsNewExpense=function(){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render()};
 window.opsEditExpense=function(id){
  const e=O.expenses.find(x=>x.id===id);if(!e)return;
- O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed};
+ O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed,managementOnly:!!e.management_only};
  const lines=O.expenseLines.filter(x=>x.expense_id===id);O.expenseDraftLines=lines.length?lines.map(l=>({id:l.id,categoryId:l.category_id||'',description:l.description||'',base:String(l.base_amount??''),vat:String(l.vat_rate??0).replace('.',','),re:String(l.re_rate??0).replace('.',','),withholding:String(l.withholding_rate??0).replace('.',','),model:l.withholding_model||'',deductible:l.deductible_irpf!==false,fixed:!!l.fixed_asset})): [defaultExpenseLine()];
  render();window.scrollTo({top:0,behavior:'smooth'});
 };
@@ -451,11 +475,11 @@ window.opsSaveExpense=async function(){
  O.saving=true;
  try{
    const totals=draftExpenseTotals();
-   const row={store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),base_amount:Math.max(0,totals.accounting),vat_rate:0,vat_amount:0,re_rate:0,re_amount:0,withholding_rate:0,withholding_amount:0,withholding_model:null,gross_expense:Math.max(0,totals.accounting),amount_paid:Math.max(0,d.amountPaid!==''?n(d.amountPaid):totals.payable),deductible_irpf:true,deductible_pct:100,fixed_asset:false,notes:d.notes||'',created_by:authSession.user.id,document_kind:d.documentKind,source:'manual',fiscal_reviewed:!!d.fiscalReviewed,accounting_amount:totals.accounting};
+   const row={store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),base_amount:Math.max(0,totals.accounting),vat_rate:0,vat_amount:0,re_rate:0,re_amount:0,withholding_rate:0,withholding_amount:0,withholding_model:null,gross_expense:Math.max(0,totals.accounting),amount_paid:Math.max(0,d.amountPaid!==''?n(d.amountPaid):totals.payable),deductible_irpf:true,deductible_pct:100,fixed_asset:false,notes:d.notes||'',created_by:authSession.user.id,document_kind:d.documentKind,source:'manual',fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,accounting_amount:totals.accounting,management_only:!!d.managementOnly};
    let id=d.id;
    if(id){const {error}=await sb.from('ops_expenses').update(row).eq('id',id);if(error)throw error;await sb.from('ops_expense_lines').delete().eq('expense_id',id)}
    else{const {data,error}=await sb.from('ops_expenses').insert(row).select('id').single();if(error)throw error;id=data.id}
-   const lines=O.expenseDraftLines.map((l,i)=>{const x=expenseLineCalc(l),cat=category(l.categoryId);return{expense_id:id,sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||cat?.name||'',base_amount:x.base,vat_rate:x.vatRate,vat_amount:x.vat,re_base:x.reRate?x.base:0,re_rate:x.reRate,re_amount:x.re,irpf_imputable:x.imputable,withholding_base:x.wRate?x.base:0,withholding_rate:x.wRate,withholding_amount:x.withholding,withholding_model:l.model||null,deductible_irpf:l.deductible!==false,deductible_pct:100,fixed_asset:!!l.fixed,notes:''}});
+   const lines=O.expenseDraftLines.map((l,i)=>{const x=expenseLineCalc(l),cat=category(l.categoryId);return{expense_id:id,sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||cat?.name||'',base_amount:x.base,vat_rate:x.vatRate,vat_amount:x.vat,re_base:x.reRate?x.base:0,re_rate:x.reRate,re_amount:x.re,irpf_imputable:x.imputable,withholding_base:x.wRate?x.base:0,withholding_rate:x.wRate,withholding_amount:x.withholding,withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}});
    const {error:le}=await sb.from('ops_expense_lines').insert(lines);if(le)throw le;
    const file=document.getElementById('ops_exp_file')?.files?.[0];
    if(file){
@@ -664,7 +688,7 @@ function closingRows(from,to){
 window.opsExportClosings=function(reportRange=false){const p=reportRange?{start:O.reportFrom,end:O.reportTo}:periodBounds(O.year,O.quarter,false);csvDownload(`cierres_${p.start}_${p.end}.csv`,closingRows(p.start,p.end))};
 function expenseRows(from,to){
  const map=expenseLineMap(),rows=[['Fecha','Nº fra. proveedor','NIF/CIF','Identificación','Código','Concepto','Base IVA','% IVA','Cuota IVA','Base R. Equiv.','% R.Equiv.','Cuota R.Equiv.','Imputable IRPF','Base retención','%','Cuota retenida','Modelo','Establecimiento']];
- O.expenses.filter(e=>inRange(e.expense_date,from,to)).sort((a,b)=>a.expense_date.localeCompare(b.expense_date)).forEach(e=>{
+ O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)).sort((a,b)=>a.expense_date.localeCompare(b.expense_date)).forEach(e=>{
   const lines=map.get(e.id)||[];
   lines.forEach(l=>{
    const c=category(l.category_id);rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,c?.manager_code||'',c?.name||l.description,l.base_amount,l.vat_rate,l.vat_amount,l.re_base,l.re_rate,l.re_amount,l.base_amount,l.withholding_base,l.withholding_rate,l.withholding_amount,l.withholding_model||'',storeName(e.store_id)]);
