@@ -154,33 +154,61 @@ function templateCards(d){return `<div class="invoice-template-row">${E.template
 function templateEditorHtml(tpl){
  if(!tpl?.id)return '<div class="ops-empty">No hay plantilla disponible.</div>';
  const disabled=manager()?'':'disabled';
- return `<div class="template-editor">
-   <div class="ops-form">
-    <div><label>Nombre plantilla</label><input id="ops_tpl_name" value="${H(tpl.name||'')}" ${disabled}></div>
-    <div><label>Estilo</label><select id="ops_tpl_style" ${disabled}>${['clean','brand','compact'].map(x=>`<option value="${x}" ${tpl.style===x?'selected':''}>${x==='clean'?'Limpia':x==='brand'?'Corporativa':'Compacta'}</option>`).join('')}</select></div>
-    <div><label>Color principal</label><input id="ops_tpl_primary" type="color" value="${H(tpl.primary_color||'#17202A')}" ${disabled}></div>
-    <div><label>Color secundario</label><input id="ops_tpl_secondary" type="color" value="${H(tpl.secondary_color||'#3B82F6')}" ${disabled}></div>
-    <div><label>Color de texto</label><input id="ops_tpl_text" type="color" value="${H(tpl.text_color||'#17202A')}" ${disabled}></div>
-    <div><label>Fuente</label><select id="ops_tpl_font" ${disabled}>${['helvetica','times','courier'].map(x=>`<option value="${x}" ${tpl.font_family===x?'selected':''}>${x}</option>`).join('')}</select></div>
-    <div><label>Ancho logo (mm)</label><input id="ops_tpl_width" inputmode="decimal" value="${H(tpl.logo_width_mm||34)}" ${disabled}></div>
-    <div><label>Posición logo</label><select id="ops_tpl_logo_pos" ${disabled}><option value="left" ${(tpl.logo_position||'left')==='left'?'selected':''}>Izquierda</option><option value="center" ${tpl.logo_position==='center'?'selected':''}>Centro</option><option value="right" ${tpl.logo_position==='right'?'selected':''}>Derecha</option></select></div>
-    <div class="checkline"><input id="ops_tpl_show_logo" type="checkbox" ${tpl.show_logo!==false?'checked':''} ${disabled}><label for="ops_tpl_show_logo">Mostrar logo</label></div>
-    <div class="checkline"><input id="ops_tpl_show_pay" type="checkbox" ${tpl.show_payment_details!==false?'checked':''} ${disabled}><label for="ops_tpl_show_pay">Mostrar datos de pago</label></div>
-    <div class="span2 template-logo-field"><label>Logo corporativo</label><input id="ops_tpl_logo" type="file" accept="image/png,image/jpeg,image/webp" ${disabled}><div class="small">${tpl.logo_name?`Actual: <b>${H(tpl.logo_name)}</b>`:'Sin logo cargado'} · PNG/JPG/WebP · máx. 2 MB</div></div>
-    <div><label>Título factura</label><input id="ops_tpl_invoice_title" value="${H(tpl.invoice_title||'FACTURA')}" ${disabled}></div>
-    <div><label>Título proforma</label><input id="ops_tpl_proforma_title" value="${H(tpl.proforma_title||'FACTURA PROFORMA')}" ${disabled}></div>
-    <div class="span2"><label>Texto cabecera</label><input id="ops_tpl_header" value="${H(tpl.header_text||'')}" ${disabled}></div>
-    <div class="span2"><label>Condiciones por defecto</label><textarea id="ops_tpl_terms" ${disabled}>${H(tpl.payment_terms_default||'')}</textarea></div>
-    <div class="span2"><label>Datos bancarios / pago</label><textarea id="ops_tpl_bank" ${disabled}>${H(tpl.bank_details||'')}</textarea></div>
-    <div class="span4"><label>Pie</label><textarea id="ops_tpl_footer" ${disabled}>${H(tpl.footer_text||'')}</textarea></div>
-    <div class="checkline"><input id="ops_tpl_definv" type="checkbox" ${tpl.default_invoice?'checked':''} ${disabled}><label for="ops_tpl_definv">Predeterminada factura</label></div>
-    <div class="checkline"><input id="ops_tpl_defpro" type="checkbox" ${tpl.default_proforma?'checked':''} ${disabled}><label for="ops_tpl_defpro">Predeterminada proforma</label></div>
+ const live=()=>{
+   const sample={documentType:'factura',invoiceKind:'invoice',templateId:tpl.id,customer:'Cliente de ejemplo',taxId:'B12345678',seriesId:O.series.find(s=>s.document_type==='factura'&&s.series_kind!=='rectifying')?.id||''};
+   return miniPreview(sample,{total:1234.56});
+ };
+ return `<div class="template-studio">
+   <div class="template-editor">
+    <div class="template-group">
+     <div class="template-group-head"><div><div class="eyebrow">Identidad</div><h4>Nombre y estilo</h4></div>${infoButton('facturas.template.style','Estilo de la plantilla')}</div>
+     <div class="ops-form">
+      <div class="span2"><label>Nombre plantilla</label><input id="ops_tpl_name" value="${H(tpl.name||'')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div><label>Estilo</label><select id="ops_tpl_style" onchange="opsTemplateLiveUpdate()" ${disabled}>${['clean','brand','compact'].map(x=>`<option value="${x}" ${tpl.style===x?'selected':''}>${x==='clean'?'Limpia':x==='brand'?'Corporativa':'Compacta'}</option>`).join('')}</select></div>
+      <div><label>Fuente</label><select id="ops_tpl_font" onchange="opsTemplateLiveUpdate()" ${disabled}>${['helvetica','times','courier'].map(x=>`<option value="${x}" ${tpl.font_family===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div><label>Color principal</label><input id="ops_tpl_primary" type="color" value="${H(tpl.primary_color||'#17202A')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div><label>Color secundario</label><input id="ops_tpl_secondary" type="color" value="${H(tpl.secondary_color||'#3B82F6')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div><label>Color de texto</label><input id="ops_tpl_text" type="color" value="${H(tpl.text_color||'#17202A')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+     </div>
+    </div>
+
+    <div class="template-group">
+     <div class="template-group-head"><div><div class="eyebrow">Marca</div><h4>Logo corporativo</h4></div>${infoButton('facturas.template.logo','Uso del logo')}</div>
+     <div class="ops-form">
+      <div class="span2 template-logo-field"><label>Archivo del logo</label><input id="ops_tpl_logo" type="file" accept="image/png,image/jpeg,image/webp" ${disabled}><div class="small">${tpl.logo_name?`Actual: <b>${H(tpl.logo_name)}</b>`:'Sin logo cargado'} · PNG/JPG/WebP · máx. 2 MB</div></div>
+      <div><label>Ancho logo (mm)</label><input id="ops_tpl_width" inputmode="decimal" value="${H(tpl.logo_width_mm||34)}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div><label>Posición logo</label><select id="ops_tpl_logo_pos" onchange="opsTemplateLiveUpdate()" ${disabled}><option value="left" ${(tpl.logo_position||'left')==='left'?'selected':''}>Izquierda</option><option value="center" ${tpl.logo_position==='center'?'selected':''}>Centro</option><option value="right" ${tpl.logo_position==='right'?'selected':''}>Derecha</option></select></div>
+      <div class="checkline"><input id="ops_tpl_show_logo" type="checkbox" ${tpl.show_logo!==false?'checked':''} onchange="opsTemplateLiveUpdate()" ${disabled}><label for="ops_tpl_show_logo">Mostrar logo</label></div>
+     </div>
+     <div class="ops-actions" style="margin-top:10px"><button class="secondary" type="button" onclick="opsUploadTemplateLogo('${tpl.id}')" ${disabled}>Subir / cambiar logo</button>${tpl.logo_path?`<button class="ghost" type="button" onclick="opsRemoveTemplateLogo('${tpl.id}')" ${disabled}>Quitar logo</button>`:''}</div>
+    </div>
+
+    <div class="template-group">
+     <div class="template-group-head"><div><div class="eyebrow">Documento</div><h4>Títulos y textos</h4></div>${infoButton('facturas.template.copy','Textos de factura')}</div>
+     <div class="ops-form">
+      <div><label>Título factura</label><input id="ops_tpl_invoice_title" value="${H(tpl.invoice_title||'FACTURA')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div><label>Título proforma</label><input id="ops_tpl_proforma_title" value="${H(tpl.proforma_title||'FACTURA PROFORMA')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div class="span2"><label>Texto de cabecera</label><input id="ops_tpl_header" value="${H(tpl.header_text||'')}" oninput="opsTemplateLiveUpdate()" ${disabled}></div>
+      <div class="span2"><label>Condiciones por defecto</label><textarea id="ops_tpl_terms" oninput="opsTemplateLiveUpdate()" ${disabled}>${H(tpl.payment_terms_default||'')}</textarea></div>
+      <div class="span2"><label>Datos bancarios / pago</label><textarea id="ops_tpl_bank" oninput="opsTemplateLiveUpdate()" ${disabled}>${H(tpl.bank_details||'')}</textarea></div>
+      <div class="span4"><label>Pie</label><textarea id="ops_tpl_footer" oninput="opsTemplateLiveUpdate()" ${disabled}>${H(tpl.footer_text||'')}</textarea></div>
+      <div class="checkline"><input id="ops_tpl_show_pay" type="checkbox" ${tpl.show_payment_details!==false?'checked':''} onchange="opsTemplateLiveUpdate()" ${disabled}><label for="ops_tpl_show_pay">Mostrar datos de pago</label></div>
+      <div class="checkline"><input id="ops_tpl_definv" type="checkbox" ${tpl.default_invoice?'checked':''} ${disabled}><label for="ops_tpl_definv">Predeterminada factura</label></div>
+      <div class="checkline"><input id="ops_tpl_defpro" type="checkbox" ${tpl.default_proforma?'checked':''} ${disabled}><label for="ops_tpl_defpro">Predeterminada proforma</label></div>
+     </div>
+    </div>
+
+    <div class="ops-actions template-editor-actions">
+     <button class="primary" type="button" onclick="opsSaveTemplate('${tpl.id}')" ${disabled}>Guardar plantilla</button>
+     <button class="secondary" type="button" onclick="opsPreviewTemplatePdf('${tpl.id}')">Vista previa PDF</button>
+     <button class="ghost" type="button" onclick="opsDuplicateTemplate('${tpl.id}')" ${disabled}>Duplicar plantilla</button>
+    </div>
    </div>
-   <div class="ops-actions template-editor-actions">
-    <button class="primary" type="button" onclick="opsSaveTemplate('${tpl.id}')" ${disabled}>Guardar plantilla</button>
-    <button class="secondary" type="button" onclick="opsUploadTemplateLogo('${tpl.id}')" ${disabled}>Subir / cambiar logo</button>
-    <button class="ghost" type="button" onclick="opsDuplicateTemplate('${tpl.id}')" ${disabled}>Duplicar plantilla</button>
-   </div>
+   <aside class="template-live-panel">
+    <div class="eyebrow">Vista previa</div><h4>Así se verá la factura</h4>
+    <div id="ops_tpl_live_preview" class="invoice-mini-preview">${live()}</div>
+    <div class="ops-note" style="margin-top:10px">La vista rápida sirve para composición. El botón <b>Vista previa PDF</b> abre el documento real dentro de Totus antes de descargar nada.</div>
+   </aside>
   </div>`;
 }
 function billingNavHtml(){
@@ -194,7 +222,7 @@ function billingCustomersHtml(){
 }
 function billingTemplatesHtml(){
  const tpl=E.templates.find(t=>t.id===E.templateId)||E.templates.find(t=>t.default_invoice)||E.templates[0]||{};
- return `<div class="invoice-workspace">${billingNavHtml()}<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Diseño documental</div><div class="ops-title-line"><h3>Plantillas y marca</h3>${infoButton('facturas','Cómo funcionan las plantillas')}</div><div class="small">Aquí se gestiona el aspecto de facturas y proformas. El logo se carga únicamente aquí.</div></div></div><div class="invoice-template-row">${E.templates.map(t=>`<button class="invoice-template-card ${tpl.id===t.id?'selected':''}" onclick="opsSelectTemplateConfig('${t.id}')"><span class="template-swatch" style="background:${H(t.primary_color)}"><i style="background:${H(t.secondary_color)}"></i></span><b>${H(t.name)}</b><small>${t.default_invoice?'Factura predeterminada':''}${t.default_proforma?' · Proforma predeterminada':''}</small></button>`).join('')}</div>${templateEditorHtml(tpl)}</div></div>`;
+ return `<div class="invoice-workspace">${billingNavHtml()}<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Diseño documental</div><div class="ops-title-line"><h3>Plantillas y marca</h3>${infoButton('facturas','Cómo funcionan las plantillas')}</div><div class="small">Toda la identidad de facturas y proformas está reunida aquí: logo, colores, tipografía, títulos, condiciones, datos de pago y pie.</div></div></div><div class="invoice-template-row">${E.templates.map(t=>`<button class="invoice-template-card ${tpl.id===t.id?'selected':''}" onclick="opsSelectTemplateConfig('${t.id}')"><span class="template-swatch" style="background:${H(t.primary_color)}"><i style="background:${H(t.secondary_color)}"></i></span><b>${H(t.name)}</b><small>${t.default_invoice?'Factura predeterminada':''}${t.default_proforma?' · Proforma predeterminada':''}</small></button>`).join('')}</div>${templateEditorHtml(tpl)}</div></div>`;
 }
 function billingSeriesHtml(){
  return `<div class="invoice-workspace">${billingNavHtml()}<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Numeración</div><div class="ops-title-line"><h3>Series ${O.year}</h3>${infoButton('facturas.series','Cómo funciona la numeración')}</div><div class="small">Una serie por tienda, año y tipo de documento. El siguiente número nunca puede retroceder.</div></div></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Tipo</th><th>Tienda</th><th>Código</th><th>Prefijo</th><th>Siguiente</th><th>Dígitos</th><th></th></tr></thead><tbody>${O.series.filter(x=>x.year===O.year).map(x=>`<tr><td>${H(x.document_type||'factura')}${x.series_kind==='rectifying'?' · rectificativa':''}</td><td>${H(storeName(x.store_id))}</td><td><b>${H(x.code)}</b></td><td><input aria-label="Prefijo de ${H(x.code)}" id="ser_p_${x.id}" value="${H(x.prefix)}" ${admin()?'':'disabled'}></td><td><input aria-label="Siguiente número de ${H(x.code)}" id="ser_n_${x.id}" inputmode="numeric" value="${x.next_number}" ${admin()?'':'disabled'}></td><td><input aria-label="Dígitos de ${H(x.code)}" id="ser_d_${x.id}" inputmode="numeric" value="${x.padding}" ${admin()?'':'disabled'}></td><td><button class="ghost" onclick="opsSaveSeries('${x.id}')" ${admin()?'':'disabled'}>Guardar</button></td></tr>`).join('')}</tbody></table></div><div class="ops-note warn" style="margin-top:10px">Las series ya usadas no deben renombrarse sin un motivo administrativo claro.</div></div></div>`;
