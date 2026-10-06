@@ -196,6 +196,9 @@ await field('Color de texto').waitFor();
 await field('Posición logo').waitFor();
 await field('Título factura').waitFor();
 await field('Título proforma').waitFor();
+await page.locator('#ops_tpl_logo').setInputFiles({name:'logo-qa.png',mimeType:'image/png',buffer:Buffer.from('PNG-QA')});
+await page.getByRole('button',{name:'Subir logo',exact:true}).click();
+await page.waitForTimeout(150);
 
 // Responsive smoke.
 await page.setViewportSize({width:390,height:844});
