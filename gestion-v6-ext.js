@@ -148,8 +148,7 @@ window.opsSaveDocument=async function(){
   let id=d.id;if(id){const old=O.invoices.find(x=>x.id===id);if(old?.status!=='borrador')throw new Error('Solo se editan borradores.');let r=await sb.from('ops_sales_invoices').update(row).eq('id',id);if(r.error)throw r.error;r=await sb.from('ops_sales_invoice_lines').delete().eq('invoice_id',id);if(r.error)throw r.error;}else{const r=await sb.from('ops_sales_invoices').insert(row).select('id').single();if(r.error)throw r.error;id=r.data.id;}
   const lines=O.invoiceDraftLines.map((l,i)=>{const x=lineCalc(l);return{invoice_id:id,sort_order:(i+1)*10,description:l.description.trim(),quantity:N(l.qty),unit_price_base:N(l.unit),discount_pct:N(l.discount),vat_rate:N(l.vat),base_amount:x.base,vat_amount:x.vat,total_amount:x.total}});let lr=await sb.from('ops_sales_invoice_lines').insert(lines);if(lr.error)throw lr.error;
   if(external){
-    const tpl=E.templates.find(t=>t.id===d.templateId)||{};
-    const er=await sb.from('ops_sales_invoices').update({number:num,display_number:ser.prefix+String(num).padStart(ser.padding,'0'),status:'emitida',issued_at:new Date().toISOString(),design_snapshot:tpl}).eq('id',id);if(er.error)throw er.error;
+    const er=await sb.rpc('ops_register_external_document',{p_document_id:id,p_number:num});if(er.error)throw er.error;
     const file=document.getElementById('ops_external_doc_file')?.files?.[0];if(file)await window.__opsUploadDocumentFile(file,id,d);
   }
   await audit('facturas',d.id?'actualizar_borrador':external?'registrar_externa':'crear_borrador',id,{tipo:d.documentType,cliente:d.customer,total:draftTotals().total});await window.opsLoadData(true);await extLoad(true);opsNewDocument(d.documentType);
