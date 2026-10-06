@@ -376,6 +376,7 @@ await page.waitForTimeout(180);
 assert(fixtures.ops_document_templates[0].invoice_title==='FACTURA QA PERSONALIZADA','Guardar plantilla no persistió el título');
 const templatesBeforeDuplicate=fixtures.ops_document_templates.length;
 await page.getByRole('button',{name:'Duplicar plantilla',exact:true}).click();
+await page.getByRole('dialog').getByRole('button',{name:'Crear copia',exact:true}).click();
 await page.waitForTimeout(180);
 assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Duplicar plantilla no creó una copia');
 const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
