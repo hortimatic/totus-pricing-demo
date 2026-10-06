@@ -149,6 +149,8 @@ assert(await page.locator('#ops_management_only').isChecked(),'Horas extra debe 
 // Facturación: invoice/proforma separation, line calculator and PDF preview.
 await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');
 await page.getByRole('heading',{name:'Factura',exact:true}).waitFor();
+await page.getByRole('button',{name:'Rectificativas',exact:true}).click();
+await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
 await field('Cliente / razón social').fill('Cliente QA');
@@ -158,6 +160,7 @@ await field('Precio base').fill('100');
 await field('Dto %').fill('10');
 await page.waitForTimeout(200);
 assert((await page.locator('.ops-invoice-total').innerText()).includes('217,80'),'Total de proforma incorrecto');
+let dl;
 const pdfDownload=page.waitForEvent('download');
 await page.getByRole('button',{name:'Vista previa PDF',exact:true}).click();
 const pdf=await pdfDownload;
@@ -184,7 +187,7 @@ assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparec
 
 // Informes: XLSX, PDF and ZIP generators.
 await page.getByRole('button',{name:'Informes',exact:true}).click();await heading('Informes');
-let dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar XLSX'}).first().click();assert((await (await dl).suggestedFilename()).endsWith('.xlsx'),'Informe XLSX no generado');
+dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar XLSX'}).first().click();assert((await (await dl).suggestedFilename()).endsWith('.xlsx'),'Informe XLSX no generado');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();assert((await (await dl).suggestedFilename()).endsWith('.pdf'),'Informe fiscal PDF no generado');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Preparar paquete'}).click();assert((await (await dl).suggestedFilename()).endsWith('.zip'),'Paquete gestor ZIP no generado');
 
