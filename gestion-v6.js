@@ -109,6 +109,36 @@ async function load(force=false){
 }
 window.opsLoadData=load;
 
+function filteredClosings(from,to,store='all'){
+ return O.closings.filter(x=>inRange(x.business_date,from,to)&&(store==='all'||x.store_id===store));
+}
+function closingCsvRows(from,to){
+ return [['Fecha','Establecimiento','Apertura','Efectivo vendido','Tarjeta','Bizum','Online','Otras entradas','Salida caja','Gastos caja','Caja final','Total ventas','Notas'],
+  ...filteredClosings(from,to,O.storeId).sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[
+   c.business_date,storeName(c.store_id),c.opening_cash,c.cash_sales,c.card_sales,c.bizum_sales,c.online_sales,c.other_income,
+   c.cash_withdrawals,c.cash_expenses_declared,c.actual_cash,
+   n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income),c.notes||''
+  ])];
+}
+window.opsExportClosings=function(){
+ const p=periodBounds(O.year,O.quarter,false);
+ csvDownload(`cierres_${p.start}_${p.end}.csv`,closingCsvRows(p.start,p.end));
+};
+function expenseCsvRows(from,to){
+ const lineMap=new Map();O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
+ const rows=[['Fecha','Establecimiento','Proveedor','NIF/CIF','Factura','Concepto','Base','IVA %','IVA','RE %','RE','Retención %','Retención','Imputable IRPF','Pagado','Interno']];
+ O.expenses.filter(e=>inRange(e.expense_date,from,to)&&(O.storeId==='all'||e.store_id===O.storeId)).sort((a,b)=>a.expense_date.localeCompare(b.expense_date)).forEach(e=>{
+  const ls=lineMap.get(e.id)||[];
+  if(!ls.length)rows.push([e.expense_date,storeName(e.store_id),e.supplier_name,e.supplier_tax_id||'',e.invoice_number||'',e.description||'',e.base_amount||0,0,e.vat_amount||0,0,e.re_amount||0,0,e.withholding_amount||0,e.deductible_irpf===false?0:(e.accounting_amount||e.gross_expense||0),e.amount_paid||0,e.management_only?'Sí':'No']);
+  else ls.forEach(l=>rows.push([e.expense_date,storeName(e.store_id),e.supplier_name,e.supplier_tax_id||'',e.invoice_number||'',l.description||category(l.category_id)?.name||'',l.base_amount||0,l.vat_rate||0,l.vat_amount||0,l.re_rate||0,l.re_amount||0,l.withholding_rate||0,l.withholding_amount||0,l.irpf_imputable||0,e.amount_paid||0,e.management_only?'Sí':'No']));
+ });
+ return rows;
+}
+window.opsExportExpenses=function(){
+ const p=periodBounds(O.year,O.quarter,false);
+ csvDownload(`gastos_${p.start}_${p.end}.csv`,expenseCsvRows(p.start,p.end));
+};
+
 function sectionMeta(tab=O.tab){
  return ({
   resumen:['Resumen','Visión global','Ventas, gastos, resultado, fiscalidad y servidor.'],
