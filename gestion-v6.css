@@ -111,7 +111,7 @@
 .invoice-template-editor .template-editor{padding:0 12px 12px}
 .template-editor-actions{margin-top:12px;flex-wrap:wrap}
 .template-logo-field{padding:10px;border:1px dashed var(--line);border-radius:12px;background:rgba(255,255,255,.02)}
-.template-editor-actions button{width:100%}}
+.template-editor-actions button{width:100%}
 
 .ops-title-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ops-title-line h1{margin:0}
