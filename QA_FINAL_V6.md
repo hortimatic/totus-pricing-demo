@@ -2,7 +2,8 @@
 
 Fecha: 2026-10-06
 Rama probada: `desarrollo-v6`
-Commit de referencia: `ec29060d18a6e4d2c147d8bff6b861accf03f337`
+Commit UI QA de referencia: `2feb390a56344d757c753a1e5837f4cabf055431`
+HEAD documentado: `ded05d85025a24ac706523fda68fb2485f830ded`
 Producción: `main` NO modificada.
 
 ## Navegación
@@ -113,6 +114,24 @@ RLS probado por roles:
 Aviso externo pendiente de configuración del proyecto Supabase:
 - Leaked Password Protection está desactivado en Auth.
 No es un fallo del código de Totus; debe activarse desde la configuración de Auth antes de considerar cerrada la revisión de seguridad de producción.
+
+## Endurecimiento de permisos de facturación · 2026-10-06
+
+Se detectó y corrigió una discrepancia real entre el modelo de roles y RLS:
+- `encargado` mantiene lectura/consulta de facturas, rectificativas y proformas
+- creación, edición, emisión, cobro, rectificación y conversión quedan en `admin` / `gerente`
+- `ops_sales_invoices` INSERT/UPDATE: `private.is_manager()`
+- `ops_sales_invoice_lines` INSERT/UPDATE/DELETE: `private.is_manager()`
+- RPC internas de emitir, registrar documento externo y convertir proforma: `private.is_manager()`
+- migración versionada: `migrations/2026-10-06_invoice_role_permissions_v6.sql`
+
+Pruebas:
+- RLS real con Davinia / rol gerente: creación de borrador permitida dentro de transacción con ROLLBACK
+- RLS real con Óscar / rol encargado: INSERT bloqueado por RLS
+- UI encargado: Facturación en modo consulta, sin botones de creación/guardado
+- GitHub Actions · Totus Central QA · run 27: SUCCESS
+- Commit QA: `2feb390a56344d757c753a1e5837f4cabf055431`
+- El commit posterior solo versiona la migración SQL y no modifica JS/CSS/tests.
 
 ## Nota
 La rama `main` sigue siendo la versión de producción anterior. No mezclar/promover esta rama hasta aprobación expresa.
