@@ -422,11 +422,73 @@ window.opsUploadTemplateLogo=async function(id){
 };
 function configHtml(){
  const st=O.settings||{},used=N(E.storageUsage?.total_bytes),limit=N(st.storage_limit_bytes||1073741824),pct=limit?used/limit*100:0,dis=admin()?'':'disabled';
- return `<div class="ops-grid">
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Empresa</div><h3>Datos generales</h3></div><button class="primary" onclick="opsSaveSettings()" ${dis}>Guardar cambios</button></div><div class="ops-form"><div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${H(st.business_name||'')}" ${dis}></div><div><label>NIF/CIF</label><input id="ops_set_tax" value="${H(st.tax_id||'')}" ${dis}></div><div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${H(st.business_address||'')}" ${dis}></div><div><label>Email</label><input id="ops_set_email" value="${H(st.business_email||'')}" ${dis}></div><div><label>Teléfono</label><input id="ops_set_phone" value="${H(st.business_phone||'')}" ${dis}></div></div></div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Fiscalidad</div><h3>Parámetros visibles de cálculo</h3></div></div><div class="ops-form"><div><label>Régimen</label><input id="ops_set_regime" value="${H(st.fiscal_regime||'')}" ${dis}></div><div><label>Método estimación</label><input id="ops_set_estimation" value="${H(st.estimation_method||'')}" ${dis}></div><div><label>Pago fraccionado IRPF %</label><input id="ops_set_irpf" inputmode="decimal" value="${H(st.irpf_prepayment_rate??20)}" ${dis}></div><div><label>IVA ventas %</label><input id="ops_set_vat" inputmode="decimal" value="${H(st.default_sales_vat_rate??21)}" ${dis}></div><div class="checkline"><input id="ops_set_diff_enabled" type="checkbox" ${st.difficult_expense_enabled!==false?'checked':''} ${dis}><label for="ops_set_diff_enabled">Difícil justificación</label></div><div><label>Difícil justificación %</label><input id="ops_set_diff_pct" inputmode="decimal" value="${H(st.difficult_expense_pct??5)}" ${dis}></div><div><label>Tope anual</label><input id="ops_set_diff_cap" inputmode="decimal" value="${H(st.difficult_expense_annual_cap??2000)}" ${dis}></div><div><label>Margen operativo objetivo %</label><input id="ops_set_target_margin" inputmode="decimal" value="${H(st.target_operating_margin_pct??15)}" ${dis}></div><div class="span4"><label>Notas fiscales</label><textarea id="ops_set_fiscal_notes" ${dis}>${H(st.fiscal_notes||'')}</textarea></div></div></div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA</div><h3>Referencias de cotización</h3></div></div><div class="ops-form"><div><label>Cuota actual mensual</label><input id="ops_set_reta" inputmode="decimal" value="${H(st.actual_reta_monthly??'')}" ${dis}></div><div><label>Rendimiento año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${H(st.previous_year_net_income??'')}" ${dis}></div><div><label>Deducción genérica %</label><input id="ops_set_reta_ded" inputmode="decimal" value="${H(st.reta_generic_deduction_pct??7)}" ${dis}></div><div><label>Tipo total estimado %</label><input id="ops_set_reta_rate" inputmode="decimal" value="${H(st.reta_total_rate??31.5)}" ${dis}></div></div></div>
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Capacidad</div><h3>Almacenamiento</h3></div><span class="badge ${pct>=95?'badb':pct>=80?'warnb':'ok'}">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="ops-form"><div><label>Límite total MB</label><input id="ops_set_storage_mb" inputmode="numeric" value="${Math.round(limit/1048576)}" ${dis}></div><div><label>Máximo documento MB</label><input id="ops_set_doc_mb" inputmode="numeric" value="${Math.round(N(st.document_max_bytes||20971520)/1048576)}" ${dis}></div></div><div class="ops-metric-line"><span>Uso actual</span><b>${(used/1048576).toFixed(1).replace('.',',')} MB</b></div><div class="small">Plantillas, logo, clientes y series siguen exclusivamente en Facturación.</div></div>
+ const ro=admin()?'':'<div class="ops-note warn">Configuración en modo consulta. Solo Administración puede modificar estos parámetros.</div>';
+ return `<div class="config-workspace">
+  <div class="config-toolbar">
+   <div><div class="eyebrow">Administración</div><div class="ops-title-line"><h2>Configuración general</h2>${infoButton('config','Qué se configura aquí')}</div><div class="small">Solo ajustes globales. Facturación, plantillas, logo, clientes y series se gestionan dentro de Facturación.</div></div>
+   <div class="ops-actions"><button class="secondary" type="button" onclick="opsTab('facturas');opsBillingPanel('templates')">Abrir diseño de facturas</button><button class="primary" type="button" onclick="opsSaveSettings()" ${dis}>Guardar configuración</button></div>
+  </div>
+  ${ro}
+  <nav class="config-nav" aria-label="Secciones de configuración">
+   <button type="button" onclick="document.getElementById('cfg_empresa')?.scrollIntoView({behavior:'smooth',block:'start'})">Empresa</button>
+   <button type="button" onclick="document.getElementById('cfg_fiscal')?.scrollIntoView({behavior:'smooth',block:'start'})">Fiscalidad</button>
+   <button type="button" onclick="document.getElementById('cfg_reta')?.scrollIntoView({behavior:'smooth',block:'start'})">RETA</button>
+   <button type="button" onclick="document.getElementById('cfg_storage')?.scrollIntoView({behavior:'smooth',block:'start'})">Almacenamiento</button>
+  </nav>
+
+  <section class="ops-card config-section" id="cfg_empresa">
+   <div class="section-head"><div><div class="eyebrow">Empresa</div><div class="ops-title-line"><h3>Identidad fiscal y contacto</h3>${infoButton('config.empresa','Datos generales de empresa')}</div><div class="small">Estos datos se reutilizan en documentos, informes y facturación. El logo NO se gestiona aquí.</div></div></div>
+   <div class="ops-form">
+    <div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${H(st.business_name||'')}" ${dis}></div>
+    <div><label>NIF/CIF</label><input id="ops_set_tax" value="${H(st.tax_id||'')}" ${dis}></div>
+    <div><label>Teléfono</label><input id="ops_set_phone" value="${H(st.business_phone||'')}" ${dis}></div>
+    <div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${H(st.business_address||'')}" ${dis}></div>
+    <div class="span2"><label>Email</label><input id="ops_set_email" type="email" value="${H(st.business_email||'')}" ${dis}></div>
+   </div>
+   <div class="ops-note" style="margin-top:12px"><b>Imagen corporativa:</b> logo, colores, títulos, pie y datos de pago pertenecen exclusivamente a <button type="button" class="ops-link-btn" onclick="opsTab('facturas');opsBillingPanel('templates')">Facturación → Plantillas y marca</button>.</div>
+  </section>
+
+  <section class="ops-card config-section" id="cfg_fiscal">
+   <div class="section-head"><div><div class="eyebrow">Fiscalidad</div><div class="ops-title-line"><h3>Criterios de cálculo</h3>${infoButton('config.fiscal','Parámetros fiscales globales')}</div><div class="small">Afectan a las previsiones de Fiscalidad. No sustituyen los datos presentados por la gestoría.</div></div></div>
+   <div class="ops-form">
+    <div><label>Régimen</label><select id="ops_set_regime" ${dis}><option value="recargo_equivalencia" ${st.fiscal_regime==='recargo_equivalencia'?'selected':''}>Recargo de equivalencia</option><option value="general" ${st.fiscal_regime==='general'?'selected':''}>Régimen general</option></select></div>
+    <div><label>Método estimación</label><select id="ops_set_estimation" ${dis}><option value="directa_simplificada" ${st.estimation_method==='directa_simplificada'?'selected':''}>Directa simplificada</option><option value="directa_normal" ${st.estimation_method==='directa_normal'?'selected':''}>Directa normal</option></select></div>
+    <div><label>Pago fraccionado IRPF %</label><input id="ops_set_irpf" inputmode="decimal" value="${H(st.irpf_prepayment_rate??20)}" ${dis}></div>
+    <div><label>IVA ventas %</label><input id="ops_set_vat" inputmode="decimal" value="${H(st.default_sales_vat_rate??21)}" ${dis}></div>
+    <div class="checkline"><input id="ops_set_diff_enabled" type="checkbox" ${st.difficult_expense_enabled!==false?'checked':''} ${dis}><label for="ops_set_diff_enabled">Aplicar difícil justificación</label></div>
+    <div><label>Difícil justificación %</label><input id="ops_set_diff_pct" inputmode="decimal" value="${H(st.difficult_expense_pct??5)}" ${dis}></div>
+    <div><label>Tope anual €</label><input id="ops_set_diff_cap" inputmode="decimal" value="${H(st.difficult_expense_annual_cap??2000)}" ${dis}></div>
+    <div><label>Margen operativo objetivo %</label><input id="ops_set_target_margin" inputmode="decimal" value="${H(st.target_operating_margin_pct??15)}" ${dis}></div>
+    <div class="span4"><label>Notas fiscales internas</label><textarea id="ops_set_fiscal_notes" ${dis}>${H(st.fiscal_notes||'')}</textarea></div>
+   </div>
+  </section>
+
+  <section class="ops-card config-section" id="cfg_reta">
+   <div class="section-head"><div><div class="eyebrow">RETA</div><div class="ops-title-line"><h3>Referencias de cotización</h3>${infoButton('config.reta','Parámetros usados para la proyección RETA')}</div><div class="small">Solo para simulación y control. La regularización oficial depende de Seguridad Social.</div></div></div>
+   <div class="ops-form">
+    <div><label>Cuota actual mensual €</label><input id="ops_set_reta" inputmode="decimal" value="${H(st.actual_reta_monthly??'')}" ${dis}></div>
+    <div><label>Rendimiento año anterior €</label><input id="ops_set_prevnet" inputmode="decimal" value="${H(st.previous_year_net_income??'')}" ${dis}></div>
+    <div><label>Deducción genérica %</label><input id="ops_set_reta_ded" inputmode="decimal" value="${H(st.reta_generic_deduction_pct??7)}" ${dis}></div>
+    <div><label>Tipo total estimado %</label><input id="ops_set_reta_rate" inputmode="decimal" value="${H(st.reta_total_rate??31.5)}" ${dis}></div>
+   </div>
+  </section>
+
+  <section class="ops-card config-section" id="cfg_storage">
+   <div class="section-head"><div><div class="eyebrow">Archivo</div><div class="ops-title-line"><h3>Almacenamiento documental</h3>${infoButton('config.storage','Límites de almacenamiento')}</div><div class="small">Controla el espacio reservado y el tamaño máximo por documento.</div></div><span class="badge ${pct>=95?'badb':pct>=80?'warnb':'ok'}">${pct.toFixed(1).replace('.',',')} % usado</span></div>
+   <div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div>
+   <div class="ops-kpis" style="margin-top:14px">
+    <div class="ops-kpi"><small>Uso actual</small><strong>${(used/1048576).toFixed(1).replace('.',',')} MB</strong></div>
+    <div class="ops-kpi"><small>Límite</small><strong>${Math.round(limit/1048576)} MB</strong></div>
+    <div class="ops-kpi"><small>Documentos</small><strong>${N(E.storageUsage?.documents_count)}</strong></div>
+    <div class="ops-kpi"><small>Recursos de marca</small><strong>${N(E.storageUsage?.assets_count)}</strong></div>
+   </div>
+   <div class="ops-form" style="margin-top:12px">
+    <div><label>Límite total MB</label><input id="ops_set_storage_mb" inputmode="numeric" value="${Math.round(limit/1048576)}" ${dis}></div>
+    <div><label>Máximo por documento MB</label><input id="ops_set_doc_mb" inputmode="numeric" value="${Math.round(N(st.document_max_bytes||20971520)/1048576)}" ${dis}></div>
+   </div>
+  </section>
+
+  <div class="config-savebar"><div><b>Configuración general</b><div class="small">Un único guardado para todos los cambios de esta pestaña.</div></div><button class="primary" type="button" onclick="opsSaveSettings()" ${dis}>Guardar configuración</button></div>
  </div>`;
 }
 window.opsSelectTemplateConfig=id=>{E.templateId=id;render()};
