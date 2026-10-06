@@ -461,13 +461,19 @@ async function fileSha256(file){
  const buf=await file.arrayBuffer(); const hash=await crypto.subtle.digest('SHA-256',buf);
  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-async function uploadDoc(file,meta,linkedType='',linkedId=null){
- if(!file)return null;
+function validateDocFile(file){
+ if(!file)return true;
  const max=n(O.settings?.document_max_bytes||20971520);
  const ext='.'+String(file.name||'').split('.').pop().toLowerCase();
  const allowedExt=new Set(['.pdf','.jpg','.jpeg','.png','.webp','.xlsx','.xls','.csv']);
  if(file.size>max)throw new Error('El archivo supera el límite de '+Math.round(max/1048576)+' MB.');
  if(!allowedExt.has(ext))throw new Error('Tipo de archivo no permitido. Usa PDF, imagen, Excel o CSV.');
+ return true;
+}
+window.__opsValidateDocumentFile=validateDocFile;
+async function uploadDoc(file,meta,linkedType='',linkedId=null){
+ if(!file)return null;
+ validateDocFile(file);
  const sha=await fileSha256(file);
  const dup=O.documents.find(d=>d.sha256&&d.sha256===sha);
  if(dup&&!confirm('Este archivo parece estar ya guardado como "'+dup.original_name+'". ¿Subirlo otra vez?'))return dup.id;
@@ -488,11 +494,12 @@ window.opsSaveExpense=async function(){
  }
  O.saving=true;
  try{
+   const file=document.getElementById('ops_exp_file')?.files?.[0];
+   validateDocFile(file);
    const totals=draftExpenseTotals();
    const payload={id:d.id||null,store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
    const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}));
    const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
-   const file=document.getElementById('ops_exp_file')?.files?.[0];
    if(file){
      const cat=category(O.expenseDraftLines[0]?.categoryId);
      const docId=await uploadDoc(file,{store_id:d.storeId||null,doc_type:'factura_recibida',document_date:d.date,supplier_or_customer:d.supplier,tax_id:d.taxId,invoice_number:d.invoice,category_code:cat?.manager_code||'',status:d.paidStatus==='pagado'?'pagada':'pendiente',notes:d.notes},'expense',id);
