@@ -599,8 +599,21 @@ window.opsZipReportDocs=async function(){
 };
 window.opsSaveSettings=async function(){
  if(!adminOnly())return;
- const row={business_name:document.getElementById('ops_set_name').value,business_address:document.getElementById('ops_set_address').value,business_email:document.getElementById('ops_set_email').value,business_phone:document.getElementById('ops_set_phone').value,tax_id:document.getElementById('ops_set_tax').value,actual_reta_monthly:n(document.getElementById('ops_set_reta').value)||null,previous_year_net_income:n(document.getElementById('ops_set_prevnet').value)||null,current_year:O.year};
- const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}await audit('config','actualizar',null,{});await load(true);render();
+ const get=id=>document.getElementById(id);
+ const row={
+  business_name:get('ops_set_name').value.trim(),business_address:get('ops_set_address').value.trim(),business_email:get('ops_set_email').value.trim(),business_phone:get('ops_set_phone').value.trim(),tax_id:get('ops_set_tax').value.trim(),
+  fiscal_regime:get('ops_set_regime')?.value||O.settings.fiscal_regime,estimation_method:get('ops_set_estimation')?.value||O.settings.estimation_method,
+  irpf_prepayment_rate:n(get('ops_set_irpf')?.value||O.settings.irpf_prepayment_rate),difficult_expense_enabled:get('ops_set_diff_enabled')?.checked??O.settings.difficult_expense_enabled,
+  difficult_expense_pct:n(get('ops_set_diff_pct')?.value||O.settings.difficult_expense_pct),difficult_expense_annual_cap:n(get('ops_set_diff_cap')?.value||O.settings.difficult_expense_annual_cap),
+  default_sales_vat_rate:n(get('ops_set_vat')?.value||O.settings.default_sales_vat_rate),reta_generic_deduction_pct:n(get('ops_set_reta_ded')?.value||O.settings.reta_generic_deduction_pct),
+  reta_total_rate:n(get('ops_set_reta_rate')?.value||O.settings.reta_total_rate),actual_reta_monthly:n(get('ops_set_reta').value)||null,previous_year_net_income:n(get('ops_set_prevnet').value)||null,
+  target_operating_margin_pct:n(get('ops_set_target_margin')?.value||O.settings.target_operating_margin_pct||15),
+  storage_limit_bytes:Math.round(n(get('ops_set_storage_mb')?.value||0)*1048576)||O.settings.storage_limit_bytes,
+  document_max_bytes:Math.round(n(get('ops_set_doc_mb')?.value||0)*1048576)||O.settings.document_max_bytes,
+  fiscal_notes:get('ops_set_fiscal_notes')?.value||'',current_year:O.year
+ };
+ const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}
+ await audit('config','actualizar',null,{campos:Object.keys(row)});await load(true);render();
 };
 
 window.opsTab=function(tab){O.tab=tab;if(tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();if(tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}render();window.scrollTo({top:0,behavior:'smooth'})};
