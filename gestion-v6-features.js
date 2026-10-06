@@ -394,11 +394,9 @@ function managerExpenseRows(from,to){
   }));
  const parseDate=x=>String(x).split('/').reverse().join('-');
  rows.sort((x,y)=>parseDate(x[1]).localeCompare(parseDate(y[1]))||N(x[0])-N(y[0]));
- const total=rows.reduce((a,r)=>{
-   [7,9,10,12,13,14,16].forEach(i=>a[i]=(a[i]||0)+N(r[i]));
-   return a;
- },[]);
- const totalRow=['','', '', '', '', '', 'TOTAL ACUMULADO',total[7]||0,'',total[9]||0,total[10]||0,'',total[12]||0,total[13]||0,total[14]||0,'',total[16]||0];
+ const last=rows.length+1;
+ const totalRow=['','','','','','','TOTAL ACUMULADO',
+  `=SUM(H2:H${last})`,'',`=SUM(J2:J${last})`,`=SUM(K2:K${last})`,'',`=SUM(M2:M${last})`,`=SUM(N2:N${last})`,`=SUM(O2:O${last})`,'',`=SUM(Q2:Q${last})`];
  return[headers,...rows,totalRow];
 }
 function managerExpenseSummaryRows(from,to){
@@ -416,8 +414,10 @@ function managerExpenseSummaryRows(from,to){
   add(c?.manager_code||'',c?.name||l.description,base,vat,N(l.re_base),re,deductible?base:0,N(l.withholding_base),N(l.withholding_amount));
   if(tax)add('632','IVA SOPORTADO(RECARGO - REAGYP)',0,0,0,0,deductible?tax:0,0,0);
  }));
+ const body=[...groups.values()].sort((a,b)=>String(a.code).localeCompare(String(b.code))||a.description.localeCompare(b.description)).map(g=>[g.code,g.description,g.base,g.vat,g.reBase,g.re,g.irpf,g.retBase,g.ret]);
+ const last=body.length+1;
  return [['Código','Descripción','Base IVA','Cuota IVA','Base R. Equiv.','Cuota R. Equiv.','Imputable IRPF','Base retención','Cuota retenida'],
-  ...[...groups.values()].sort((a,b)=>String(a.code).localeCompare(String(b.code))||a.description.localeCompare(b.description)).map(g=>[g.code,g.description,g.base,g.vat,g.reBase,g.re,g.irpf,g.retBase,g.ret])];
+  ...body,['','TOTAL',`=SUM(C2:C${last})`,`=SUM(D2:D${last})`,`=SUM(E2:E${last})`,`=SUM(F2:F${last})`,`=SUM(G2:G${last})`,`=SUM(H2:H${last})`,`=SUM(I2:I${last})`]];
 }
 function managerIncomeRows(from,to){
  const headers=['Orden','Fecha','Nº factura','Rect.','Identificación del Cliente','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
@@ -433,8 +433,8 @@ function managerIncomeRows(from,to){
    const ref=`${monthName(m)}${y}${alc?'ALC':''}`;
    return[++i,reportDate(v.date),ref,'',`VENTAS ${monthName(m)} ${alc?'ALCALA':'AZUQUECA'}`,'VENTAS - INGRESOS',v.total,0,0,0,0,0,v.total,0,0,0]
  });
- const total=rows.reduce((a,r)=>a+N(r[6]),0);
- return[headers,...rows,['','','','','','TOTAL ACUMULADO',total,'',0,0,'',0,total,0,'',0]];
+ const last=rows.length+1;
+ return[headers,...rows,['','','','','','TOTAL ACUMULADO',`=SUM(G2:G${last})`,'',0,0,'',0,`=SUM(M2:M${last})`,0,'',0]];
 }
 function wbBlob(sheets){
  if(!window.XLSX)throw new Error('Excel no disponible');
@@ -442,6 +442,11 @@ function wbBlob(sheets){
  const palettes={GASTOS:['0F766E','D1FAE5'],INGRESOS:['1D4ED8','DBEAFE'],RESUMEN:['6D28D9','EDE9FE'],default:['334155','E2E8F0']};
  for(const [name,rows] of Object.entries(sheets)){
   const ws=XLSX.utils.aoa_to_sheet(rows),upper=name.toUpperCase();
+  for(const addr of Object.keys(ws)){
+   if(addr[0]==='!')continue;
+   const cell=ws[addr];
+   if(typeof cell?.v==='string'&&cell.v.startsWith('=')){cell.f=cell.v.slice(1);cell.t='n';cell.v=0}
+  }
   const palette=palettes[upper]||palettes[upper.includes('GAST')?'GASTOS':upper.includes('INGRES')?'INGRESOS':upper.includes('RESUM')?'RESUMEN':'default'];
   const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
   const widthCount=Math.max(1,...rows.map(r=>r.length));
