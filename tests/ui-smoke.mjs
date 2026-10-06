@@ -160,13 +160,44 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
 function assert(cond,msg){if(!cond)throw new Error(msg)}
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
+async function auditCurrentUi(section){
+ const a=await page.evaluate(()=>{
+  const ids=[...document.querySelectorAll('[id]')].map(x=>x.id).filter(Boolean);
+  const dupIds=[...new Set(ids.filter((x,i)=>ids.indexOf(x)!==i))];
+  const missingHandlers=[];
+  for(const el of document.querySelectorAll('[onclick],[onchange],[oninput]')){
+   for(const attr of ['onclick','onchange','oninput']){
+    const code=el.getAttribute(attr)||'';
+    for(const m of code.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)){
+     const name=m[1];
+     if(['if','confirm','alert','Number','String','Math','setTimeout'].includes(name))continue;
+     if(typeof window[name]!=='function'&&!['find','filter','map','includes'].includes(name))missingHandlers.push(name);
+    }
+   }
+  }
+  const unlabeled=[...document.querySelectorAll('input:not([type="hidden"]),select,textarea')].filter(el=>{
+   if(el.disabled||el.getAttribute('aria-label')||el.getAttribute('title'))return false;
+   if(el.id&&document.querySelector(`label[for="${CSS.escape(el.id)}"]`))return false;
+   const parent=el.closest('label');
+   if(parent&&parent.textContent.trim())return false;
+   const wrap=el.parentElement;
+   return !(wrap?.querySelector(':scope > label')?.textContent||'').trim();
+  }).map(el=>el.id||el.name||el.type||el.tagName);
+  const emptyButtons=[...document.querySelectorAll('button:not([disabled])')].filter(b=>!(b.textContent||'').trim()&&!b.getAttribute('aria-label')&&!b.getAttribute('title')).length;
+  return{dupIds,missingHandlers:[...new Set(missingHandlers)],unlabeled,emptyButtons};
+ });
+ assert(a.dupIds.length===0,section+' tiene IDs duplicados: '+a.dupIds.join(', '));
+ assert(a.missingHandlers.length===0,section+' tiene handlers inexistentes: '+a.missingHandlers.join(', '));
+ assert(a.unlabeled.length===0,section+' tiene campos activos sin etiqueta: '+a.unlabeled.join(', '));
+ assert(a.emptyButtons===0,section+' tiene botones activos sin nombre');
+}
 
 await page.goto(base,{waitUntil:'networkidle'});
-await heading('Totus Central');
+await heading('Totus Central');await auditCurrentUi('Inicio');
 
 // Pricing and decimal-focus regression.
 await page.getByRole('button',{name:'Pricing',exact:true}).first().click();
-await page.getByRole('heading',{name:'Precio rápido',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Precio rápido',exact:true}).waitFor();await auditCurrentUi('Pricing');
 const cost=page.locator('#q_cost');await cost.click();await cost.type('3.20');
 assert(await cost.inputValue()==='3,20','El coste no normalizó punto a coma');
 assert(await page.evaluate(()=>document.activeElement?.id)==='q_cost','El campo de coste perdió el foco');
@@ -177,7 +208,7 @@ assert((await page.locator('#q_out_real').innerText()).includes('4,04'),'Cálcul
 assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálculo de venta final incorrecto');
 
 // Cajas: isolated page and live cash calculation.
-await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');
+await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');await auditCurrentUi('Cajas');
 await field('Tarjeta').fill('333,31');
 const closeInputs=page.locator('label').filter({hasText:'queda en caja'}).locator('..').locator('input');
 assert(await closeInputs.count()===2,'Hortimatic debe mostrar dos cajas');
@@ -195,7 +226,7 @@ assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre guarda
 assert(fixtures.ops_daily_closing_drawers.length===2,'No se guardaron las dos cajas de Hortimatic');
 
 // Gastos: internal-only quick helpers.
-await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
+await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');await auditCurrentUi('Gastos');
 await page.getByRole('button',{name:'Almacén 300 €',exact:true}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Almacén debe quedar como solo control interno');
 assert(await field('Proveedor / servicio').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
@@ -216,7 +247,7 @@ assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunt
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===savedExpense.id),'El documento del gasto no quedó archivado');
 
 // Facturación: invoice/proforma separation, line calculator and PDF preview.
-await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');
+await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');await auditCurrentUi('Facturación');
 await page.getByRole('heading',{name:'Factura',exact:true}).waitFor();
 await page.getByRole('button',{name:'Rectificativas',exact:true}).click();
 await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
@@ -263,7 +294,7 @@ assert(savedProforma.display_number,'La proforma emitida no recibió numeración
 
 
 // Documentos: UI completo subir -> recargar -> descargar.
-await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');
+await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
 await field('Proveedor / cliente').fill('Proveedor QA');
 await field('Nº documento').fill('QA-2026-001');
 await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
@@ -282,7 +313,7 @@ assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento 
 
 
 // Fiscalidad: counters and simulator.
-await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');
+await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
 await page.getByRole('heading',{name:/Contador IRPF/}).waitFor();
 await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
@@ -303,14 +334,14 @@ assert(reportQa.i[0][0]==='Orden'&&reportQa.i[0][2]==='Nº factura'&&reportQa.i[
 assert(reportQa.i.at(-1)[5]==='TOTAL ACUMULADO','Falta total acumulado en ingresos');
 assert(reportQa.i.slice(1,-1).every(r=>/^\d{2}\/\d{2}\/\d{4}$/.test(String(r[1]))),'Fechas de ingresos no están en DD/MM/AAAA');
 
-await page.getByRole('button',{name:'Informes',exact:true}).click();await heading('Informes');
+await page.getByRole('button',{name:'Informes',exact:true}).click();await heading('Informes');await auditCurrentUi('Informes');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar XLSX'}).first().click();assert((await (await dl).suggestedFilename()).endsWith('.xlsx'),'Informe XLSX no generado');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();assert((await (await dl).suggestedFilename()).endsWith('.pdf'),'Informe fiscal PDF no generado');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Preparar paquete'}).click();assert((await (await dl).suggestedFilename()).endsWith('.zip'),'Paquete gestor ZIP no generado');
 
 // Administración: separated configuration and template controls.
-await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');
-await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');
+await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
+await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');await auditCurrentUi('Configuración');
 await page.getByText('Datos fiscales',{exact:true}).waitFor();
 await field('Color de texto').waitFor();
 await field('Posición logo').waitFor();
