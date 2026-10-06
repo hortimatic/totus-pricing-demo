@@ -59,7 +59,10 @@ function currentExpense(from,to,store='all'){
  const lineMap=new Map();O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
  let t=0;
  O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)&&(store==='all'||e.store_id===store)).forEach(e=>{
-   if(store==='all'&&e.expense_date<'2026-07-01'&&from.startsWith('2026'))return;
+   if(from.startsWith('2026')&&e.expense_date<'2026-07-01'){
+     if(store==='all')return;
+     if(e.source!=='importacion_gestor')return;
+   }
    const ls=lineMap.get(e.id)||[];
    if(ls.length)t+=sum(ls,l=>l.deductible_irpf===false||l.fixed_asset?0:N(l.irpf_imputable));
    else if(e.deductible_irpf!==false)t+=N(e.accounting_amount||e.gross_expense);
