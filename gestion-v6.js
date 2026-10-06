@@ -216,7 +216,7 @@ function managementHtml(){
  if(O.tab==='resumen')body=dashboardHtml();
  if(O.tab==='cajas')body=closingsHtml();
  if(O.tab==='gastos')body=expensesHtml();
- if(O.tab==='facturas')body=invoicesHtml();
+ if(O.tab==='facturas')body=window.BillingV7?window.BillingV7.html():invoicesHtml();
  if(O.tab==='documentos')body=documentsHtml();
  if(O.tab==='fiscal')body=fiscalHtml();
  if(O.tab==='informes')body=reportsHtml();
@@ -666,7 +666,7 @@ function expenseRows(from,to){
  O.expenses.filter(e=>inRange(e.expense_date,from,to)).sort((a,b)=>a.expense_date.localeCompare(b.expense_date)).forEach(e=>{
   const lines=map.get(e.id)||[];
   lines.forEach(l=>{
-   const c=category(l.category_id);rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,c?.manager_code||'',c?.name||l.description,l.base_amount,l.vat_rate,l.vat_amount,l.re_base,l.re_rate,l.re_amount,l.irpf_imputable,l.withholding_base,l.withholding_rate,l.withholding_amount,l.withholding_model||'',storeName(e.store_id)]);
+   const c=category(l.category_id);rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,c?.manager_code||'',c?.name||l.description,l.base_amount,l.vat_rate,l.vat_amount,l.re_base,l.re_rate,l.re_amount,l.base_amount,l.withholding_base,l.withholding_rate,l.withholding_amount,l.withholding_model||'',storeName(e.store_id)]);
    const tax=n(l.vat_amount)+n(l.re_amount);if(tax)rows.push([e.expense_date,e.invoice_number||'',e.supplier_tax_id||'',e.supplier_name,'632','IVA SOPORTADO (RECARGO - REAGYP)','', '', '', '', '', '',tax,'','','','',storeName(e.store_id)]);
   });
  });
