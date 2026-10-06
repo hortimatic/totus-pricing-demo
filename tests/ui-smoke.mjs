@@ -643,13 +643,16 @@ assert(zipNames.some(n=>n.endsWith('/00_LEEME.txt')),'Paquete gestor sin LEEME')
 // Administración: configuración, Log y Backup separados.
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
 await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');await auditCurrentUi('Configuración');
-await page.getByText('Datos generales',{exact:true}).waitFor();
-await page.getByText('Parámetros visibles de cálculo',{exact:true}).waitFor();
-await page.getByText('Almacenamiento',{exact:true}).waitFor();
+await page.getByRole('heading',{name:'Configuración general',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Identidad fiscal y contacto',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Criterios de cálculo',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Referencias de cotización',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Almacenamiento documental',exact:true}).waitFor();
 assert(await page.locator('#ops_tpl_logo').count()===0,'Configuración vuelve a duplicar la subida de logo');
-assert(await page.getByText('Plantillas y marca',{exact:true}).count()===0,'Configuración vuelve a duplicar las plantillas');
+assert(await page.getByText('Logo corporativo',{exact:true}).count()===0,'Configuración vuelve a duplicar la carga de logo');
+assert(await page.getByRole('button',{name:'Abrir diseño de facturas',exact:true}).count()===1,'Configuración no dirige la marca a Facturación');
 await field('Margen operativo objetivo %').fill('18');
-await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();
+await page.getByRole('button',{name:'Guardar configuración',exact:true}).first().click();
 await page.waitForTimeout(100);
 assert(Number(fixtures.ops_business_settings[0].target_operating_margin_pct)===18,'No se guardó margen objetivo');
 
