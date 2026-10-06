@@ -300,10 +300,10 @@ await page.evaluate(()=>opsNewClosing());
 
 // Gastos: atajos internos, maestros, deducibilidad, factura adjunta y selección masiva.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');await auditCurrentUi('Gastos');
-await page.getByRole('button',{name:/Almacén 300/}).click();
+await page.getByRole('button',{name:/almacén 300/i}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Almacén debe quedar como solo control interno');
 assert(await page.locator('input[placeholder="Nombre del proveedor"]').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
-await page.getByRole('button',{name:/Horas extra/}).click();
+await page.getByRole('button',{name:/horas extra/i}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Horas extra debe quedar fuera de fiscalidad');
 await page.evaluate(()=>opsNewExpense());
 
