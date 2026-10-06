@@ -756,4 +756,34 @@ grant execute on function public.ops_register_external_document(uuid,integer) to
 grant execute on function public.ops_convert_proforma(uuid,uuid) to authenticated,service_role;
 grant execute on function public.ops_issue_invoice(uuid) to authenticated,service_role;
 
+
+
+-- Boundary RPC: funciones públicas invocadoras; privilegios reales permanecen en private.
+grant usage on schema private to authenticated, service_role;
+revoke usage on schema private from anon;
+
+revoke all on function private.ops_save_closing_internal(jsonb,jsonb) from public,anon;
+revoke all on function private.ops_save_expense_internal(jsonb,jsonb) from public,anon;
+revoke all on function private.ops_save_document_draft_internal(jsonb,jsonb) from public,anon;
+revoke all on function private.ops_finalize_document_internal(uuid) from public,anon;
+revoke all on function private.ops_register_external_document_internal(uuid,integer) from public,anon;
+revoke all on function private.ops_convert_proforma_internal(uuid,uuid) from public,anon;
+revoke all on function private.ops_issue_invoice_internal(uuid) from public,anon;
+
+grant execute on function private.ops_save_closing_internal(jsonb,jsonb) to authenticated,service_role;
+grant execute on function private.ops_save_expense_internal(jsonb,jsonb) to authenticated,service_role;
+grant execute on function private.ops_save_document_draft_internal(jsonb,jsonb) to authenticated,service_role;
+grant execute on function private.ops_finalize_document_internal(uuid) to authenticated,service_role;
+grant execute on function private.ops_register_external_document_internal(uuid,integer) to authenticated,service_role;
+grant execute on function private.ops_convert_proforma_internal(uuid,uuid) to authenticated,service_role;
+grant execute on function private.ops_issue_invoice_internal(uuid) to authenticated,service_role;
+
+alter function public.ops_save_closing(jsonb,jsonb) security invoker;
+alter function public.ops_save_expense(jsonb,jsonb) security invoker;
+alter function public.ops_save_document_draft(jsonb,jsonb) security invoker;
+alter function public.ops_finalize_document(uuid) security invoker;
+alter function public.ops_register_external_document(uuid,integer) security invoker;
+alter function public.ops_convert_proforma(uuid,uuid) security invoker;
+alter function public.ops_issue_invoice(uuid) security invoker;
+
 commit;
