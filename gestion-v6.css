@@ -102,3 +102,14 @@
 @media(max-width:720px){.invoice-toolbar{align-items:stretch;flex-direction:column}.invoice-toolbar .ops-actions{width:100%}.invoice-toolbar .ops-actions button{flex:1}.invoice-type-switch{width:100%}.invoice-type-switch button{flex:1}.invoice-template-row{grid-template-columns:1fr}.invoice-lines .ops-line{grid-template-columns:1fr 1fr}.invoice-lines .ops-line>div:first-child{grid-column:1/-1}}
 
  /* --- Facturación / proformas / editor documental --- */
+
+.invoice-template-editor{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);overflow:hidden}
+.invoice-template-editor>summary{cursor:pointer;padding:12px 14px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.invoice-template-editor>summary::-webkit-details-marker{display:none}
+.invoice-template-editor>summary:after{content:'▾';opacity:.7}
+.invoice-template-editor[open]>summary:after{content:'▴'}
+.invoice-template-editor .template-editor{padding:0 12px 12px}
+.template-editor.compact .ops-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+.template-editor-actions{margin-top:12px;flex-wrap:wrap}
+.template-logo-field{padding:10px;border:1px dashed var(--line);border-radius:12px;background:rgba(255,255,255,.02)}
+@media(max-width:720px){.template-editor.compact .ops-form{grid-template-columns:1fr}.template-editor.compact .span2,.template-editor.compact .span4{grid-column:1}.template-editor-actions button{width:100%}}
