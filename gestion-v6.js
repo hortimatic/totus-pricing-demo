@@ -7,7 +7,7 @@ const O=window.TotusGestion={
   year:new Date().getFullYear(),quarter:Math.floor(new Date().getMonth()/3)+1,storeId:'all',
   settings:null,stores:[],categories:[],documents:[],expenses:[],expenseLines:[],
   closings:[],drawers:[],closingDrawers:[],series:[],invoices:[],invoiceLines:[],
-  taxPayments:[],retaBrackets:[],fiscalAdjustments:[],incomeAdjustments:[],
+  taxPayments:[],retaBrackets:[],fiscalAdjustments:[],incomeAdjustments:[],gestorQuarterSummary:[],reconciliationNotes:[],
   closeDraft:null,expenseDraft:null,expenseDraftLines:[],invoiceDraft:null,invoiceDraftLines:[],
   docFilter:{from:'',to:'',store:'all',status:'all',type:'all',q:''},
   reportFrom:'',reportTo:'',plannedSpend:'',
@@ -72,7 +72,7 @@ async function load(force=false){
   if(O.loaded&&!force)return;
   O.loading=true;
   try{
-    const [settings,stores,categories,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments]=await Promise.all([
+    const [settings,stores,categories,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments,gestorQuarterSummary,reconciliationNotes]=await Promise.all([
       selectAll('ops_business_settings'),
       selectAll('ops_stores','sort_order',true),
       selectAll('ops_expense_categories','sort_order',true),
@@ -88,7 +88,9 @@ async function load(force=false){
       selectAll('ops_tax_payments','created_at',false),
       selectAll('ops_reta_brackets','bracket_order',true),
       selectAll('ops_fiscal_adjustments','adjustment_date',false),
-      selectAll('ops_income_adjustments','income_date',false)
+      selectAll('ops_income_adjustments','income_date',false),
+      selectAll('ops_gestor_quarter_summary','quarter',true),
+      selectAll('ops_reconciliation_notes','created_at',false)
     ]);
     O.settings=settings[0]||{};
     O.stores=stores.filter(x=>x.active!==false);
@@ -96,7 +98,7 @@ async function load(force=false){
     O.documents=documents; O.expenses=expenses; O.expenseLines=expenseLines;
     O.closings=closings; O.drawers=drawers.filter(x=>x.active!==false); O.closingDrawers=closingDrawers;
     O.series=series; O.invoices=invoices; O.invoiceLines=invoiceLines; O.taxPayments=taxPayments;
-    O.retaBrackets=retaBrackets; O.fiscalAdjustments=fiscalAdjustments; O.incomeAdjustments=incomeAdjustments;
+    O.retaBrackets=retaBrackets; O.fiscalAdjustments=fiscalAdjustments; O.incomeAdjustments=incomeAdjustments; O.gestorQuarterSummary=gestorQuarterSummary; O.reconciliationNotes=reconciliationNotes.filter(x=>x.active!==false);
     if(!O.year)O.year=O.settings.current_year||new Date().getFullYear();
     if(!O.reportFrom)O.reportFrom=`${O.year}-01-01`;
     if(!O.reportTo)O.reportTo=`${O.year}-12-31`;
@@ -627,6 +629,8 @@ function fiscalHtml(){
  const f=fiscal(O.year,O.quarter,n(O.plannedSpend)),r=retaEstimate(),pb=periodBounds(O.year,O.quarter,false);
  const prev=O.settings?.previous_year_net_income;let minor=0;if(prev!=null&&prev<=12000){minor=prev<=9000?100:prev<=10000?75:prev<=11000?50:25}
  const reserve=f.payable+f.m111+f.m115;
+ const gestorRef=sum(O.gestorQuarterSummary.filter(x=>x.fiscal_year===O.year&&n(x.quarter)===O.quarter),x=>n(x.imputable_irpf));
+ const recon=O.reconciliationNotes.filter(x=>(x.fiscal_year==null||x.fiscal_year===O.year)&&(x.quarter==null||n(x.quarter)===O.quarter));
  return `<div class="ops-kpis">
   <div class="ops-kpi"><small>Ingresos acumulados</small><strong>${eur(f.incomeAcc)}</strong><div class="sub">01/01 → fin T${O.quarter}</div></div>
   <div class="ops-kpi"><small>Gastos deducibles</small><strong>${eur(f.expRaw)}</strong><div class="sub">Antes del 5 %</div></div>
