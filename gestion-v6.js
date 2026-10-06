@@ -823,10 +823,13 @@ window.opsSetStore=function(v){O.storeId=v;O.closeDraft=null;O.expenseDraft=null
 window.goOps=async function(tab='resumen'){
  O.tab=tab||'resumen';
  state.page='management';state.familyId=null;state.productId=null;state.dirty=false;
- if(O.tab==='cajas'&&!O.closeDraft)O.closeDraft=newClosingDraft();
- if(O.tab==='gastos'&&!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
  render();
- try{await load();render()}catch(e){document.getElementById('main').innerHTML=`<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>No se pudo cargar ${sectionMeta()[0].toLowerCase()}</h1><p>${h(e.message)}</p></div></div>`}
+ try{
+   await load();
+   if(O.tab==='cajas'&&(!O.closeDraft?.storeId||!O.stores.some(s=>s.id===O.closeDraft.storeId)))O.closeDraft=newClosingDraft();
+   if(O.tab==='gastos'&&(!O.expenseDraft?.storeId||!O.stores.some(s=>s.id===O.expenseDraft.storeId))){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
+   render();
+ }catch(e){document.getElementById('main').innerHTML=`<div class="head"><div><div class="eyebrow">${sectionMeta()[1]}</div><h1>No se pudo cargar ${sectionMeta()[0].toLowerCase()}</h1><p>${h(e.message)}</p></div></div>`}
 };
 
 const pricingRender=render;
