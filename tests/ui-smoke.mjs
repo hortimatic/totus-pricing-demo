@@ -1,4 +1,7 @@
 import { chromium } from 'playwright';
+import fs from 'node:fs/promises';
+import * as XLSXNode from 'xlsx';
+import JSZipNode from 'jszip';
 
 const base='http://127.0.0.1:4173';
 const project='zwkpmjjuurgjygcrejiw';
@@ -363,6 +366,22 @@ assert(storageUploads===beforeExternalUpload+1,'PDF externo no llegó a Storage'
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='sales_invoice_source'&&x.linked_entity_id===externalInvoice.id),'PDF externo no quedó archivado');
 
 
+// Validación de tipos/tamaño documental.
+const validationQa=await page.evaluate(()=>{
+ const ok=[];
+ for(const [name,type] of [['a.pdf','application/pdf'],['a.jpg','image/jpeg'],['a.png','image/png'],['a.webp','image/webp'],['a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],['a.xls','application/vnd.ms-excel'],['a.csv','text/csv']]){
+  try{window.__opsValidateDocumentFile(new File(['x'],name,{type}));ok.push(name)}catch(e){}
+ }
+ let badExt=false,badMime=false,big=false,empty=false;
+ try{window.__opsValidateDocumentFile(new File(['x'],'a.exe',{type:'application/octet-stream'}))}catch(e){badExt=true}
+ try{window.__opsValidateDocumentFile(new File(['x'],'a.pdf',{type:'application/javascript'}))}catch(e){badMime=true}
+ try{window.__opsValidateDocumentFile(new File([new Uint8Array(21*1024*1024)],'big.pdf',{type:'application/pdf'}))}catch(e){big=true}
+ try{window.__opsValidateDocumentFile(new File([],'empty.pdf',{type:'application/pdf'}))}catch(e){empty=true}
+ return{ok,badExt,badMime,big,empty};
+});
+assert(validationQa.ok.length===7,'No se aceptan todos los formatos documentales previstos');
+assert(validationQa.badExt&&validationQa.badMime&&validationQa.big&&validationQa.empty,'Validación documental no bloquea extensión, MIME, tamaño o vacío');
+
 // Documentos: UI completo subir -> recargar -> descargar.
 await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
 await field('Proveedor / cliente').fill('Proveedor QA');
@@ -405,9 +424,44 @@ assert(reportQa.i.at(-1)[5]==='TOTAL ACUMULADO','Falta total acumulado en ingres
 assert(reportQa.i.slice(1,-1).every(r=>/^\d{2}\/\d{2}\/\d{4}$/.test(String(r[1]))),'Fechas de ingresos no están en DD/MM/AAAA');
 
 await page.getByRole('button',{name:'Informes',exact:true}).click();await heading('Informes');await auditCurrentUi('Informes');
-dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar XLSX'}).first().click();assert((await (await dl).suggestedFilename()).endsWith('.xlsx'),'Informe XLSX no generado');
-dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();assert((await (await dl).suggestedFilename()).endsWith('.pdf'),'Informe fiscal PDF no generado');
-dl=page.waitForEvent('download');await page.getByRole('button',{name:'Preparar paquete'}).click();assert((await (await dl).suggestedFilename()).endsWith('.zip'),'Paquete gestor ZIP no generado');
+const xlsxButtons=page.getByRole('button',{name:'Descargar XLSX'});
+
+let downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(0).click();const expensesXlsx=await downloadPromise;
+assert((await expensesXlsx.suggestedFilename()).endsWith('.xlsx'),'Informe de gastos XLSX no generado');
+const expensesWb=XLSXNode.readFile(await expensesXlsx.path(),{cellStyles:true});
+assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes('DESGLOSE CONCEPTOS'),'Libro de gastos no contiene sus hojas esperadas');
+const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
+assert(expensesRows[0][0]==='Orden'&&expensesRows[0][6]==='Concepto'&&expensesRows.at(-1)[6]==='TOTAL ACUMULADO','Contenido del XLSX de gastos incorrecto');
+
+downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(1).click();const incomeXlsx=await downloadPromise;
+const incomeWb=XLSXNode.readFile(await incomeXlsx.path(),{cellStyles:true});
+assert(incomeWb.SheetNames.join('|')==='INGRESOS','Libro de ingresos debe tener una hoja INGRESOS');
+const incomeRows=XLSXNode.utils.sheet_to_json(incomeWb.Sheets.INGRESOS,{header:1,raw:false});
+assert(incomeRows[0][0]==='Orden'&&incomeRows[0][5]==='Concepto'&&incomeRows.at(-1)[5]==='TOTAL ACUMULADO','Contenido del XLSX de ingresos incorrecto');
+
+for(const idx of [2,3]){
+ downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(idx).click();const daily=await downloadPromise;
+ const wb=XLSXNode.readFile(await daily.path(),{cellStyles:true});
+ assert(wb.SheetNames.length===12,'El diario no contiene 12 hojas mensuales');
+ const firstRows=XLSXNode.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false});
+ assert(firstRows[0].join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
+ assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
+}
+
+downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(4).click();const fullXlsx=await downloadPromise;
+const fullWb=XLSXNode.readFile(await fullXlsx.path());
+for(const name of ['Resumen','Cierres','Gastos','Facturas'])assert(fullWb.SheetNames.includes(name),'Libro completo no contiene hoja '+name);
+
+downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();const fiscalPdf=await downloadPromise;
+const pdfBytes=await fs.readFile(await fiscalPdf.path());
+assert(pdfBytes.subarray(0,4).toString()==='%PDF'&&pdfBytes.length>800,'Informe fiscal PDF inválido o vacío');
+
+downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Preparar paquete'}).click();const pack=await downloadPromise;
+assert((await pack.suggestedFilename()).endsWith('.zip'),'Paquete gestor ZIP no generado');
+const zip=await JSZipNode.loadAsync(await fs.readFile(await pack.path()));
+const zipNames=Object.keys(zip.files);
+for(const folder of ['01_INGRESOS','02_GASTOS','03_DIARIOS','04_RESUMEN','05_DOCUMENTOS'])assert(zipNames.some(n=>n.includes('/'+folder+'/')),'Paquete gestor sin carpeta '+folder);
+assert(zipNames.some(n=>n.endsWith('/00_LEEME.txt')),'Paquete gestor sin LEEME');
 
 // Administración: separated configuration and template controls.
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
