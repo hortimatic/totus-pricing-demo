@@ -878,4 +878,49 @@ grant execute on function private.ops_storage_usage_internal() to authenticated,
 revoke all on function public.ops_storage_usage() from public,anon;
 grant execute on function public.ops_storage_usage() to authenticated,service_role;
 
+
+-- Eliminación controlada de gastos manuales.
+create or replace function private.ops_delete_manual_expense_internal(p_expense_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $function$
+declare
+  e public.ops_expenses;
+  d public.ops_documents;
+begin
+  if not private.is_manager() then raise exception 'Solo administración o gerencia puede eliminar gastos'; end if;
+
+  select * into e from public.ops_expenses where id=p_expense_id for update;
+  if not found then raise exception 'Gasto no encontrado'; end if;
+  if coalesce(e.source,'manual')<>'manual' then raise exception 'Los gastos importados no se eliminan desde la aplicación'; end if;
+
+  if e.document_id is not null then
+    select * into d from public.ops_documents
+    where id=e.document_id and linked_entity_type='expense' and linked_entity_id=e.id
+    for update;
+  end if;
+
+  delete from public.ops_expenses where id=e.id;
+  if d.id is not null then delete from public.ops_documents where id=d.id; end if;
+
+  return jsonb_build_object('expense_id',e.id,'document_id',d.id,'storage_path',d.storage_path);
+end;
+$function$;
+
+create or replace function public.ops_delete_manual_expense(p_expense_id uuid)
+returns jsonb
+language sql
+security invoker
+set search_path = public
+as $function$
+  select private.ops_delete_manual_expense_internal(p_expense_id);
+$function$;
+
+revoke all on function private.ops_delete_manual_expense_internal(uuid) from public,anon;
+grant execute on function private.ops_delete_manual_expense_internal(uuid) to authenticated,service_role;
+revoke all on function public.ops_delete_manual_expense(uuid) from public,anon;
+grant execute on function public.ops_delete_manual_expense(uuid) to authenticated,service_role;
+
 commit;
