@@ -356,12 +356,9 @@ window.opsSaveClosing=async function(status='cerrado'){
  if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()==='')){alert('Indica cuánto queda en cada caja.');return}
  O.saving=true;
  try{
-   const row={store_id:d.storeId,business_date:d.date,opening_cash:c.opening,cash_sales:c.cashSales,card_sales:n(d.card),bizum_sales:n(d.bizum),online_sales:n(d.online),other_income:n(d.other),cash_withdrawals:n(d.withdrawals),cash_expenses_declared:n(d.cashExpenses),expected_cash:c.closing,actual_cash:c.closing,difference:0,notes:d.notes||'',status,created_by:authSession.user.id,closed_by:status==='cerrado'?authSession.user.id:null,source:'manual',legacy_cash_method:false};
-   let id=d.id;
-   if(id){const {error}=await sb.from('ops_daily_closings').update(row).eq('id',id);if(error)throw error;await sb.from('ops_daily_closing_drawers').delete().eq('closing_id',id)}
-   else{const {data,error}=await sb.from('ops_daily_closings').insert(row).select('id').single();if(error)throw error;id=data.id}
-   const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{closing_id:id,drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing)}});
-   const {error:de}=await sb.from('ops_daily_closing_drawers').insert(drawerRows);if(de)throw de;
+   const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,card_sales:n(d.card),bizum_sales:n(d.bizum),online_sales:n(d.online),other_income:n(d.other),cash_withdrawals:n(d.withdrawals),cash_expenses_declared:n(d.cashExpenses),notes:d.notes||'',status};
+   const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),notes:''}});
+   const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
    await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total});
    await load(true); O.closeDraft=newClosingDraft(); render();
  }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
@@ -466,6 +463,11 @@ async function fileSha256(file){
 }
 async function uploadDoc(file,meta,linkedType='',linkedId=null){
  if(!file)return null;
+ const max=n(O.settings?.document_max_bytes||20971520);
+ const ext='.'+String(file.name||'').split('.').pop().toLowerCase();
+ const allowedExt=new Set(['.pdf','.jpg','.jpeg','.png','.webp','.xlsx','.xls','.csv']);
+ if(file.size>max)throw new Error('El archivo supera el límite de '+Math.round(max/1048576)+' MB.');
+ if(!allowedExt.has(ext))throw new Error('Tipo de archivo no permitido. Usa PDF, imagen, Excel o CSV.');
  const sha=await fileSha256(file);
  const dup=O.documents.find(d=>d.sha256&&d.sha256===sha);
  if(dup&&!confirm('Este archivo parece estar ya guardado como "'+dup.original_name+'". ¿Subirlo otra vez?'))return dup.id;
@@ -487,12 +489,9 @@ window.opsSaveExpense=async function(){
  O.saving=true;
  try{
    const totals=draftExpenseTotals();
-   const row={store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),base_amount:Math.max(0,totals.accounting),vat_rate:0,vat_amount:0,re_rate:0,re_amount:0,withholding_rate:0,withholding_amount:0,withholding_model:null,gross_expense:Math.max(0,totals.accounting),amount_paid:Math.max(0,d.amountPaid!==''?n(d.amountPaid):totals.payable),deductible_irpf:true,deductible_pct:100,fixed_asset:false,notes:d.notes||'',created_by:authSession.user.id,document_kind:d.documentKind,source:'manual',fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,accounting_amount:totals.accounting,management_only:!!d.managementOnly};
-   let id=d.id;
-   if(id){const {error}=await sb.from('ops_expenses').update(row).eq('id',id);if(error)throw error;await sb.from('ops_expense_lines').delete().eq('expense_id',id)}
-   else{const {data,error}=await sb.from('ops_expenses').insert(row).select('id').single();if(error)throw error;id=data.id}
-   const lines=O.expenseDraftLines.map((l,i)=>{const x=expenseLineCalc(l),cat=category(l.categoryId);return{expense_id:id,sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||cat?.name||'',base_amount:x.base,vat_rate:x.vatRate,vat_amount:x.vat,re_base:x.reRate?x.base:0,re_rate:x.reRate,re_amount:x.re,irpf_imputable:x.imputable,withholding_base:x.wRate?x.base:0,withholding_rate:x.wRate,withholding_amount:x.withholding,withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}});
-   const {error:le}=await sb.from('ops_expense_lines').insert(lines);if(le)throw le;
+   const payload={id:d.id||null,store_id:d.storeId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
+   const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}));
+   const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
    const file=document.getElementById('ops_exp_file')?.files?.[0];
    if(file){
      const cat=category(O.expenseDraftLines[0]?.categoryId);
