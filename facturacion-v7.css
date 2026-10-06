@@ -1,0 +1,48 @@
+
+/* Totus Central · Facturación V7 */
+.billing-v7{display:flex;flex-direction:column;gap:14px}
+.bill-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-end}
+.bill-head h2{margin:3px 0 4px;font-size:26px}
+.bill-head p{margin:0;color:var(--muted)}
+.bill-subnav{display:flex;gap:7px;flex-wrap:wrap;padding:7px;border:1px solid var(--line);border-radius:14px;background:rgba(6,20,30,.72)}
+.bill-subnav button{border:0;background:transparent;color:#aebbc7;padding:9px 13px;border-radius:10px;font-weight:900;cursor:pointer}
+.bill-subnav button.active{background:rgba(75,217,255,.10);color:#fff;box-shadow:inset 0 0 0 1px rgba(75,217,255,.15)}
+.bill-editor{display:grid;grid-template-columns:minmax(0,1fr) 275px;gap:14px;align-items:start}
+.bill-editor-main{display:flex;flex-direction:column;gap:12px}
+.bill-section{background:rgba(8,24,35,.82);border:1px solid var(--line);border-radius:16px;padding:15px}
+.bill-section-title{display:flex;align-items:center;gap:10px;margin-bottom:13px}
+.bill-section-title>span{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:rgba(75,217,255,.10);border:1px solid rgba(75,217,255,.18);font-weight:950;color:#aef3ff}
+.bill-section-title>div{min-width:0}.bill-section-title b{display:block}.bill-section-title small{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.bill-section-title button{margin-left:auto}
+.bill-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bill-grid>div{min-width:0}.bill-grid .span2{grid-column:span 2}.bill-grid .span3{grid-column:span 3}.bill-grid .span4{grid-column:1/-1}
+.bill-grid label{display:block;color:#aebbc7;font-weight:850;font-size:11px;margin-bottom:5px}
+.bill-grid input,.bill-grid select,.bill-grid textarea{width:100%}
+.bill-grid textarea{min-height:72px;resize:vertical}
+.bill-check{display:flex!important;align-items:center;gap:8px;min-height:38px}.bill-check input{width:auto!important}.bill-check label{margin:0!important}
+.bill-line-head,.bill-line{display:grid;grid-template-columns:minmax(220px,2.4fr) .55fr .8fr .6fr .6fr .9fr 34px;gap:7px;align-items:center}
+.bill-line-head{padding:0 8px 6px;color:#82919e;font-size:10px;font-weight:900;text-transform:uppercase}
+.bill-line{padding:8px;border:1px solid rgba(255,255,255,.06);border-radius:11px;background:rgba(255,255,255,.025);margin-bottom:7px}
+.bill-line input{width:100%}.bill-line b{text-align:right;white-space:nowrap}
+.bill-summary{position:sticky;top:83px;background:linear-gradient(180deg,rgba(8,28,40,.95),rgba(5,20,30,.95));border:1px solid rgba(75,217,255,.16);border-radius:17px;padding:16px;box-shadow:var(--shadow)}
+.bill-template-chip{display:flex;align-items:center;gap:7px;font-size:11px;color:#b9c6d1}.bill-template-chip i{width:11px;height:11px;border-radius:50%}
+.bill-summary-total{padding:20px 0 13px;border-bottom:1px solid var(--line)}.bill-summary-total small{display:block;color:#8e9ba8}.bill-summary-total strong{display:block;font-size:30px;margin-top:4px}
+.bill-summary-row{display:flex;justify-content:space-between;gap:9px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:12px}.bill-summary-row span{color:#97a6b3}
+.bill-summary-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:14px}.bill-summary-actions button{width:100%}
+.bill-issue{width:100%;margin-top:8px;background:linear-gradient(135deg,#33e0a6,#22c789);border:0;border-radius:10px;color:#042218;padding:10px 12px;font-weight:950;cursor:pointer}
+.bill-summary-note{font-size:10px;color:#7e8d9a;line-height:1.45;margin-top:10px}
+.bill-list-card{margin-top:2px}.bill-list-tools input{min-width:250px}
+.bill-template-layout{display:grid;grid-template-columns:minmax(0,.9fr) minmax(420px,1.1fr);gap:14px}
+.tpl-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tpl-card{position:relative;text-align:left;border:1px solid var(--line);background:rgba(255,255,255,.025);color:#d8e0e7;border-radius:12px;padding:12px;cursor:pointer;min-height:86px}.tpl-card.active{border-color:rgba(75,217,255,.45);background:rgba(75,217,255,.06)}.tpl-card b,.tpl-card small{display:block}.tpl-card small{color:#82909c;margin-top:4px}.tpl-card em{position:absolute;right:8px;top:8px;font-size:8px;font-style:normal;padding:3px 6px;border-radius:999px;background:rgba(55,222,165,.12);color:#7bf0c3}.tpl-swatch{width:20px;height:7px;border-radius:999px;display:block;margin-bottom:9px}
+.tpl-preview{position:relative;min-height:610px;max-width:470px;margin:0 auto;background:#fff;color:#1e2730;border-radius:6px;padding:32px 30px;box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:Arial,sans-serif;overflow:hidden}
+.tpl-preview.modern:before{content:"";position:absolute;left:0;right:0;top:0;height:9px;background:var(--tpl-a)}.tpl-preview.modern .tpl-preview-head{background:var(--tpl-b);color:#fff;margin:-23px -30px 24px;padding:25px 30px 17px}
+.tpl-preview.minimal{border-top:5px solid var(--tpl-a)}.tpl-preview.classic{border:1px solid #d7d7d7}.tpl-preview.classic .tpl-preview-head{border-bottom:2px solid var(--tpl-a);padding-bottom:13px}
+.tpl-preview-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.tpl-preview-head>div:last-child{text-align:right}.tpl-preview-head b,.tpl-preview-head small{display:block}.tpl-preview-head small{font-size:10px;margin-top:4px}
+.tpl-logo{width:92px;height:38px;display:grid;place-items:center;border:1px dashed rgba(80,90,100,.35);font-size:10px;font-weight:900}
+.tpl-company{display:flex;flex-direction:column;gap:3px;font-size:10px;margin-bottom:22px}.tpl-company b{font-size:13px;color:var(--tpl-a)}
+.tpl-client{margin-left:auto;width:52%;padding:12px;border-left:3px solid var(--tpl-a);background:#f6f8fa;display:flex;flex-direction:column;gap:3px;font-size:10px}.tpl-client small{font-size:8px;color:#7b8790}
+.tpl-table{margin-top:28px;font-size:9px}.tpl-table>div{display:grid;grid-template-columns:1fr 45px 60px 60px;padding:9px 6px;border-bottom:1px solid #e5e7eb}.tpl-table>div:first-child{background:var(--tpl-b);color:#fff}
+.tpl-total{margin:20px 0 0 auto;width:180px;display:flex;justify-content:space-between;padding:12px;border-top:2px solid var(--tpl-a);font-size:12px}.tpl-total b{color:var(--tpl-a);font-size:15px}
+.tpl-footer{position:absolute;left:30px;right:30px;bottom:22px;text-align:center;font-size:8px;color:#7c8790}
+@media(max-width:1100px){.bill-editor{grid-template-columns:1fr}.bill-summary{position:static}.bill-template-layout{grid-template-columns:1fr}.bill-grid{grid-template-columns:repeat(2,1fr)}.bill-grid .span3,.bill-grid .span4{grid-column:1/-1}}
+@media(max-width:760px){.bill-head{align-items:flex-start;flex-direction:column}.bill-grid{grid-template-columns:1fr}.bill-grid .span2,.bill-grid .span3,.bill-grid .span4{grid-column:auto}.bill-line-head{display:none}.bill-line{grid-template-columns:1fr 1fr}.bill-line .desc{grid-column:1/-1}.bill-summary-actions,.tpl-cards{grid-template-columns:1fr}.bill-template-layout{grid-template-columns:1fr}.tpl-preview{min-height:560px}.bill-list-tools input{min-width:0;width:100%}}
