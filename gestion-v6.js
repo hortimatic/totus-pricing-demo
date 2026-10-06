@@ -65,6 +65,7 @@ async function audit(area,action,entityId=null,detail={}){
   try{ await sb.from('ops_audit_log').insert({user_id:authSession?.user?.id||null,user_email:authSession?.user?.email||'',area,action,entity_id:entityId,detail}); }catch(e){console.warn(e)}
 }
 function manager(){ return ['admin','gerente'].includes(currentRole()); }
+function adminOnly(){ return currentRole()==='admin'; }
 
 async function load(force=false){
   if(O.loading)return;
@@ -787,12 +788,12 @@ window.opsFiscalPdf=function(){
 function configHtml(){
  const s=O.settings||{},usage=sum(O.documents,d=>n(d.size_bytes)),limit=n(s.storage_limit_bytes||1073741824);
  return `<div class="ops-grid">
-  <div class="ops-card ${manager()?'ops-manager':''}"><div class="section-head"><div><div class="eyebrow">Empresa</div><h3>Datos y criterios</h3></div><button class="primary" onclick="opsSaveSettings()" ${manager()?'':'disabled'}>Guardar</button></div>
+  <div class="ops-card ${adminOnly()?'ops-manager':''}"><div class="section-head"><div><div class="eyebrow">Empresa</div><h3>Datos y criterios</h3></div><button class="primary" onclick="opsSaveSettings()" ${adminOnly()?'':'disabled'}>Guardar</button></div>
    <div class="ops-form">
-    <div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${h(s.business_name||'')}" ${manager()?'':'disabled'}></div><div><label>NIF/CIF</label><input id="ops_set_tax" value="${h(s.tax_id||'')}" ${manager()?'':'disabled'}></div>
-    <div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${h(s.business_address||'')}" ${manager()?'':'disabled'}></div>
-    <div><label>Email</label><input id="ops_set_email" value="${h(s.business_email||'')}" ${manager()?'':'disabled'}></div><div><label>Teléfono</label><input id="ops_set_phone" value="${h(s.business_phone||'')}" ${manager()?'':'disabled'}></div>
-    <div><label>Cuota RETA actual / mes</label><input id="ops_set_reta" inputmode="decimal" value="${h(s.actual_reta_monthly??'')}" ${manager()?'':'disabled'}></div><div><label>Rendimiento neto año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${h(s.previous_year_net_income??'')}" ${manager()?'':'disabled'}></div>
+    <div class="span2"><label>Nombre / titular</label><input id="ops_set_name" value="${h(s.business_name||'')}" ${adminOnly()?'':'disabled'}></div><div><label>NIF/CIF</label><input id="ops_set_tax" value="${h(s.tax_id||'')}" ${adminOnly()?'':'disabled'}></div>
+    <div class="span4"><label>Dirección fiscal</label><input id="ops_set_address" value="${h(s.business_address||'')}" ${adminOnly()?'':'disabled'}></div>
+    <div><label>Email</label><input id="ops_set_email" value="${h(s.business_email||'')}" ${adminOnly()?'':'disabled'}></div><div><label>Teléfono</label><input id="ops_set_phone" value="${h(s.business_phone||'')}" ${adminOnly()?'':'disabled'}></div>
+    <div><label>Cuota RETA actual / mes</label><input id="ops_set_reta" inputmode="decimal" value="${h(s.actual_reta_monthly??'')}" ${adminOnly()?'':'disabled'}></div><div><label>Rendimiento neto año anterior</label><input id="ops_set_prevnet" inputmode="decimal" value="${h(s.previous_year_net_income??'')}" ${adminOnly()?'':'disabled'}></div>
    </div>
    <div class="ops-note" style="margin-top:12px">Régimen configurado: recargo de equivalencia · estimación directa simplificada · pago fraccionado IRPF ${h(String(s.irpf_prepayment_rate||20))}%.</div>
   </div>
@@ -804,7 +805,7 @@ function configHtml(){
  </div>`;
 }
 window.opsSaveSettings=async function(){
- if(!manager())return;
+ if(!adminOnly())return;
  const row={business_name:document.getElementById('ops_set_name').value,business_address:document.getElementById('ops_set_address').value,business_email:document.getElementById('ops_set_email').value,business_phone:document.getElementById('ops_set_phone').value,tax_id:document.getElementById('ops_set_tax').value,actual_reta_monthly:n(document.getElementById('ops_set_reta').value)||null,previous_year_net_income:n(document.getElementById('ops_set_prevnet').value)||null,current_year:O.year};
  const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}await audit('config','actualizar',null,{});await load(true);render();
 };
