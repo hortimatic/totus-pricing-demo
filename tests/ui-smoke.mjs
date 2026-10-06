@@ -25,16 +25,21 @@ const ids={
  seriesN:'44444444-4444-4444-8444-444444444451',
  seriesNR:'44444444-4444-4444-8444-444444444452',
  seriesNP:'44444444-4444-4444-8444-444444444453',
- tpl:'55555555-5555-4555-8555-555555555555'
+ tpl:'55555555-5555-4555-8555-555555555555',
+ supplier:'66666666-6666-4666-8666-666666666666',
+ personnel:'77777777-7777-4777-8777-777777777777'
 };
 const fixtures={
  brands:[],families:[],products:[],product_variants:[],providers:[],product_provider_prices:[],product_competitor_prices:[],
  consultations:[],consultation_history:[],price_history:[],team_email_log:[],
  team_members:[{email,full_name:'QA Admin',role:'admin',active:true,job_title:'Admin'}],
  profiles:[{id:userId,email,full_name:'QA Admin',role:'admin',active:true}],
- ops_business_settings:[{id:1,business_name:'Empresa QA',tax_id:'B00000000',business_address:'Calle QA',business_email:'qa@example.com',business_phone:'',current_year:2026,irpf_prepayment_rate:20,difficult_expense_enabled:true,difficult_expense_pct:5,difficult_expense_annual_cap:2000,reta_generic_deduction_pct:7,reta_total_rate:31.5,actual_reta_monthly:315,storage_limit_bytes:1073741824,document_max_bytes:20971520}],
+ ops_business_settings:[{id:1,business_name:'Empresa QA',tax_id:'B00000000',business_address:'Calle QA',business_email:'qa@example.com',business_phone:'',current_year:2026,fiscal_regime:'recargo_equivalencia',estimation_method:'directa_simplificada',irpf_prepayment_rate:20,difficult_expense_enabled:true,difficult_expense_pct:5,difficult_expense_annual_cap:2000,default_sales_vat_rate:21,reta_generic_deduction_pct:7,reta_total_rate:31.5,actual_reta_monthly:315,previous_year_net_income:0,target_operating_margin_pct:15,storage_limit_bytes:1073741824,document_max_bytes:20971520,fiscal_notes:''}],
  ops_stores:[{id:ids.h,code:'HORTIMATIC',name:'Hortimatic',active:true,sort_order:10},{id:ids.n,code:'NEWOLDSMOK',name:'NewOldSmok',active:true,sort_order:20}],
- ops_expense_categories:[{id:ids.merch,code:'MERCH',name:'Mercancía / producto para tienda',manager_code:'600',deductible_default:true,fixed_asset_default:false,sort_order:10},{id:ids.internal,code:'INTERNAL_WAREHOUSE',name:'Almacén / pago interno',manager_code:'',deductible_default:false,fixed_asset_default:false,sort_order:920}],
+ ops_expense_categories:[{id:ids.merch,code:'MERCH',name:'Mercancía / producto para tienda',manager_code:'600',aeat_group:'Compra de existencias',deductible_default:true,fixed_asset_default:false,sort_order:10},{id:ids.internal,code:'INTERNAL_WAREHOUSE',name:'Almacén / pago interno',manager_code:'',aeat_group:'Control interno',deductible_default:false,fixed_asset_default:false,sort_order:920},{id:'22222222-2222-4222-8222-222222222223',code:'INTERNAL_OVERTIME',name:'Horas extra / pagos internos',manager_code:'',aeat_group:'Control interno',deductible_default:false,fixed_asset_default:false,sort_order:910}],
+ ops_suppliers:[{id:ids.supplier,name:'Proveedor Maestro QA',tax_id:'B12345678',email:'proveedor@qa.test',phone:'',address:'Calle Proveedor',city:'',postal_code:'',province:'',country:'España',default_category_id:ids.merch,default_payment_method:'transferencia',default_document_kind:'factura',default_vat_rate:21,default_re_rate:5.2,default_withholding_rate:0,default_withholding_model:null,default_deductible_irpf:true,default_deductible_pct:100,notes:'',active:true,source:'qa'}],
+ ops_personnel:[{id:ids.personnel,full_name:'Davinia Hidalgo',tax_id:'',person_type:'family_collaborator',active:true,compensation_mode:'manual',notes:'QA'}],
+ ops_entity_revisions:[],ops_backup_archives:[],ops_audit_log:[],ops_fiscal_reference_periods:[],ops_import_batches:[],
  ops_documents:[],
  ops_expenses:[],
  ops_expense_lines:[],
@@ -54,7 +59,7 @@ const fixtures={
  ops_fiscal_adjustments:[],ops_income_adjustments:[],ops_gestor_quarter_summary:[],ops_reconciliation_notes:[],
  ops_customers:[],
  ops_document_templates:[{id:ids.tpl,code:'TOTUS-QA',name:'Totus QA',style:'brand',primary_color:'#19D3C5',secondary_color:'#101B27',text_color:'#17202A',font_family:'helvetica',logo_path:null,logo_name:null,logo_mime:null,logo_size_bytes:0,logo_width_mm:34,logo_position:'left',show_logo:true,show_payment_details:true,header_text:'',footer_text:'Gracias',payment_terms_default:'Pago al contado',bank_details:'',invoice_title:'FACTURA',proforma_title:'FACTURA PROFORMA',active:true,default_invoice:true,default_proforma:true}],
- ops_legacy_daily_rows:[],ops_historical_income_periods:[],ops_gestor_source_rows:[],
+ ops_legacy_daily_rows:[],ops_historical_income_periods:[],ops_gestor_source_rows:[],ops_gestor_natural_rows:[],
 };
 
 function tableFrom(url){
@@ -64,7 +69,7 @@ function out(body,status=200,headers={}){return {status,contentType:'application
 
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
-const dialogs=[],pageErrors=[];let storageDownloads=0,storageUploads=0;
+const dialogs=[],pageErrors=[];let storageDownloads=0,storageUploads=0;const storageFiles=new Map();
 page.on('dialog',async d=>{dialogs.push(d.message());if(d.type()==='confirm')await d.accept();else await d.dismiss()});
 page.on('pageerror',e=>{pageErrors.push(e.stack||e.message);console.error('PAGEERROR',e.stack||e.message)});
 await page.addInitScript(({key,session})=>localStorage.setItem(key,JSON.stringify(session)),{key:`sb-${project}-auth-token`,session});
@@ -84,12 +89,40 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    return route.fulfill(out({ok:true}));
  }
  if(u.pathname.startsWith('/storage/v1/object/')){
-   if(method==='GET'){storageDownloads++;return route.fulfill({status:200,contentType:'application/pdf',body:Buffer.from('%PDF-1.4\nQA\n%%EOF')});}
-   if(['POST','PUT'].includes(method))storageUploads++;
+   const key=u.pathname.replace('/storage/v1/object/','');
+   if(method==='GET'){storageDownloads++;const body=storageFiles.get(key)||Buffer.from('%PDF-1.4\nQA\n%%EOF');return route.fulfill({status:200,contentType:'application/octet-stream',body});}
+   if(['POST','PUT'].includes(method)){storageUploads++;const pd=await req.postDataBuffer();storageFiles.set(key,pd||Buffer.from('QA'))}
+   if(method==='DELETE')storageFiles.delete(key);
    return route.fulfill(out({Key:u.pathname}));
  }
  if(u.pathname.startsWith('/rest/v1/rpc/')){
    const fn=u.pathname.split('/').pop();let body={};try{body=req.postDataJSON()}catch{}
+   if(fn==='ops_delete_expense_controlled'){
+     const id=body.p_expense_id,row=fixtures.ops_expenses.find(x=>x.id===id);if(!row)return route.fulfill(out({message:'not found'},404));
+     const docs=fixtures.ops_documents.filter(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===id),paths=docs.map(x=>x.storage_path);
+     fixtures.ops_expenses=fixtures.ops_expenses.filter(x=>x.id!==id);fixtures.ops_expense_lines=fixtures.ops_expense_lines.filter(x=>x.expense_id!==id);fixtures.ops_documents=fixtures.ops_documents.filter(x=>!docs.some(d=>d.id===x.id));
+     fixtures.ops_entity_revisions.push({id:Date.now(),created_at:new Date().toISOString(),user_email:email,entity_type:'expense',entity_id:id,action:'delete',reason:body.p_reason,before_data:row,after_data:{},metadata:{}});
+     return route.fulfill(out({expense_id:id,storage_paths:paths}));
+   }
+   if(fn==='ops_delete_document_controlled'){
+     const id=body.p_document_id,row=fixtures.ops_documents.find(x=>x.id===id);if(!row)return route.fulfill(out({message:'not found'},404));
+     fixtures.ops_documents=fixtures.ops_documents.filter(x=>x.id!==id);fixtures.ops_expenses.forEach(e=>{if(e.document_id===id)e.document_id=null});
+     fixtures.ops_entity_revisions.push({id:Date.now(),created_at:new Date().toISOString(),user_email:email,entity_type:'document',entity_id:id,action:'delete',reason:body.p_reason,before_data:row,after_data:{},metadata:{}});
+     return route.fulfill(out({id,storage_path:row.storage_path,original_name:row.original_name}));
+   }
+   if(fn==='ops_link_expense_document'){
+     const e=fixtures.ops_expenses.find(x=>x.id===body.p_expense_id);if(e)e.document_id=body.p_document_id;return route.fulfill(out(null));
+   }
+   if(fn==='ops_set_closing_status_controlled'){
+     const c=fixtures.ops_daily_closings.find(x=>x.id===body.p_closing_id);if(c)c.status=body.p_status;return route.fulfill(out(body.p_closing_id));
+   }
+   if(fn==='ops_delete_closing_controlled'){
+     const id=body.p_closing_id;fixtures.ops_daily_closings=fixtures.ops_daily_closings.filter(x=>x.id!==id);fixtures.ops_daily_closing_drawers=fixtures.ops_daily_closing_drawers.filter(x=>x.closing_id!==id);return route.fulfill(out(id));
+   }
+   if(fn==='ops_delete_supplier_controlled'){
+     const id=body.p_supplier_id;fixtures.ops_suppliers=fixtures.ops_suppliers.filter(x=>x.id!==id);fixtures.ops_expenses.forEach(e=>{if(e.supplier_id===id)e.supplier_id=null});return route.fulfill(out(id));
+   }
+   if(fn==='ops_restore_backup_data') return route.fulfill(out({ok:true,tables:Object.keys(body.p_tables||{}).length}));
    if(fn==='ops_storage_usage'){
      const documents_bytes=fixtures.ops_documents.reduce((a,x)=>a+Number(x.size_bytes||0),0);
      const assets_bytes=fixtures.ops_document_templates.reduce((a,x)=>a+Number(x.logo_size_bytes||0),0);
@@ -121,9 +154,11 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    if(fn==='ops_save_closing'){
      const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
      const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
-     const cash=closing+Number(p.cash_withdrawals||0)+Number(p.cash_expenses_declared||0)-opening;
+     const quick=(p.entry_mode||'quick')==='quick';
+     const cash=quick?Number(p.reported_total_sales||0)-Number(p.card_sales||0)-Number(p.bizum_sales||0)-Number(p.online_sales||0)-Number(p.other_income||0):closing+Number(p.cash_withdrawals||0)+Number(p.cash_expenses_declared||0)-opening;
+     const total=quick?Number(p.reported_total_sales||0):cash+Number(p.card_sales||0)+Number(p.bizum_sales||0)+Number(p.online_sales||0)+Number(p.other_income||0);
      let row=fixtures.ops_daily_closings.find(x=>x.id===id);
-     const data={id,store_id:p.store_id,business_date:p.business_date,opening_cash:opening,cash_sales:cash,card_sales:Number(p.card_sales||0),bizum_sales:Number(p.bizum_sales||0),online_sales:Number(p.online_sales||0),other_income:Number(p.other_income||0),cash_withdrawals:Number(p.cash_withdrawals||0),cash_expenses_declared:Number(p.cash_expenses_declared||0),expected_cash:closing,actual_cash:closing,difference:0,notes:p.notes||'',status:p.status||'cerrado',source:'manual',legacy_cash_method:false,include_in_income:true};
+     const data={id,store_id:p.store_id,business_date:p.business_date,opening_cash:opening,cash_sales:cash,card_sales:Number(p.card_sales||0),bizum_sales:Number(p.bizum_sales||0),online_sales:Number(p.online_sales||0),other_income:Number(p.other_income||0),cash_withdrawals:Number(p.cash_withdrawals||0),cash_expenses_declared:Number(p.cash_expenses_declared||0),expected_cash:closing,actual_cash:closing,difference:0,notes:p.notes||'',status:p.status||'cerrado',source:'manual',legacy_cash_method:false,include_in_income:true,reported_total_sales:total,entry_mode:p.entry_mode||'quick'};
      if(row)Object.assign(row,data);else fixtures.ops_daily_closings.push(data);
      fixtures.ops_daily_closing_drawers=fixtures.ops_daily_closing_drawers.filter(x=>x.closing_id!==id);
      fixtures.ops_daily_closing_drawers.push(...drawers.map(x=>({id:crypto.randomUUID(),closing_id:id,drawer_id:x.drawer_id,opening_cash:Number(x.opening_cash||0),closing_cash:Number(x.closing_cash||0),notes:x.notes||''})));
@@ -133,9 +168,10 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
      const p=body.p_expense||{},lines=body.p_lines||[];let id=p.id||crypto.randomUUID();
      let row=fixtures.ops_expenses.find(x=>x.id===id);
      let base=0,vat=0,re=0,wh=0;
-     const made=lines.map((l,i)=>{const b=Number(l.base_amount||0),vr=Number(l.vat_rate||0),rr=Number(l.re_rate||0),wr=Number(l.withholding_rate||0);base+=b;vat+=b*vr/100;re+=b*rr/100;wh+=b*wr/100;return{...l,id:crypto.randomUUID(),expense_id:id,sort_order:l.sort_order||((i+1)*10),vat_amount:b*vr/100,re_base:rr?b:0,re_amount:b*rr/100,withholding_base:wr?b:0,withholding_amount:b*wr/100,irpf_imputable:l.deductible_irpf===false||l.fixed_asset?0:b+b*vr/100+b*rr/100}});
+     const made=lines.map((l,i)=>{const b=Number(l.base_amount||0),vr=Number(l.vat_rate||0),rr=Number(l.re_rate||0),wr=Number(l.withholding_rate||0);base+=b;vat+=b*vr/100;re+=b*rr/100;wh+=b*wr/100;return{...l,id:crypto.randomUUID(),expense_id:id,sort_order:l.sort_order||((i+1)*10),vat_amount:b*vr/100,re_base:rr?b:0,re_amount:b*rr/100,withholding_base:wr?b:0,withholding_amount:b*wr/100,irpf_imputable:l.deductible_irpf===false||l.fixed_asset?0:(b+b*vr/100+b*rr/100)*Number(l.deductible_pct??100)/100}});
      const accounting=base+vat+re;
-     const data={id,store_id:p.store_id||null,expense_date:p.expense_date,supplier_name:p.supplier_name,supplier_tax_id:p.supplier_tax_id||'',invoice_number:p.invoice_number||'',description:p.description||'',payment_method:p.payment_method||'transferencia',paid_status:p.paid_status||'pagado',paid_date:p.paid_date||null,base_amount:base,vat_amount:vat,re_amount:re,withholding_amount:wh,gross_expense:accounting,accounting_amount:accounting,amount_paid:p.amount_paid??(accounting-wh),deductible_irpf:!p.management_only,deductible_pct:p.management_only?0:100,notes:p.notes||'',document_kind:p.document_kind||'factura',source:'manual',fiscal_reviewed:!!p.fiscal_reviewed,management_only:!!p.management_only,document_id:row?.document_id||null};
+     let supplier=fixtures.ops_suppliers.find(x=>(p.supplier_tax_id&&x.tax_id===p.supplier_tax_id)||(!p.supplier_tax_id&&x.name===p.supplier_name));if(!supplier){supplier={id:crypto.randomUUID(),name:p.supplier_name,tax_id:p.supplier_tax_id||'',active:true,default_payment_method:p.payment_method||'transferencia',default_document_kind:p.document_kind||'factura',default_vat_rate:21,default_re_rate:0,default_withholding_rate:0,default_deductible_irpf:true,default_deductible_pct:100};fixtures.ops_suppliers.push(supplier)}
+     const data={id,store_id:p.store_id||null,supplier_id:supplier.id,expense_date:p.expense_date,supplier_name:p.supplier_name,supplier_tax_id:p.supplier_tax_id||'',invoice_number:p.invoice_number||'',description:p.description||'',payment_method:p.payment_method||'transferencia',paid_status:p.paid_status||'pagado',paid_date:p.paid_date||null,base_amount:base,vat_amount:vat,re_amount:re,withholding_amount:wh,gross_expense:accounting,accounting_amount:accounting,amount_paid:p.amount_paid??(accounting-wh),deductible_irpf:!p.management_only,deductible_pct:p.management_only?0:100,notes:p.notes||'',document_kind:p.document_kind||'factura',source:'manual',fiscal_reviewed:!!p.fiscal_reviewed,management_only:!!p.management_only,document_id:row?.document_id||null};
      if(row)Object.assign(row,data);else fixtures.ops_expenses.push(data);
      fixtures.ops_expense_lines=fixtures.ops_expense_lines.filter(x=>x.expense_id!==id);fixtures.ops_expense_lines.push(...made);
      return route.fulfill(out(id));
