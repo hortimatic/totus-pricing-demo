@@ -4,22 +4,12 @@ const O=window.TotusGestion;
 if(!O) return;
 O.ext=O.ext||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.ext;
-const H=v=>esc(v);
-const N=v=>parseNum(v);
-const today=()=>new Date().toISOString().slice(0,10);
-const sum=(a,f=x=>x)=>a.reduce((s,x)=>s+(Number(f(x))||0),0);
-const inRange=(d,a,b)=>!!d&&d>=a&&d<=b;
-const storeName=id=>O.stores.find(x=>x.id===id)?.name||'General';
+const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll}=O.core;
+const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
 const qBounds=(y,q)=>{const sm=(q-1)*3+1,end=new Date(y,q*3,0);return{start:`${y}-${String(sm).padStart(2,'0')}-01`,end:`${y}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`}};
 const yearQEnd=(y,q)=>qBounds(y,q).end;
 const monthName=m=>['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'][m-1];
 const euro=v=>eur(Number(v)||0);
-function manager(){return ['admin','gerente'].includes(currentRole())}
-function admin(){return currentRole()==='admin'}
-function statusBadge(v){const good=['pagado','pagada','entregada_gestor','archivada','emitida','cerrado','revisada','aceptada','convertida'];const bad=['anulada','rechazada','fallido'];return `<span class="badge ${good.includes(v)?'ok':bad.includes(v)?'badb':'warnb'}">${H(String(v||'').replaceAll('_',' '))}</span>`}
-function dlBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-async function audit(area,action,entityId=null,detail={}){try{await sb.from('ops_audit_log').insert({user_id:authSession?.user?.id||null,user_email:authSession?.user?.email||'',area,action,entity_id:entityId,detail})}catch(e){console.warn('audit',e)}}
-async function all(table,order=null,asc=true){const out=[];let from=0;while(true){let r=sb.from(table).select('*');if(order)r=r.order(order,{ascending:asc});r=r.range(from,from+999);const {data,error}=await r;if(error)throw error;out.push(...(data||[]));if(!data||data.length<1000)break;from+=1000;}return out;}
 async function extLoad(force=false){
  if(E.loaded&&!force)return;
  const [customers,templates,legacy,hist,gestor,summary]=await Promise.all([
@@ -29,7 +19,6 @@ async function extLoad(force=false){
  E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;E.loaded=true;
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
 }
-window.opsExtLoad=extLoad;
 function docTpl(id,type='factura'){
  const inv=O.invoices.find(i=>i.id===id);if(inv?.design_snapshot&&Object.keys(inv.design_snapshot).length)return inv.design_snapshot;
  return E.templates.find(t=>t.id===(id||E.templateId))||E.templates.find(t=>type==='proforma'?t.default_proforma:t.default_invoice)||E.templates[0]||{};
@@ -119,7 +108,6 @@ function newDocDraft(type='factura'){
  return {id:null,mode,documentType,invoiceKind,origin:'totus',seriesId:ser?.id||'',storeId:sid,date:today(),dueDate:'',operationDate:'',externalNumber:'',customerId:'',customer:'',taxId:'',address:'',email:'',concept:'',payment:'transferencia',paidStatus:'pendiente',paidDate:'',includeIncome:false,notes:'',terms:tpl?.payment_terms_default||'',footer:tpl?.footer_text||'',poRef:'',templateId:tpl?.id||'',sourceFile:null};
 }
 window.opsInvoiceStatus=function(v){E.invoiceStatus=v;render()};
-window.opsPlannedSpend=function(v){O.plannedSpend=v;clearTimeout(window.__fisc);window.__fisc=setTimeout(render,150)};
 window.opsReportField=function(k,v){if(k==='from')O.reportFrom=v;else O.reportTo=v};
 window.opsInvoiceView=function(type='factura'){E.invoiceMode=type;O.invoiceDraft=null;render();};
 window.opsNewDocument=function(type='factura'){if(!manager())return alert('Facturación en modo consulta. Solo administración o gerencia puede crear documentos.');O.tab='facturas';E.invoiceMode=type;O.invoiceDraft=newDocDraft(type);O.invoiceDraftLines=[{description:'',qty:'1',unit:'',discount:'0',vat:'21'}];render();};
@@ -309,12 +297,17 @@ window.opsExtGestorPack=async function(){
  dlBlob(await z.generateAsync({type:'blob'}),`PAQUETE_GESTOR_${O.reportFrom}_${O.reportTo}.zip`);
 };
 function extReports(){return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Descargas</div><h3>Informes, Excel diario y gestoría</h3><div class="small">Orden cronológico y columnas alineadas con tus hojas y los informes de gestoría.</div></div></div><div class="ops-filters"><div><label>Desde</label><input type="date" value="${H(O.reportFrom)}" onchange="opsReportField('from',this.value)"></div><div><label>Hasta</label><input type="date" value="${H(O.reportTo)}" onchange="opsReportField('to',this.value)"></div></div><div class="ops-grid-3" style="margin-top:14px"><div class="ops-card"><h4>Gastos · formato gestoría</h4><p class="small">Orden, fecha, factura, identificación, concepto, IVA, RE, IRPF y retenciones.</p><button class="secondary" onclick="opsDownloadManagerExpenses()">Descargar XLSX</button></div><div class="ops-card"><h4>Ingresos · formato gestoría</h4><p class="small">Resumen mensual por Azuqueca/Hortimatic y Alcalá/NewOldSmok.</p><button class="secondary" onclick="opsDownloadManagerIncome()">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario Hortimatic</h4><p class="small">12 hojas: Día · Gastos · Precio · Tarjeta · Salida de caja.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='HORTIMATIC')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario NewOldSmok</h4><p class="small">Misma estructura que tu libro actual.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='NEWOLDSMOK')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Libro completo Totus</h4><p class="small">Resumen, cierres, gastos y facturación en un único Excel.</p><button class="secondary" onclick="opsManagementWorkbook()">Descargar XLSX</button></div><div class="ops-card"><h4>Informe fiscal</h4><p class="small">130, 111, 115, resultado y RETA orientativo.</p><button class="secondary" onclick="opsExtFiscalPdf()">Descargar PDF</button></div><div class="ops-card"><h4>Documentos</h4><p class="small">Archivos de la franja seleccionada ordenados por fecha.</p><button class="secondary" onclick="opsZipReportDocs()">Descargar ZIP</button></div><div class="ops-card"><h4>Paquete gestor</h4><p class="small">Gastos + ingresos + diarios + libro Totus + documentos.</p><button class="primary" onclick="opsExtGestorPack()">Preparar paquete</button></div></div></div>`}
-function replaceBody(base,body){const box=document.createElement('div');box.innerHTML=base;const wrap=box.querySelector('.ops-wrap');if(!wrap)return base;while(wrap.children.length>1)wrap.lastElementChild.remove();wrap.insertAdjacentHTML('beforeend',body);return box.innerHTML}
-const baseManagement=window.opsManagementHtml;
-window.opsManagementHtml=function(){const base=baseManagement();if(!E.loaded)return base;if(O.tab==='resumen')return replaceBody(base,extDashboard());if(O.tab==='facturas')return replaceBody(base,manager()?extInvoices():extInvoicesReadOnly());if(O.tab==='documentos')return replaceBody(base,extDocuments());if(O.tab==='fiscal')return replaceBody(base,extFiscalHtml());if(O.tab==='informes')return replaceBody(base,extReports());if(O.tab==='config')return replaceBody(base,(window.adminStripHtml?window.adminStripHtml('config'):'')+extConfig());return base};
-const priorRender=render;render=function(){if(state.page==='management'){document.querySelectorAll('.nav button').forEach(b=>{const active=b.dataset.opsTab===O.tab||(b.dataset.page==='admin'&&O.tab==='config');b.classList.toggle('active',active)});document.getElementById('savebar')?.classList.add('hidden');const search=document.querySelector('.search');if(search)search.classList.add('hidden');const m=document.getElementById('main');if(m)m.innerHTML=window.opsManagementHtml();return}priorRender()};
-const priorGo=window.goOps;window.goOps=async function(tab='resumen'){await priorGo(tab);try{await extLoad();render()}catch(e){console.error(e);alert('No se pudieron cargar los datos ampliados: '+e.message)}};
-const priorTab=window.opsTab;window.opsTab=function(tab){priorTab(tab);if(!E.loaded)extLoad().then(()=>render()).catch(console.error)};
+function bodyForTab(tab){
+ if(!E.loaded)return null;
+ if(tab==='resumen')return extDashboard();
+ if(tab==='facturas')return manager()?extInvoices():extInvoicesReadOnly();
+ if(tab==='documentos')return extDocuments();
+ if(tab==='fiscal')return extFiscalHtml();
+ if(tab==='informes')return extReports();
+ if(tab==='config')return (window.adminStripHtml?window.adminStripHtml('config'):'')+extConfig();
+ return null;
+}
+window.TotusGestionExt={load:extLoad,body:bodyForTab};
 // Expose selected helpers for automated tests without changing production behaviour.
 window.__TotusOpsTest={extIncome,extExpense,extFiscal,managerExpenseRows,managerIncomeRows,dailyWorkbook,makePdf,lineCalc,draftTotals};
 })();
