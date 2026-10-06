@@ -236,7 +236,10 @@ assert(fixtures.ops_sales_invoice_lines.some(x=>x.invoice_id===savedProforma.id)
 assert(Math.abs(Number(savedProforma.total_amount)-217.8)<0.01,'Total persistido de proforma incorrecto');
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 const row=page.locator('tr').filter({hasText:'Cliente QA'}).first();
+const issuedPdfDownload=page.waitForEvent('download');
 await row.getByRole('button',{name:'Emitir',exact:true}).click();
+const issuedPdf=await issuedPdfDownload;
+assert((await issuedPdf.suggestedFilename()).endsWith('.pdf'),'La emisión no generó su PDF');
 await page.waitForTimeout(250);
 assert(savedProforma.status==='emitida','La proforma no se emitió');
 assert(savedProforma.display_number,'La proforma emitida no recibió numeración');
