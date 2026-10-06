@@ -786,4 +786,48 @@ alter function public.ops_register_external_document(uuid,integer) security invo
 alter function public.ops_convert_proforma(uuid,uuid) security invoker;
 alter function public.ops_issue_invoice(uuid) security invoker;
 
+
+-- Storage: documentos de negocio y recursos de marca.
+drop policy if exists "totus_business_documents_read" on storage.objects;
+create policy "totus_business_documents_read"
+on storage.objects for select to authenticated
+using (bucket_id='business-documents' and private.is_team_member());
+
+drop policy if exists "totus_business_documents_insert" on storage.objects;
+create policy "totus_business_documents_insert"
+on storage.objects for insert to authenticated
+with check (bucket_id='business-documents' and private.is_team_member());
+
+drop policy if exists "totus_business_documents_update" on storage.objects;
+create policy "totus_business_documents_update"
+on storage.objects for update to authenticated
+using (bucket_id='business-documents' and private.is_team_member())
+with check (bucket_id='business-documents' and private.is_team_member());
+
+drop policy if exists "totus_business_documents_delete" on storage.objects;
+create policy "totus_business_documents_delete"
+on storage.objects for delete to authenticated
+using (bucket_id='business-documents' and private.is_manager());
+
+drop policy if exists "totus_business_assets_read" on storage.objects;
+create policy "totus_business_assets_read"
+on storage.objects for select to authenticated
+using (bucket_id='business-assets' and private.is_team_member());
+
+drop policy if exists "totus_business_assets_insert" on storage.objects;
+create policy "totus_business_assets_insert"
+on storage.objects for insert to authenticated
+with check (bucket_id='business-assets' and private.is_manager());
+
+drop policy if exists "totus_business_assets_update" on storage.objects;
+create policy "totus_business_assets_update"
+on storage.objects for update to authenticated
+using (bucket_id='business-assets' and private.is_manager())
+with check (bucket_id='business-assets' and private.is_manager());
+
+drop policy if exists "totus_business_assets_delete" on storage.objects;
+create policy "totus_business_assets_delete"
+on storage.objects for delete to authenticated
+using (bucket_id='business-assets' and private.is_manager());
+
 commit;
