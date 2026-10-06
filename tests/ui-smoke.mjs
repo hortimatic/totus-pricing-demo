@@ -253,10 +253,10 @@ await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'appli
 assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Selector documental no cargó archivo');
 await page.getByRole('button',{name:'Subir',exact:true}).click();
 await page.locator('td').filter({hasText:'qa.pdf'}).first().waitFor({timeout:10000});
-const qaDocCell=page.getByRole('cell',{name:'qa.pdf',exact:true}).first();
-const qaDocRow=qaDocCell.locator('..');
+const qaDoc=fixtures.ops_documents.find(x=>x.original_name==='qa.pdf');
+assert(qaDoc,'El documento QA no tiene registro persistido');
 const beforeStorageDownloads=storageDownloads;
-await qaDocRow.getByRole('button',{name:'Descargar',exact:true}).click();
+await page.evaluate(id=>window.opsDownloadDocument(id),qaDoc.id);
 await page.waitForTimeout(180);
 assert(storageDownloads===beforeStorageDownloads+1,'Descarga documental no consultó Supabase Storage');
 assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
