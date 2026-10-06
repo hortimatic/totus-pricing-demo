@@ -50,7 +50,7 @@ function out(body,status=200,headers={}){return {status,contentType:'application
 
 const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
-const dialogs=[],pageErrors=[];let storageDownloads=0;
+const dialogs=[],pageErrors=[];let storageDownloads=0,storageUploads=0;
 page.on('dialog',async d=>{dialogs.push(d.message());if(d.type()==='confirm')await d.accept();else await d.dismiss()});
 page.on('pageerror',e=>{pageErrors.push(e.stack||e.message);console.error('PAGEERROR',e.stack||e.message)});
 await page.addInitScript(({key,session})=>localStorage.setItem(key,JSON.stringify(session)),{key:`sb-${project}-auth-token`,session});
@@ -71,10 +71,16 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
  }
  if(u.pathname.startsWith('/storage/v1/object/')){
    if(method==='GET'){storageDownloads++;return route.fulfill({status:200,contentType:'application/pdf',body:Buffer.from('%PDF-1.4\nQA\n%%EOF')});}
+   if(['POST','PUT'].includes(method))storageUploads++;
    return route.fulfill(out({Key:u.pathname}));
  }
  if(u.pathname.startsWith('/rest/v1/rpc/')){
    const fn=u.pathname.split('/').pop();let body={};try{body=req.postDataJSON()}catch{}
+   if(fn==='ops_storage_usage'){
+     const documents_bytes=fixtures.ops_documents.reduce((a,x)=>a+Number(x.size_bytes||0),0);
+     const assets_bytes=fixtures.ops_document_templates.reduce((a,x)=>a+Number(x.logo_size_bytes||0),0);
+     return route.fulfill(out({documents_count:fixtures.ops_documents.length,documents_bytes,assets_count:fixtures.ops_document_templates.filter(x=>Number(x.logo_size_bytes||0)>0).length,assets_bytes,total_bytes:documents_bytes+assets_bytes}));
+   }
    if(fn==='ops_save_closing'){
      const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
      const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
@@ -216,6 +222,17 @@ await page.getByRole('button',{name:'Rectificativas',exact:true}).click();
 await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
 await page.getByRole('button',{name:'Proformas',exact:true}).click();
 await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
+const designDetails=page.getByText('Personalizar plantilla y logo',{exact:true});
+await designDetails.waitFor();
+await designDetails.click();
+await page.locator('#ops_tpl_logo').setInputFiles({name:'logo-facturacion-qa.png',mimeType:'image/png',buffer:Buffer.from('PNG-QA-INVOICE')});
+const storageBeforeLogo=storageUploads;
+await page.getByRole('button',{name:'Subir / cambiar logo',exact:true}).click();
+await page.waitForTimeout(200);
+assert(storageUploads===storageBeforeLogo+1,'La subida de logo desde Facturación no llegó a Storage');
+assert(fixtures.ops_document_templates[0].logo_name==='logo-facturacion-qa.png','El logo no quedó asociado a la plantilla');
+assert(fixtures.ops_document_templates[0].logo_path,'La plantilla no guardó ruta de logo');
+await page.getByRole('heading',{name:'Proforma',exact:true}).waitFor();
 await field('Cliente / razón social').fill('Cliente QA');
 await field('Descripción').fill('Servicio QA');
 await field('Cant.').fill('2');
@@ -299,9 +316,16 @@ await field('Color de texto').waitFor();
 await field('Posición logo').waitFor();
 await field('Título factura').waitFor();
 await field('Título proforma').waitFor();
-await page.locator('#ops_tpl_logo').setInputFiles({name:'logo-qa.png',mimeType:'image/png',buffer:Buffer.from('PNG-QA')});
-await page.getByRole('button',{name:'Subir logo',exact:true}).click();
-await page.waitForTimeout(150);
+await field('Título factura').fill('FACTURA QA PERSONALIZADA');
+await page.getByRole('button',{name:'Guardar plantilla',exact:true}).click();
+await page.waitForTimeout(180);
+assert(fixtures.ops_document_templates[0].invoice_title==='FACTURA QA PERSONALIZADA','Guardar plantilla no persistió el título');
+const templatesBeforeDuplicate=fixtures.ops_document_templates.length;
+await page.getByRole('button',{name:'Duplicar plantilla',exact:true}).click();
+await page.waitForTimeout(180);
+assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Duplicar plantilla no creó una copia');
+const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
+assert(!duplicatedTemplate.logo_path&&Number(duplicatedTemplate.logo_size_bytes||0)===0,'La plantilla duplicada heredó indebidamente el archivo de logo');
 
 // Encargado: facturación debe quedar estrictamente en modo consulta.
 fixtures.team_members[0].role='encargado';
