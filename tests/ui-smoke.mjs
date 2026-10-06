@@ -253,8 +253,9 @@ await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'appli
 assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Selector documental no cargó archivo');
 await page.getByRole('button',{name:'Subir',exact:true}).click();
 await page.locator('td').filter({hasText:'qa.pdf'}).first().waitFor({timeout:10000});
+const qaDocRow=page.locator('tr').filter({hasText:'qa.pdf'}).first();
 dl=page.waitForEvent('download');
-await page.getByRole('button',{name:'Descargar',exact:true}).first().click();
+await qaDocRow.getByRole('button',{name:'Descargar',exact:true}).click();
 assert((await (await dl).suggestedFilename())==='qa.pdf','Descarga documental no devolvió el archivo esperado');
 assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
 
@@ -266,7 +267,21 @@ await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 
-// Informes: XLSX, PDF and ZIP generators.
+// Informes: estructura gestoría + XLSX, PDF and ZIP generators.
+const reportQa=await page.evaluate(()=>{
+  const g=window.__TotusOpsTest.managerExpenseRows('2026-01-01','2026-12-31');
+  const s=window.__TotusOpsTest.managerExpenseSummaryRows('2026-01-01','2026-12-31');
+  const i=window.__TotusOpsTest.managerIncomeRows('2026-01-01','2026-12-31');
+  return {g,s,i};
+});
+assert(reportQa.g[0].join('|')==='Orden|Fecha|Nºfra.rec.|Nºfra.proveedor|Rt|Identificación|Concepto|Base IVA|%|Cuota IVA|Base R. Equiv.|% R.Eq.|Cuota R.Equiv.|Imputable a IRPF|Base retención|% ret.|Cuota retenida','Cabecera de gastos no coincide con gestoría');
+assert(reportQa.g.some(r=>String(r[6]).includes('IVA SOPORTADO(RECARGO - REAGYP)')),'Falta fila separada de IVA/RE en gastos');
+assert(reportQa.g.at(-1)[6]==='TOTAL ACUMULADO','Falta total acumulado en gastos');
+assert(reportQa.s[0][0]==='Descripción'&&reportQa.s[0][5]==='Imputable IRPF','Desglose de conceptos incorrecto');
+assert(reportQa.i[0][0]==='Orden'&&reportQa.i[0][2]==='Nº factura'&&reportQa.i[0][4]==='Identificación del Cliente','Cabecera de ingresos no coincide con gestoría');
+assert(reportQa.i.at(-1)[5]==='TOTAL ACUMULADO','Falta total acumulado en ingresos');
+assert(reportQa.i.slice(1,-1).every(r=>/^\d{2}\/\d{2}\/\d{4}$/.test(String(r[1]))),'Fechas de ingresos no están en DD/MM/AAAA');
+
 await page.getByRole('button',{name:'Informes',exact:true}).click();await heading('Informes');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar XLSX'}).first().click();assert((await (await dl).suggestedFilename()).endsWith('.xlsx'),'Informe XLSX no generado');
 dl=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();assert((await (await dl).suggestedFilename()).endsWith('.pdf'),'Informe fiscal PDF no generado');
