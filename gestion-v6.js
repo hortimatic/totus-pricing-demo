@@ -19,6 +19,9 @@ function h(v){ return esc(v); }
 function isoToday(){ return new Date().toISOString().slice(0,10); }
 function dmy(v){ if(!v)return '—'; const [y,m,d]=String(v).slice(0,10).split('-'); return d+'/'+m+'/'+y; }
 function qtrFromDate(v){ const m=+(String(v).slice(5,7)||1); return Math.floor((m-1)/3)+1; }
+function safeSegment(v){
+ return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,120);
+}
 function periodBounds(year,quarter,accumulated=false){
   const start=accumulated?`${year}-01-01`:`${year}-${String((quarter-1)*3+1).padStart(2,'0')}-01`;
   const endMonth=quarter*3;
@@ -354,8 +357,8 @@ async function uploadDoc(file,meta,linkedType='',linkedId=null){
  const dup=O.documents.find(d=>d.sha256&&d.sha256===sha);
  if(dup&&!confirm('Este archivo ya existe como "'+dup.original_name+'". ¿Quieres guardar otra copia vinculada a este registro?'))return null;
  const dt=meta.document_date||isoToday(),year=dt.slice(0,4),month=dt.slice(5,7),q='T'+qtrFromDate(dt),sc=meta.store_id?(O.stores.find(s=>s.id===meta.store_id)?.code||'TIENDA'):'GENERAL';
- const kind=b64Safe(meta.doc_type||'otro')||'otro',party=b64Safe(meta.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
- const path=[year,q,month,sc,kind,party,crypto.randomUUID()+'_'+b64Safe(file.name)].join('/');
+ const kind=safeSegment(meta.doc_type||'otro')||'otro',party=safeSegment(meta.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
+ const path=[year,q,month,sc,kind,party,crypto.randomUUID()+'_'+safeSegment(file.name)].join('/');
  const {error:upErr}=await sb.storage.from('business-documents').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});if(upErr)throw upErr;
  const row={store_id:meta.store_id||null,doc_type:meta.doc_type||'factura_recibida',document_date:dt,supplier_or_customer:meta.supplier_or_customer||'',tax_id:meta.tax_id||'',invoice_number:meta.invoice_number||'',category_code:meta.category_code||'',status:meta.status||'pendiente',storage_path:path,original_name:file.name,mime_type:file.type||'application/octet-stream',size_bytes:file.size,sha256:sha,linked_entity_type:linkedType,linked_entity_id:linkedId,notes:meta.notes||'',uploaded_by:authSession.user.id};
  const {data,error}=await sb.from('ops_documents').insert(row).select('id').single();if(error){await sb.storage.from('business-documents').remove([path]);throw error}
@@ -430,8 +433,8 @@ function docArchiveFolder(d,root='04_DOCUMENTOS'){
  const dt=d.document_date||'sin_fecha',year=dt.slice(0,4)||'SIN_ANO',month=dt.slice(5,7)||'SIN_MES';
  const q=dt&&dt.length>=7?'T'+qtrFromDate(dt):'SIN_TRIMESTRE';
  const store=d.store_id?(O.stores.find(s=>s.id===d.store_id)?.code||'TIENDA'):'GENERAL';
- const type=b64Safe(d.doc_type||'otro')||'otro';
- const party=b64Safe(d.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
+ const type=safeSegment(d.doc_type||'otro')||'otro';
+ const party=safeSegment(d.supplier_or_customer||'SIN_PROVEEDOR')||'SIN_PROVEEDOR';
  return [root,year,q,month,store,type,party].join('/');
 }
 async function zipDocs(docs,zip,root='04_DOCUMENTOS'){
@@ -439,8 +442,8 @@ async function zipDocs(docs,zip,root='04_DOCUMENTOS'){
  const sorted=[...docs].sort((a,b)=>String(a.document_date||'').localeCompare(String(b.document_date||''))||String(a.supplier_or_customer||'').localeCompare(String(b.supplier_or_customer||'')));
  for(const d of sorted){
   const {data,error}=await sb.storage.from('business-documents').download(d.storage_path);if(error)continue;
-  const inv=b64Safe(d.invoice_number||'SIN_NUMERO')||'SIN_NUMERO';
-  const original=b64Safe(d.original_name||'documento')||'documento';
+  const inv=safeSegment(d.invoice_number||'SIN_NUMERO')||'SIN_NUMERO';
+  const original=safeSegment(d.original_name||'documento')||'documento';
   const name=`${d.document_date||'sin_fecha'}_${inv}_${original}`;
   zip.file(docArchiveFolder(d,root)+'/'+name,data);done++;
  }
