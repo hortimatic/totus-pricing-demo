@@ -164,3 +164,20 @@
 .config-savebar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:1px solid rgba(53,211,197,.28);border-radius:14px;background:rgba(53,211,197,.045);position:sticky;bottom:12px;z-index:8;backdrop-filter:blur(14px)}
 .ops-link-btn{border:0;background:transparent;color:var(--cyan);padding:0;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 @media(max-width:760px){.config-toolbar,.config-savebar{position:static;align-items:stretch;flex-direction:column}.config-toolbar .ops-actions,.config-savebar button{width:100%}.config-toolbar .ops-actions button{flex:1}.config-nav{overflow:auto;flex-wrap:nowrap}.config-nav button{white-space:nowrap}}
+
+/* Estudio de plantillas de facturación */
+.template-studio{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,.7fr);gap:14px;margin-top:14px;align-items:start}
+.template-editor{display:flex;flex-direction:column;gap:14px}
+.template-group{border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.018)}
+.template-group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.template-group-head h4{margin:2px 0 0}
+.template-live-panel{position:sticky;top:150px;border:1px solid var(--line);border-radius:14px;background:rgba(5,18,27,.78);padding:14px}
+.template-live-panel h4{margin:2px 0 10px}
+.mini-doc-style{min-height:100%;color:var(--tpl-text)}
+.mini-doc-style.brand .mini-head{background:var(--tpl-primary);color:#fff;border-radius:4px;padding:8px;border-bottom:0!important}
+.mini-doc-style.compact .mini-client{margin-top:8px;padding:6px}
+.mini-doc-style.compact .mini-line{margin-top:8px}
+.mini-header-copy,.mini-footer-copy{font-size:6px;line-height:1.35;margin-top:7px;color:#64748b}
+.mini-footer-copy{margin-top:16px;padding-top:6px;border-top:1px solid #e5e7eb}
+.mini-logo.empty{opacity:.45;border-style:dotted}
+@media(max-width:1050px){.template-studio{grid-template-columns:1fr}.template-live-panel{position:static}.template-live-panel .invoice-mini-preview{max-width:360px;margin-left:auto;margin-right:auto}}
