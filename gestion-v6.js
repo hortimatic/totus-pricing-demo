@@ -92,7 +92,7 @@ function closeOpsModal(){
 function openOpsModal(title,html,{wide=false}={}){
  closeOpsModal();
  const wrap=document.createElement('div');wrap.className='ops-modal-backdrop';
- wrap.innerHTML=`<section class="ops-modal ${wide?'wide':''}" role="dialog" aria-modal="true" aria-labelledby="ops_modal_title"><div class="ops-modal-head"><div><div class="eyebrow">Ayuda / vista</div><h3 id="ops_modal_title">${h(title)}</h3></div><button type="button" class="ops-modal-close" aria-label="Cerrar">×</button></div><div class="ops-modal-body">${html}</div></section>`;
+ wrap.innerHTML=`<section class="ops-modal ${wide?'wide':''}" role="dialog" aria-modal="true" aria-labelledby="ops_modal_title"><div class="ops-modal-head"><div><div class="eyebrow">Ayuda / vista</div><h3 id="ops_modal_title">${h(title)}</h3></div><button type="button" class="ops-modal-close" aria-label="Cerrar ventana">×</button></div><div class="ops-modal-body">${html}</div></section>`;
  wrap.querySelector('.ops-modal-close').onclick=closeOpsModal;
  wrap.addEventListener('click',e=>{if(e.target===wrap)closeOpsModal()});
  document.body.appendChild(wrap);__opsModal=wrap;return wrap;
