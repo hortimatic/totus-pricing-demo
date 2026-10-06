@@ -303,6 +303,65 @@ await page.waitForTimeout(250);
 assert(savedProforma.status==='emitida','La proforma no se emitió');
 assert(savedProforma.display_number,'La proforma emitida no recibió numeración');
 
+// Proforma: aceptar y convertir a factura borrador.
+let proRow=page.locator('tr').filter({hasText:'Cliente QA'}).first();
+await proRow.getByRole('button',{name:'Aceptar',exact:true}).click();
+await page.waitForTimeout(160);
+assert(savedProforma.status==='aceptada','Aceptar proforma no actualizó el estado');
+proRow=page.locator('tr').filter({hasText:'Cliente QA'}).first();
+await proRow.getByRole('button',{name:'Convertir a factura',exact:true}).click();
+await page.waitForTimeout(200);
+assert(savedProforma.status==='convertida'&&savedProforma.converted_invoice_id,'La proforma no quedó convertida');
+assert(fixtures.ops_sales_invoices.some(x=>x.id===savedProforma.converted_invoice_id&&x.document_type==='factura'&&x.status==='borrador'),'La conversión no creó factura borrador');
+
+// Factura normal: guardar, emitir, cobrar y crear rectificativa.
+await page.getByRole('button',{name:'Facturas',exact:true}).click();
+await page.getByRole('heading',{name:'Factura',exact:true}).waitFor();
+await field('Cliente / razón social').fill('Cliente Factura QA');
+await field('Descripción').fill('Venta QA');
+await field('Cant.').fill('1');
+await field('Precio base').fill('50');
+await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
+await page.waitForTimeout(180);
+const normalInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Factura QA'&&x.document_type==='factura'&&x.invoice_kind==='invoice');
+assert(normalInvoice&&normalInvoice.status==='borrador','Factura normal no guardada como borrador');
+let invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
+let invoicePdfDl=page.waitForEvent('download');
+await invoiceRow.getByRole('button',{name:'Emitir',exact:true}).click();
+assert((await(await invoicePdfDl).suggestedFilename()).endsWith('.pdf'),'Emisión de factura no generó PDF');
+await page.waitForTimeout(220);
+assert(normalInvoice.status==='emitida'&&normalInvoice.display_number,'Factura normal no emitida/numerada');
+invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
+await invoiceRow.getByRole('button',{name:'Marcar cobrada',exact:true}).click();
+await page.waitForTimeout(160);
+assert(normalInvoice.paid_status==='pagada','Marcar cobrada no persistió');
+invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
+await invoiceRow.getByRole('button',{name:'Rectificar',exact:true}).click();
+await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
+assert(Number(await field('Precio base').inputValue())<0,'La rectificativa no propone importe negativo');
+await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
+await page.waitForTimeout(180);
+const rectInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Factura QA'&&x.invoice_kind==='rectifying');
+assert(rectInvoice&&rectInvoice.series_id===ids.seriesHR,'Rectificativa no usa su serie independiente');
+
+// Factura externa: documento original + numeración externa + registro emitido.
+await page.getByRole('button',{name:'Facturas',exact:true}).click();
+await field('Origen').selectOption('externa');
+await page.waitForTimeout(80);
+await field('Nº usado fuera').fill('77');
+await field('Cliente / razón social').fill('Cliente Externo QA');
+await field('Descripción').fill('Venta externa QA');
+await field('Precio base').fill('80');
+await page.locator('#ops_external_doc_file').setInputFiles({name:'factura-externa-qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nEXTERNA QA\n%%EOF')});
+const beforeExternalUpload=storageUploads;
+await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
+await page.waitForTimeout(250);
+const externalInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Externo QA');
+assert(externalInvoice&&externalInvoice.status==='emitida','Factura externa no quedó emitida');
+assert(externalInvoice.number===77,'Factura externa no conservó su número');
+assert(storageUploads===beforeExternalUpload+1,'PDF externo no llegó a Storage');
+assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='sales_invoice_source'&&x.linked_entity_id===externalInvoice.id),'PDF externo no quedó archivado');
+
 
 // Documentos: UI completo subir -> recargar -> descargar.
 await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
