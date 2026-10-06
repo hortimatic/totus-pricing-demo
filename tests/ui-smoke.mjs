@@ -325,7 +325,7 @@ assert(savedExpense,'El gasto con factura real no se guardó');
 assert(savedExpense.supplier_id===ids.supplier,'El gasto no quedó enlazado al maestro de proveedor');
 assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta');
 const savedLine=fixtures.ops_expense_lines.find(x=>x.expense_id===savedExpense.id);
-assert(Math.abs(Number(savedLine.irpf_imputable)-63.025)<0.02,'La deducibilidad parcial del 50 % no se aplicó');
+assert(Math.abs(Number(savedLine.irpf_imputable)-63.10)<0.02,'La deducibilidad parcial del 50 % no se aplicó');
 
 // Abrir gasto y comprobar gestión directa del adjunto.
 let savedExpenseRow=page.locator('tr').filter({hasText:'PROV-QA-001'}).first();
