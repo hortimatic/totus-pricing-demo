@@ -15,7 +15,7 @@ async function featureLoad(force=false){
  if(E.loaded&&!force)return;
  const [customers,templates,legacy,hist,gestor,summary,storage]=await Promise.all([
    all('ops_customers','name',true),all('ops_document_templates','name',true),all('ops_legacy_daily_rows','row_date',true),
-   all('ops_historical_income_periods','period_start',true),all('ops_gestor_source_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),
+   all('ops_historical_income_periods','period_start',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),
    sb.rpc('ops_storage_usage').then(r=>r.error?null:r.data).catch(()=>null)
  ]);
  E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;
@@ -24,7 +24,7 @@ async function featureLoad(force=false){
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
 }
 function historicalIncome(from,to,store='all'){
- return sum(E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to&&(store==='all'||x.store_id===store)),x=>N(x.total_income));
+ return sum(E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to&&(store==='all'||x.store_id===store)),x=>N(x.official_total_income??x.total_income));
 }
 function coveredByHistoricalIncome(closing){
  return E.historicalIncome.some(h=>h.store_id===closing.store_id&&closing.business_date>=h.period_start&&closing.business_date<=h.period_end);
@@ -40,9 +40,7 @@ function incomeAdjust(from,to,store='all'){
 }
 function incomeTotal(from,to,store='all'){return historicalIncome(from,to,store)+dailyIncome(from,to,store)+invoicedExtra(from,to,store)+incomeAdjust(from,to,store)}
 function exactGestorExpense(from,to){
- let total=0;
- E.gestorSummary.filter(x=>x.fiscal_year===2026).forEach(x=>{const b=qBounds(2026,x.quarter);if(b.start>=from&&b.end<=to)total+=N(x.imputable_irpf)});
- return total;
+ return sum(E.gestorRows.filter(x=>x.fiscal_year===2026&&inRange(x.expense_date,from,to)),x=>N(x.imputable_irpf));
 }
 function currentExpense(from,to,store='all'){
  const lineMap=new Map();O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
@@ -52,6 +50,7 @@ function currentExpense(from,to,store='all'){
      if(store==='all')return;
      if(e.source!=='importacion_gestor')return;
    }
+   if(e.source==='importacion_excel'&&!e.fiscal_reviewed)return;
    const ls=lineMap.get(e.id)||[];
    if(ls.length)t+=sum(ls,l=>l.deductible_irpf===false||l.fixed_asset?0:N(l.irpf_imputable));
    else if(e.deductible_irpf!==false)t+=N(e.accounting_amount||e.gross_expense);
@@ -81,9 +80,9 @@ function retainedModel(model,from,to){
  const paid=sum(O.taxPayments.filter(t=>t.fiscal_year===y&&t.tax_type===model&&t.status==='pagado'&&t.quarter&&qBounds(y,N(t.quarter)).start>=from&&qBounds(y,N(t.quarter)).end<=to),t=>N(t.amount));
  if(paid)return paid;
  if(y===2026){
-   const qs=E.gestorSummary.filter(x=>x.fiscal_year===2026&&qBounds(2026,x.quarter).start>=from&&qBounds(2026,x.quarter).end<=to);
-   if(model==='115')return sum(qs.filter(x=>x.concept_code==='621'),x=>N(x.withholding_amount));
-   if(model==='111')return Math.max(0,sum(qs,x=>N(x.withholding_amount))-sum(qs.filter(x=>x.concept_code==='621'),x=>N(x.withholding_amount)));
+   const rows=E.gestorRows.filter(x=>x.fiscal_year===2026&&inRange(x.expense_date,from,to));
+   if(model==='115')return sum(rows.filter(x=>x.concept_code==='621'),x=>N(x.withholding_amount));
+   if(model==='111')return Math.max(0,sum(rows,x=>N(x.withholding_amount))-sum(rows.filter(x=>x.concept_code==='621'),x=>N(x.withholding_amount)));
  }
  const ids=new Set(O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,from,to)).map(e=>e.id));
  return sum(O.expenseLines.filter(l=>ids.has(l.expense_id)&&l.withholding_model===model),l=>N(l.withholding_amount));
@@ -94,10 +93,14 @@ function fiscalProjection(y=O.year,q=O.quarter,planned=0){
 function retaProjection(){
  const cutoff=(O.year===new Date().getFullYear())?today():`${O.year}-12-31`,from=`${O.year}-01-01`;const net=Math.max(0,incomeTotal(from,cutoff)-deductibleExpenseTotal(from,cutoff,'all'));const days=Math.max(1,Math.round((new Date(cutoff)-new Date(from))/86400000)+1),annual=net/(days/365),monthly=annual/12*(1-N(O.settings?.reta_generic_deduction_pct||7)/100);const b=O.retaBrackets.find(x=>(x.min_net_monthly==null||monthly>N(x.min_net_monthly)||(x.min_inclusive&&monthly===N(x.min_net_monthly)))&&(x.max_net_monthly==null||monthly<N(x.max_net_monthly)||(x.max_inclusive&&monthly===N(x.max_net_monthly))));const rate=N(O.settings?.reta_total_rate||31.5)/100;return{monthly,annual,bracket:b,minQuota:b?N(b.min_base)*rate:0,maxQuota:b?N(b.max_base)*rate:0};
 }
-function importedStatusHtml(){return `<div class="ops-note"><b>Histórico 2026 incorporado</b> · ${E.legacyRows.length} filas de tus Excel diarios · ${E.gestorRows.length} líneas de gestoría · ${E.historicalIncome.length} periodos de ingresos · ${O.expenses.filter(x=>x.source==='importacion_excel').length} gastos Jul–Oct.</div>`}
+function importedStatusHtml(){
+ const confirmed=E.historicalIncome.filter(x=>x.verified_by_gestor).length,provisional=E.historicalIncome.filter(x=>!x.verified_by_gestor).length;
+ const pendingExpenses=O.expenses.filter(x=>x.source==='importacion_excel'&&!x.fiscal_reviewed&&!x.management_only).length;
+ return `<div class="ops-note"><b>Estado de fuentes 2026</b> · Ingresos: <span class="badge ok">${confirmed} periodos confirmados</span> <span class="badge warnb">${provisional} provisionales</span> · Gastos Excel pendientes de revisión fiscal: <b>${pendingExpenses}</b>. Los provisionales afectan al control real, no a la deducción fiscal.</div>`;
+}
 function dashboardHtml(){
  const b=qBounds(O.year,O.quarter),inc=incomeTotal(b.start,b.end,O.storeId),fiscalExp=deductibleExpenseTotal(b.start,b.end,O.storeId),internal=internalExpense(b.start,b.end,O.storeId),realExp=realExpense(b.start,b.end,O.storeId),f=fiscalProjection(),r=retaProjection();const assets=N(E.storageUsage?.assets_bytes);const used=N(E.storageUsage?.total_bytes),limit=N(O.settings?.storage_limit_bytes||1073741824),pct=limit?used/limit*100:0;
- return `${importedStatusHtml()}<div class="ops-kpis" style="margin-top:14px"><div class="ops-kpi"><small>Ingresos T${O.quarter}</small><strong>${euro(inc)}</strong><div class="sub">${O.storeId==='all'?'Ambos establecimientos':H(storeName(O.storeId))}</div></div><div class="ops-kpi"><small>Gastos reales T${O.quarter}</small><strong>${euro(realExp)}</strong><div class="sub">Incluye ${euro(internal)} de control interno</div></div><div class="ops-kpi ${inc-realExp>=0?'good':'bad'}"><small>Resultado real T${O.quarter}</small><strong>${euro(inc-realExp)}</strong><div class="sub">Ingresos menos todos los gastos registrados</div></div><div class="ops-kpi"><small>Gastos fiscales T${O.quarter}</small><strong>${euro(fiscalExp)}</strong><div class="sub">Base usada en fiscalidad</div></div><div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div><div class="ops-kpi"><small>RETA orientativo</small><strong>${r.bracket?euro(r.minQuota)+'–'+euro(r.maxQuota):'—'}</strong><div class="sub">Rend. mensual ${euro(r.monthly)}</div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trimestre</div><h3>Contador fiscal</h3></div><button class="ghost" onclick="opsTab('fiscal')">Abrir fiscalidad</button></div><div class="ops-metric-line"><span>Ingresos acumulados</span><b>${euro(f.income)}</b></div><div class="ops-metric-line"><span>Gastos deducibles + 5 %</span><b>${euro(f.raw+f.diff)}</b></div><div class="ops-metric-line"><span>130 pendiente estimado</span><b>${euro(f.payable)}</b></div><div class="ops-metric-line"><span>Reserva total</span><b>${euro(f.reserve)}</b></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Servidor</div><h3>Archivo documental</h3></div><button class="ghost" onclick="opsTab('documentos')">Abrir</button></div><div class="ops-space-head"><b>${Math.round(used/1048576)} MB usados</b><span class="small">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="ops-metric-line"><span>Documentos</span><b>${N(E.storageUsage?.documents_count)} · ${(N(E.storageUsage?.documents_bytes)/1048576).toFixed(1).replace('.',',')} MB</b></div><div class="ops-metric-line"><span>Plantillas de factura</span><b>${E.templates.length}</b></div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trabajo diario</div><h3>Accesos rápidos</h3></div></div><div class="ops-actions"><button class="primary" onclick="opsTab('cajas')">Cerrar caja</button><button class="secondary" onclick="opsTab('gastos')">Registrar gasto</button>${manager()?`<button class="secondary" onclick="opsNewDocument('factura')">Nueva factura</button><button class="secondary" onclick="opsNewDocument('proforma')">Nueva proforma</button>`:''}<button class="secondary" onclick="opsTab('documentos')">Subir documento</button></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">2026</div><h3>Continuidad real</h3></div></div><div class="ops-metric-line"><span>Ingresos históricos cargados</span><b>${euro(sum(E.historicalIncome,x=>N(x.total_income)))}</b></div><div class="ops-metric-line"><span>Gastos gestoría Q1+Q2</span><b>${euro(sum(E.gestorSummary,x=>N(x.imputable_irpf)))}</b></div><div class="ops-metric-line"><span>Cierres chat importados</span><b>${O.closings.filter(x=>x.source==='importacion_excel').length}</b></div></div></div>`;
+ return `${importedStatusHtml()}<div class="ops-kpis" style="margin-top:14px"><div class="ops-kpi"><small>Ingresos T${O.quarter}</small><strong>${euro(inc)}</strong><div class="sub">${O.storeId==='all'?'Ambos establecimientos':H(storeName(O.storeId))}</div></div><div class="ops-kpi"><small>Gastos reales T${O.quarter}</small><strong>${euro(realExp)}</strong><div class="sub">Incluye ${euro(internal)} de control interno</div></div><div class="ops-kpi ${inc-realExp>=0?'good':'bad'}"><small>Resultado real T${O.quarter}</small><strong>${euro(inc-realExp)}</strong><div class="sub">Ingresos menos todos los gastos registrados</div></div><div class="ops-kpi"><small>Gastos fiscales T${O.quarter}</small><strong>${euro(fiscalExp)}</strong><div class="sub">Base usada en fiscalidad</div></div><div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong><div class="sub">130 + 111 + 115</div></div><div class="ops-kpi"><small>RETA orientativo</small><strong>${r.bracket?euro(r.minQuota)+'–'+euro(r.maxQuota):'—'}</strong><div class="sub">Rend. mensual ${euro(r.monthly)}</div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trimestre</div><h3>Contador fiscal</h3></div><button class="ghost" onclick="opsTab('fiscal')">Abrir fiscalidad</button></div><div class="ops-metric-line"><span>Ingresos acumulados</span><b>${euro(f.income)}</b></div><div class="ops-metric-line"><span>Gastos deducibles + 5 %</span><b>${euro(f.raw+f.diff)}</b></div><div class="ops-metric-line"><span>130 pendiente estimado</span><b>${euro(f.payable)}</b></div><div class="ops-metric-line"><span>Reserva total</span><b>${euro(f.reserve)}</b></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Servidor</div><h3>Archivo documental</h3></div><button class="ghost" onclick="opsTab('documentos')">Abrir</button></div><div class="ops-space-head"><b>${Math.round(used/1048576)} MB usados</b><span class="small">${pct.toFixed(1).replace('.',',')} %</span></div><div class="ops-progress ${pct>=95?'bad':pct>=80?'warn':''}"><i style="width:${Math.min(100,pct)}%"></i></div><div class="ops-metric-line"><span>Documentos</span><b>${N(E.storageUsage?.documents_count)} · ${(N(E.storageUsage?.documents_bytes)/1048576).toFixed(1).replace('.',',')} MB</b></div><div class="ops-metric-line"><span>Plantillas de factura</span><b>${E.templates.length}</b></div></div></div><div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Trabajo diario</div><h3>Accesos rápidos</h3></div></div><div class="ops-actions"><button class="primary" onclick="opsTab('cajas')">Cerrar caja</button><button class="secondary" onclick="opsTab('gastos')">Registrar gasto</button>${manager()?`<button class="secondary" onclick="opsNewDocument('factura')">Nueva factura</button><button class="secondary" onclick="opsNewDocument('proforma')">Nueva proforma</button>`:''}<button class="secondary" onclick="opsTab('documentos')">Subir documento</button></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">2026</div><h3>Continuidad real</h3></div></div><div class="ops-metric-line"><span>Ingresos históricos cargados</span><b>${euro(sum(E.historicalIncome,x=>N(x.official_total_income??x.total_income)))}</b></div><div class="ops-metric-line"><span>Gastos gestoría Q1+Q2</span><b>${euro(sum(E.gestorSummary,x=>N(x.imputable_irpf)))}</b></div><div class="ops-metric-line"><span>Cierres chat importados</span><b>${O.closings.filter(x=>x.source==='importacion_excel').length}</b></div></div></div>`;
 }
 function newDocDraft(type='factura'){
  const mode=type,documentType=mode==='proforma'?'proforma':'factura',invoiceKind=mode==='rectificativa'?'rectifying':'invoice';
@@ -608,7 +611,7 @@ function managerExpenseSummaryRows(from,to){
 function managerIncomeRows(from,to){
  const headers=['Orden','Fecha','Nº factura','Rect.','Identificación del Cliente','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
  const groups=new Map();
- E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to).forEach(x=>groups.set(x.store_id+'|'+x.period_start.slice(0,7),{store:x.store_id,date:x.period_end,total:N(x.total_income),historical:true}));
+ E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to).forEach(x=>groups.set(x.store_id+'|'+x.period_start.slice(0,7),{store:x.store_id,date:x.period_end,total:N(x.official_total_income??x.total_income),historical:true}));
  O.closings.filter(c=>c.include_in_income!==false&&inRange(c.business_date,from,to)&&!coveredByHistoricalIncome(c)).forEach(c=>{
    const k=c.store_id+'|'+c.business_date.slice(0,7),v=groups.get(k)||{store:c.store_id,date:new Date(+c.business_date.slice(0,4),+c.business_date.slice(5,7),0).toISOString().slice(0,10),total:0};
    v.total+=N(c.cash_sales)+N(c.card_sales)+N(c.bizum_sales)+N(c.online_sales)+N(c.other_income);groups.set(k,v)
