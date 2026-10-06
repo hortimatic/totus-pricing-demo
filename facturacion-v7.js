@@ -386,12 +386,15 @@ window.billConvertProforma=async function(id){
 
 /* ---------------- PLANTILLAS ---------------- */
 function templatePreview(t){
- return `<div class="tpl-preview ${H(t.style_code)}" style="--tpl-a:${H(t.primary_color)};--tpl-b:${H(t.secondary_color)}">
-  <div class="tpl-preview-head"><div class="tpl-logo">${t.logo_path&&t.show_logo?'LOGO':'TU LOGO'}</div><div><b>FACTURA H-2026-0001</b><small>06/10/2026</small></div></div>
+ const title=t.invoice_title||'FACTURA',logo=t.show_logo===false?'Sin logo':(t.logo_path?'LOGO':'TU LOGO');
+ return `<div class="tpl-preview ${H(t.style_code)}" style="--tpl-a:${H(t.primary_color)};--tpl-b:${H(t.secondary_color)};--tpl-text:${H(t.text_color||'#17202A')}">
+  <div class="tpl-preview-head"><div class="tpl-logo tpl-logo-${H(t.logo_position||'left')}">${H(logo)}</div><div><b>${H(title)} H-2026-0001</b><small>06/10/2026</small></div></div>
+  ${t.header_text?`<div class="tpl-header-text">${H(t.header_text)}</div>`:''}
   <div class="tpl-company"><b>${H(O.settings?.business_name||'Tu empresa')}</b><span>${H(O.settings?.tax_id||'NIF/CIF')}</span></div>
   <div class="tpl-client"><small>CLIENTE</small><b>Cliente de ejemplo S.L.</b><span>B00000000</span></div>
   <div class="tpl-table"><div><b>Concepto</b><b>Cant.</b><b>Precio</b><b>Total</b></div><div><span>Producto o servicio</span><span>1</span><span>100,00 €</span><span>121,00 €</span></div></div>
   <div class="tpl-total"><span>Total</span><b>121,00 €</b></div>
+  ${t.show_payment_details!==false&&t.bank_details?`<div class="tpl-pay">${H(t.bank_details)}</div>`:''}
   <div class="tpl-footer">${H(t.footer_text||O.settings?.invoice_footer_text||'Gracias por tu confianza.')}</div>
  </div>`;
 }
@@ -402,31 +405,48 @@ function templatesHtml(){
    <div class="tpl-cards">${B.templates.map(x=>`<button class="tpl-card ${x.id===t.id?'active':''}" onclick="billSelectTemplate('${x.id}')"><span class="tpl-swatch" style="background:${H(x.primary_color)}"></span><b>${H(x.name)}</b><small>${H(x.style_code)}</small>${x.is_default?'<em>Predeterminada</em>':''}</button>`).join('')}</div>
    ${roleManager()?`<div class="bill-grid" style="margin-top:16px">
     <div class="span2"><label>Nombre</label><input id="tpl_name" value="${H(t.name)}"></div>
-    <div><label>Estilo base</label><select id="tpl_style"><option value="modern" ${t.style_code==='modern'?'selected':''}>Moderna</option><option value="minimal" ${t.style_code==='minimal'?'selected':''}>Minimal</option><option value="classic" ${t.style_code==='classic'?'selected':''}>Clásica</option></select></div>
+    <div><label>Estilo base</label><select id="tpl_style" onchange="billTemplateLive()"><option value="modern" ${t.style_code==='modern'?'selected':''}>Moderna</option><option value="minimal" ${t.style_code==='minimal'?'selected':''}>Minimal</option><option value="classic" ${t.style_code==='classic'?'selected':''}>Clásica</option></select></div>
     <div><label>Logo</label><input id="tpl_logo_file" type="file" accept=".png,.jpg,.jpeg,.webp"></div>
     <div><label>Color principal</label><input id="tpl_primary" type="color" value="${H(t.primary_color)}" oninput="billTemplateLive()"></div>
     <div><label>Color secundario</label><input id="tpl_secondary" type="color" value="${H(t.secondary_color)}" oninput="billTemplateLive()"></div>
-    <div><label>Posición logo</label><select id="tpl_logo_pos"><option value="left" ${t.logo_position==='left'?'selected':''}>Izquierda</option><option value="center" ${t.logo_position==='center'?'selected':''}>Centro</option><option value="right" ${t.logo_position==='right'?'selected':''}>Derecha</option></select></div>
-    <div class="bill-check"><input id="tpl_default" type="checkbox" ${t.is_default?'checked':''}><label for="tpl_default">Predeterminada</label></div>
+    <div><label>Color texto</label><input id="tpl_text" type="color" value="${H(t.text_color||'#17202A')}" oninput="billTemplateLive()"></div>
+    <div><label>Posición logo</label><select id="tpl_logo_pos" onchange="billTemplateLive()"><option value="left" ${t.logo_position==='left'?'selected':''}>Izquierda</option><option value="center" ${t.logo_position==='center'?'selected':''}>Centro</option><option value="right" ${t.logo_position==='right'?'selected':''}>Derecha</option></select></div>
+    <div><label>Ancho logo (mm)</label><input id="tpl_logo_width" inputmode="decimal" value="${H(t.logo_width_mm||34)}"></div>
+    <div class="bill-check"><input id="tpl_show_logo" type="checkbox" ${t.show_logo!==false?'checked':''}><label for="tpl_show_logo">Mostrar logo</label></div>
+    <div class="bill-check"><input id="tpl_show_pay" type="checkbox" ${t.show_payment_details!==false?'checked':''}><label for="tpl_show_pay">Mostrar datos de pago</label></div>
+    <div class="bill-check"><input id="tpl_default" type="checkbox" ${t.is_default?'checked':''}><label for="tpl_default">Predeterminada factura</label></div>
+    <div class="bill-check"><input id="tpl_default_pro" type="checkbox" ${t.default_proforma?'checked':''}><label for="tpl_default_pro">Predeterminada proforma</label></div>
+    <div class="span2"><label>Título factura</label><input id="tpl_invoice_title" value="${H(t.invoice_title||'FACTURA')}"></div>
+    <div class="span2"><label>Título proforma</label><input id="tpl_proforma_title" value="${H(t.proforma_title||'FACTURA PROFORMA')}"></div>
+    <div class="span4"><label>Texto de cabecera</label><textarea id="tpl_header">${H(t.header_text||'')}</textarea></div>
+    <div class="span4"><label>Datos bancarios / pago</label><textarea id="tpl_bank">${H(t.bank_details||'')}</textarea></div>
     <div class="span4"><label>Pie de documento</label><textarea id="tpl_footer">${H(t.footer_text||'')}</textarea></div>
     <div class="span4"><label>Condiciones / forma de pago</label><textarea id="tpl_terms">${H(t.payment_terms||'')}</textarea></div>
     <div class="span4"><label>Texto por defecto en notas</label><textarea id="tpl_notes">${H(t.notes_default||'')}</textarea></div>
-   </div><div class="ops-actions" style="margin-top:14px"><button class="primary" onclick="billSaveTemplate()">Guardar plantilla</button><button class="secondary" onclick="billUploadLogo()">Subir / cambiar logo</button></div>`:'<div class="ops-note">Solo administración y gerencia pueden modificar plantillas.</div>'}
+   </div><div class="ops-actions" style="margin-top:14px"><button class="primary" onclick="billSaveTemplate()">Guardar plantilla</button><button class="secondary" onclick="billUploadLogo()">Subir / cambiar logo</button><button class="ghost" onclick="billDuplicateTemplate()">Duplicar plantilla</button></div>`:'<div class="ops-note">Solo administración y gerencia pueden modificar plantillas.</div>'}
   </div>
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Vista previa</div><h3>Documento A4</h3></div></div><div id="tpl_preview_wrap">${templatePreview(t)}</div></div>
  </div>`;
 }
 window.billSelectTemplate=id=>{B.templateId=id;render()};
-window.billTemplateLive=()=>{const t={...activeTemplate(B.templateId),primary_color:document.getElementById('tpl_primary')?.value||'#19D3C5',secondary_color:document.getElementById('tpl_secondary')?.value||'#101B27',style_code:document.getElementById('tpl_style')?.value||'modern',footer_text:document.getElementById('tpl_footer')?.value||''};const w=document.getElementById('tpl_preview_wrap');if(w)w.innerHTML=templatePreview(t)};
+window.billTemplateLive=()=>{const t={...activeTemplate(B.templateId),primary_color:document.getElementById('tpl_primary')?.value||'#19D3C5',secondary_color:document.getElementById('tpl_secondary')?.value||'#101B27',text_color:document.getElementById('tpl_text')?.value||'#17202A',style_code:document.getElementById('tpl_style')?.value||'modern',logo_position:document.getElementById('tpl_logo_pos')?.value||'left',show_logo:document.getElementById('tpl_show_logo')?.checked!==false,show_payment_details:document.getElementById('tpl_show_pay')?.checked!==false,invoice_title:document.getElementById('tpl_invoice_title')?.value||'FACTURA',proforma_title:document.getElementById('tpl_proforma_title')?.value||'FACTURA PROFORMA',header_text:document.getElementById('tpl_header')?.value||'',bank_details:document.getElementById('tpl_bank')?.value||'',footer_text:document.getElementById('tpl_footer')?.value||''};const w=document.getElementById('tpl_preview_wrap');if(w)w.innerHTML=templatePreview(t)};
 window.billSaveTemplate=async function(){
  if(!roleManager())return;const id=B.templateId,t=activeTemplate(id);
- const row={name:document.getElementById('tpl_name').value.trim(),style:dbTemplateStyle(document.getElementById('tpl_style').value),primary_color:document.getElementById('tpl_primary').value,secondary_color:document.getElementById('tpl_secondary').value,logo_position:document.getElementById('tpl_logo_pos').value,default_invoice:document.getElementById('tpl_default').checked,footer_text:document.getElementById('tpl_footer').value,payment_terms_default:document.getElementById('tpl_terms').value,notes_default:document.getElementById('tpl_notes').value};
+ const row={name:document.getElementById('tpl_name').value.trim(),style:dbTemplateStyle(document.getElementById('tpl_style').value),primary_color:document.getElementById('tpl_primary').value,secondary_color:document.getElementById('tpl_secondary').value,text_color:document.getElementById('tpl_text').value,logo_position:document.getElementById('tpl_logo_pos').value,logo_width_mm:N(document.getElementById('tpl_logo_width').value)||34,show_logo:document.getElementById('tpl_show_logo').checked,show_payment_details:document.getElementById('tpl_show_pay').checked,default_invoice:document.getElementById('tpl_default').checked,default_proforma:document.getElementById('tpl_default_pro').checked,invoice_title:document.getElementById('tpl_invoice_title').value.trim()||'FACTURA',proforma_title:document.getElementById('tpl_proforma_title').value.trim()||'FACTURA PROFORMA',header_text:document.getElementById('tpl_header').value,bank_details:document.getElementById('tpl_bank').value,footer_text:document.getElementById('tpl_footer').value,payment_terms_default:document.getElementById('tpl_terms').value,notes_default:document.getElementById('tpl_notes').value};
  try{
   if(row.default_invoice)await sb.from('ops_document_templates').update({default_invoice:false}).neq('id',id);
+  if(row.default_proforma)await sb.from('ops_document_templates').update({default_proforma:false}).neq('id',id);
   const {error}=await sb.from('ops_document_templates').update(row).eq('id',id);if(error)throw error;
   if(row.default_invoice)await sb.from('ops_business_settings').update({default_invoice_template_id:id,invoice_footer_text:row.footer_text,invoice_payment_terms:row.payment_terms_default,invoice_notes_default:row.notes_default}).eq('id',1);
   await window.opsLoadData(true);await load(true);render();
  }catch(e){alert('No se pudo guardar la plantilla: '+e.message)}
+};
+window.billDuplicateTemplate=async function(){
+ if(!roleManager())return;const src=activeTemplate(B.templateId);if(!src?.id)return;
+ const name=prompt('Nombre de la nueva plantilla:',(src.name||'Plantilla')+' copia');if(!name)return;
+ const code='TPL-'+Date.now().toString(36).toUpperCase();
+ const row={store_id:src.store_id||null,code,name:name.trim(),style:dbTemplateStyle(src.style_code),primary_color:src.primary_color,secondary_color:src.secondary_color,text_color:src.text_color||'#17202A',font_family:src.font_family||'helvetica',logo_path:src.logo_path||null,logo_name:src.logo_name||null,logo_mime:src.logo_mime||null,logo_size_bytes:N(src.logo_size_bytes),logo_width_mm:N(src.logo_width_mm)||34,show_logo:src.show_logo!==false,show_payment_details:src.show_payment_details!==false,header_text:src.header_text||'',footer_text:src.footer_text||'',payment_terms_default:src.payment_terms||src.payment_terms_default||'',bank_details:src.bank_details||'',invoice_title:src.invoice_title||'FACTURA',proforma_title:src.proforma_title||'FACTURA PROFORMA',active:true,default_invoice:false,default_proforma:false,logo_position:src.logo_position||'left',show_company_email:src.show_company_email!==false,show_company_phone:src.show_company_phone!==false,notes_default:src.notes_default||''};
+ try{const {data,error}=await sb.from('ops_document_templates').insert(row).select('id').single();if(error)throw error;await load(true);B.templateId=data.id;render()}catch(e){alert('No se pudo duplicar la plantilla: '+e.message)}
 };
 window.billUploadLogo=async function(){
  if(!roleManager())return;const file=document.getElementById('tpl_logo_file')?.files?.[0];if(!file)return alert('Selecciona un logo PNG, JPG o WEBP.');
@@ -495,26 +515,26 @@ function docLines(doc,lines,startY){
 async function makePdf(kind,obj,lines,template){
  if(!window.jspdf?.jsPDF)throw new Error('Generador PDF no disponible');
  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),s=O.settings||{},t=template||activeTemplate(obj.template_id||obj.templateId),a=rgb(t.primary_color),b=rgb(t.secondary_color);
- const isPro=kind==='proforma',label=isPro?'PROFORMA':(obj.invoice_kind==='rectifying'||obj.kind==='rectifying'?'FACTURA RECTIFICATIVA':'FACTURA');
+ const isPro=kind==='proforma',label=isPro?(t.proforma_title||'FACTURA PROFORMA'):(obj.invoice_kind==='rectifying'||obj.kind==='rectifying'?'FACTURA RECTIFICATIVA':(t.invoice_title||'FACTURA'));
  const number=isPro?(obj.display_number||'BORRADOR'):(obj.display_number||obj.external_number_text||'BORRADOR');
  const logo=await logoData(t);
  if(t.style_code==='modern'){doc.setFillColor(...a);doc.rect(0,0,210,8,'F');doc.setFillColor(...b);doc.rect(0,8,210,28,'F')}
- if(logo&&t.show_logo!==false){try{const x=t.logo_position==='right'?158:t.logo_position==='center'?83:15;doc.addImage(logo,'PNG',x,12,36,18,'FAST')}catch{}}
+ if(logo&&t.show_logo!==false){try{const w=Math.max(18,Math.min(65,N(t.logo_width_mm)||34)),x=t.logo_position==='right'?195-w:t.logo_position==='center'?(210-w)/2:15;doc.addImage(logo,'PNG',x,12,w,Math.max(10,w*.5),'FAST')}catch{}}
  if(t.style_code==='modern')doc.setTextColor(255,255,255);else doc.setTextColor(...b);
  if(t.style_code!=='modern')doc.setTextColor(...b);
  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text(label,195,18,{align:'right'});
  doc.setFontSize(10);doc.text(number,195,25,{align:'right'});
  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('Fecha: '+fmtDate(obj.issue_date||obj.date),195,31,{align:'right'});
  if(obj.due_date||obj.dueDate||obj.valid_until||obj.validUntil)doc.text((isPro?'Válida hasta: ':'Vencimiento: ')+fmtDate(obj.valid_until||obj.validUntil||obj.due_date||obj.dueDate),195,36,{align:'right'});
- doc.setTextColor(30,38,48);doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(s.business_name||'Tu empresa',15,47);doc.setFont('helvetica','normal');doc.setFontSize(9);
+ doc.setTextColor(...rgb(t.text_color||'#17202A'));if(t.header_text){doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(String(t.header_text),15,41,{maxWidth:180})}doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(s.business_name||'Tu empresa',15,47);doc.setFont('helvetica','normal');doc.setFontSize(9);
  let cy=53;[s.tax_id,s.business_address,(t.show_company_email!==false?s.business_email:''),(t.show_company_phone!==false?s.business_phone:'')].filter(Boolean).forEach(v=>{doc.text(String(v),15,cy,{maxWidth:85});cy+=5});
  doc.setFont('helvetica','bold');doc.text('CLIENTE',115,47);doc.setFont('helvetica','normal');doc.text(obj.customer_name||obj.customer||'',115,53,{maxWidth:80});if(obj.customer_tax_id||obj.taxId)doc.text(obj.customer_tax_id||obj.taxId,115,58);if(obj.customer_address||obj.address)doc.text(obj.customer_address||obj.address,115,63,{maxWidth:80});
  if(isPro){doc.setTextColor(130,70,35);doc.setFont('helvetica','bold');doc.text('Documento proforma · sin efecto contable hasta su conversión en factura.',15,73);doc.setTextColor(30,38,48)}
  let y=docLines(doc,lines,isPro?84:78);const tt=totals(lines.map(l=>({qty:l.quantity??l.qty,unit:l.unit_price_base??l.unit,discount:l.discount_pct??l.discount,vat:l.vat_rate??l.vat,description:l.description,total_amount:l.total_amount})));
  y+=3;if(y>260){doc.addPage();y=25}doc.line(120,y,195,y);y+=7;doc.text('Base',160,y,{align:'right'});doc.text(E(tt.base),195,y,{align:'right'});y+=6;doc.text('IVA',160,y,{align:'right'});doc.text(E(tt.vat),195,y,{align:'right'});y+=8;doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...a);doc.text('TOTAL',160,y,{align:'right'});doc.text(E(tt.total),195,y,{align:'right'});doc.setTextColor(30,38,48);
- const notes=obj.notes||'';const terms=t.payment_terms||O.settings?.invoice_payment_terms||'';
- let fy=Math.max(y+16,250);if(fy>275){doc.addPage();fy=245}doc.setFontSize(8);doc.setFont('helvetica','normal');
- if(notes)doc.text('Notas: '+notes,15,fy,{maxWidth:180});if(terms)doc.text('Condiciones: '+terms,15,fy+8,{maxWidth:180});if(t.footer_text||O.settings?.invoice_footer_text)doc.text(t.footer_text||O.settings.invoice_footer_text,105,288,{align:'center',maxWidth:180});
+ const notes=obj.notes||'';const terms=t.payment_terms||O.settings?.invoice_payment_terms||'',bank=t.show_payment_details!==false?(t.bank_details||''):'';
+ let fy=Math.max(y+16,244);if(fy>270){doc.addPage();fy=238}doc.setFontSize(8);doc.setFont('helvetica','normal');
+ if(notes){doc.text('Notas: '+notes,15,fy,{maxWidth:180});fy+=8}if(terms){doc.text('Condiciones: '+terms,15,fy,{maxWidth:180});fy+=8}if(bank){doc.text('Pago: '+bank,15,fy,{maxWidth:180});fy+=8}if(t.footer_text||O.settings?.invoice_footer_text)doc.text(t.footer_text||O.settings.invoice_footer_text,105,288,{align:'center',maxWidth:180});
  return doc.output('blob');
 }
 window.billPreviewDraftPdf=async()=>{try{const b=await makePdf('invoice',B.invoiceDraft,B.invoiceLines,activeTemplate(B.invoiceDraft.templateId));downloadBlob(b,'vista_previa_factura.pdf')}catch(e){alert(e.message)}};
