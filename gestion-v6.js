@@ -226,21 +226,29 @@ function closeCalc(){
 function closingsHtml(){
  if(!O.closeDraft)O.closeDraft=newClosingDraft();
  const d=O.closeDraft,c=closeCalc(),drawers=O.drawers.filter(x=>x.store_id===d.storeId);
- const pb=periodBounds(O.year,O.quarter,false);
- const rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
+ const pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
+ const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'';
  return `<div class="ops-card">
-  <div class="section-head"><div><div class="eyebrow">${d.id?'Editar':'Nuevo'} cierre</div><h3>Cierre diario</h3><div class="small">Mismo flujo que el chat: caja final, salida y tarjeta; con Bizum/online cuando exista.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')">Guardar cierre</button></div></div>
+  <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario</h3>${infoButton('cajas','Cómo funciona el cierre de caja')}</div><div class="small">Introduce cobros y dinero físico; Totus calcula automáticamente la venta en efectivo y el total del día.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
+  ${locked?'<div class="ops-note warn">Este cierre está cerrado. Como encargado puedes consultarlo, pero solo administración o gerencia puede modificarlo.</div>':''}
+  <div class="invoice-section-title">1 · Día y establecimiento</div>
   <div class="ops-form">
-   <div><label>Establecimiento</label><select onchange="opsCloseField('storeId',this.value,true)">${O.stores.map(s=>`<option value="${s.id}" ${d.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div>
-   <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)"></div>
-   <div><label>Tarjeta</label><input inputmode="decimal" value="${h(d.card)}" oninput="opsCloseField('card',this.value)"></div>
-   <div><label>Salida de caja</label><input inputmode="decimal" value="${h(d.withdrawals)}" oninput="opsCloseField('withdrawals',this.value)"></div>
-   <div><label>Bizum</label><input inputmode="decimal" value="${h(d.bizum)}" oninput="opsCloseField('bizum',this.value)"></div>
-   <div><label>Pedidos online</label><input inputmode="decimal" value="${h(d.online)}" oninput="opsCloseField('online',this.value)"></div>
-   <div><label>Otras entradas</label><input inputmode="decimal" value="${h(d.other)}" oninput="opsCloseField('other',this.value)"></div>
-   <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(d.cashExpenses)}" oninput="opsCloseField('cashExpenses',this.value)"></div>
-   ${drawers.map(dr=>{const x=closingDrawerState(d,dr);return `<div><label>${h(dr.name)} · apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)"></div><div><label>${h(dr.name)} · queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)"></div>`}).join('')}
-   <div class="span4"><label>Observaciones</label><textarea oninput="opsCloseField('notes',this.value)">${h(d.notes)}</textarea></div>
+   <div><label>Establecimiento</label><select aria-label="Establecimiento del cierre" onchange="opsCloseField('storeId',this.value,true)" ${dis}>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
+   <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
+  </div>
+  <div class="invoice-section-title">2 · Cobros del día</div>
+  <div class="ops-form">
+   <div><label>Tarjeta</label><input inputmode="decimal" value="${h(d.card)}" oninput="opsCloseField('card',this.value)" ${dis}></div>
+   <div><label>Bizum</label><input inputmode="decimal" value="${h(d.bizum)}" oninput="opsCloseField('bizum',this.value)" ${dis}></div>
+   <div><label>Pedidos online</label><input inputmode="decimal" value="${h(d.online)}" oninput="opsCloseField('online',this.value)" ${dis}></div>
+   <div><label>Otras entradas</label><input inputmode="decimal" value="${h(d.other)}" oninput="opsCloseField('other',this.value)" ${dis}></div>
+  </div>
+  <div class="invoice-section-title">3 · Caja física ${infoButton('cajas','Ayuda sobre efectivo, salidas y caja final')}</div>
+  <div class="ops-form">
+   ${drawers.map(dr=>{const x=closingDrawerState(d,dr);return `<div><label>${h(dr.name)} · apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div><div><label>${h(dr.name)} · queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>`}).join('')}
+   <div><label>Salida / retirada de caja</label><input inputmode="decimal" value="${h(d.withdrawals)}" oninput="opsCloseField('withdrawals',this.value)" ${dis}></div>
+   <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(d.cashExpenses)}" oninput="opsCloseField('cashExpenses',this.value)" ${dis}></div>
+   <div class="span4"><label>Observaciones</label><textarea oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea></div>
   </div>
   <div class="ops-close-summary">
    <div><small>Apertura total</small><b id="ops_close_open">${eur(c.opening)}</b></div>
@@ -248,10 +256,10 @@ function closingsHtml(){
    <div><small>Caja final</small><b id="ops_close_end">${eur(c.closing)}</b></div>
    <div><small>Ventas del día</small><b id="ops_close_total">${eur(c.total)}</b></div>
   </div>
-  <div class="ops-note" style="margin-top:10px">Venta en efectivo = caja final + salidas + gastos pagados desde caja − apertura. De esta forma no dependes de volver a contar la apertura al día siguiente.</div>
+  <div class="ops-note" style="margin-top:10px">Efectivo vendido = caja final + retiradas + gastos pagados desde caja − apertura. Tarjeta, Bizum, online y otras entradas se suman aparte.</div>
  </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3></div><button class="secondary" onclick="opsExportClosings()">CSV</button></div>
- ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Salida</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(c=>`<tr><td>${dmy(c.business_date)}</td><td>${h(storeName(c.store_id))}</td><td class="num">${eur(c.cash_sales)}</td><td class="num">${eur(c.card_sales)}</td><td class="num">${eur(c.bizum_sales)}</td><td class="num">${eur(c.online_sales)}</td><td class="num">${eur(c.cash_withdrawals)}</td><td class="num">${eur(c.actual_cash)}</td><td class="num"><b>${eur(n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${c.id}')">Abrir</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
+ <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Los cierres importados se conservan como histórico y los modernos siguen la fórmula actual.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
+ ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Salida</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
  </div>`;
 }
 window.opsCloseField=function(k,v,rerender=false){ if(!O.closeDraft)O.closeDraft=newClosingDraft();O.closeDraft[k]=v;if(rerender){O.closeDraft.drawers={};render()}else updateCloseSummary(); };
@@ -265,6 +273,7 @@ window.opsEditClosing=function(id){
 };
 window.opsSaveClosing=async function(status='cerrado'){
  if(O.saving)return; const d=O.closeDraft,c=closeCalc(); if(!d.storeId||!d.date){alert('Tienda y fecha son obligatorias.');return}
+ if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date)){alert('Ya existe un cierre para esa tienda y fecha. Ábrelo desde el histórico en lugar de crear otro.');return}
  const ds=O.drawers.filter(x=>x.store_id===d.storeId); if(!ds.length){alert('Esta tienda no tiene cajas configuradas.');return}
  if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()==='')){alert('Indica cuánto queda en cada caja.');return}
  O.saving=true;
@@ -301,27 +310,34 @@ function expensesHtml(){
  if(!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
  const d=O.expenseDraft,t=draftExpenseTotals(),pb=periodBounds(O.year,O.quarter,false);
  const rows=O.expenses.filter(e=>inRange(e.expense_date,pb.start,pb.end)&&(O.storeId==='all'||e.store_id===O.storeId)).slice(0,120);
- return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">${d.id?'Editar':'Registrar'} gasto</div><h3>Compra, suministro o gasto</h3><div class="small">Los impuestos quedan desglosados como en el documento de la gestoría.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewExpense()">Nuevo</button>':''}<button class="primary" onclick="opsSaveExpense()">Guardar gasto</button></div></div>
+ const attached=d.id?O.expenses.find(x=>x.id===d.id)?.document_id:null;
+ return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">${d.id?'Editar':'Registrar'} gasto</div><div class="ops-title-line"><h3>Compra, suministro o gasto</h3>${infoButton('gastos','Cómo registrar correctamente un gasto')}</div><div class="small">Separa proveedor, pago, documento y desglose fiscal para que el registro sea fácil de revisar.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewExpense()">Nuevo gasto</button>':''}<button class="primary" onclick="opsSaveExpense()">Guardar gasto</button></div></div>
+ <div class="invoice-section-title">1 · Proveedor y documento</div>
  <div class="ops-form">
   <div><label>Fecha</label><input type="date" value="${h(d.date)}" oninput="opsExpenseField('date',this.value)"></div>
-  <div><label>Establecimiento</label><select oninput="opsExpenseField('storeId',this.value)"><option value="">General</option>${O.stores.map(s=>`<option value="${s.id}" ${d.storeId===s.id?'selected':''}>${h(s.name)}</option>`).join('')}</select></div>
+  <div><label>Establecimiento</label><select aria-label="Establecimiento del gasto" oninput="opsExpenseField('storeId',this.value)"><option value="">General</option>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
   <div><label>Proveedor / servicio</label><input value="${h(d.supplier)}" oninput="opsExpenseField('supplier',this.value)"></div>
   <div><label>NIF / CIF proveedor</label><input value="${h(d.taxId)}" oninput="opsExpenseField('taxId',this.value)"></div>
   <div><label>Nº factura proveedor</label><input value="${h(d.invoice)}" oninput="opsExpenseField('invoice',this.value)"></div>
-  <div><label>Documento</label><select oninput="opsExpenseField('documentKind',this.value)">${[['factura','Factura'],['rectificativa','Rectificativa / abono'],['ticket','Ticket'],['nomina','Nómina'],['seguridad_social','Seguridad Social'],['recibo','Recibo'],['otro','Otro']].map(x=>`<option value="${x[0]}" ${d.documentKind===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
-  <div><label>Forma de pago</label><select oninput="opsExpenseField('payment',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.payment===x?'selected':''}>${x}</option>`).join('')}</select></div>
-  <div><label>Estado</label><select oninput="opsExpenseField('paidStatus',this.value)">${['pagado','pendiente','parcial'].map(x=>`<option ${d.paidStatus===x?'selected':''}>${x}</option>`).join('')}</select></div>
+  <div><label>Tipo de documento</label><select aria-label="Tipo de documento del gasto" oninput="opsExpenseField('documentKind',this.value)">${[['factura','Factura'],['rectificativa','Rectificativa / abono'],['ticket','Ticket'],['nomina','Nómina'],['seguridad_social','Seguridad Social'],['recibo','Recibo'],['otro','Otro']].map(x=>`<option value="${x[0]}" ${d.documentKind===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
+  <div class="span2"><label>Factura / documento adjunto</label><input id="ops_exp_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"><div class="small">${attached?'<span class="badge ok">Adjunto existente</span> Puedes sustituirlo seleccionando otro archivo.':'PDF, imagen, Excel o CSV · máximo configurado 20 MB'}</div></div>
+ </div>
+ <div class="invoice-section-title">2 · Pago</div>
+ <div class="ops-form">
+  <div><label>Forma de pago</label><select aria-label="Forma de pago del gasto" oninput="opsExpenseField('payment',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.payment===x?'selected':''}>${x}</option>`).join('')}</select></div>
+  <div><label>Estado</label><select aria-label="Estado de pago del gasto" oninput="opsExpenseField('paidStatus',this.value)">${['pagado','pendiente','parcial'].map(x=>`<option ${d.paidStatus===x?'selected':''}>${x}</option>`).join('')}</select></div>
   <div><label>Fecha pago</label><input type="date" value="${h(d.paidDate)}" oninput="opsExpenseField('paidDate',this.value)"></div>
   <div><label>Importe realmente pagado</label><input inputmode="decimal" placeholder="${String(t.payable.toFixed(2)).replace('.',',')}" value="${h(d.amountPaid)}" oninput="opsExpenseField('amountPaid',this.value)"></div>
-  <div class="span2"><label>Factura / documento adjunto</label><input id="ops_exp_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv"></div>
-  <div class="span4 ops-checkline"><input id="ops_management_only" type="checkbox" ${d.managementOnly?'checked':''} onchange="opsExpenseField('managementOnly',this.checked,true)"><label for="ops_management_only">Solo control interno · no incluir en gestoría ni cálculo fiscal.</label></div>
-  <div class="span4"><label>Notas</label><textarea oninput="opsExpenseField('notes',this.value)">${h(d.notes)}</textarea></div>
+  <div class="checkline"><input id="ops_fiscal_reviewed" type="checkbox" ${d.fiscalReviewed?'checked':''} onchange="opsExpenseField('fiscalReviewed',this.checked)"><label for="ops_fiscal_reviewed">Revisado fiscalmente</label></div>
  </div>
- <div class="section-head" style="margin-top:16px"><div><h4>${d.managementOnly?'Desglose interno':'Desglose fiscal'}</h4><div class="small">${d.managementOnly?'Se contará para rentabilidad real, pero quedará fuera de gestoría y fiscalidad.':'Permite facturas con varios tipos de IVA, retenciones y recargo.'}</div></div><div class="ops-actions"><button class="ghost" onclick="opsQuickInternal('warehouse')">Almacén 300 €</button><button class="ghost" onclick="opsQuickInternal('overtime')">Horas extra</button><button class="secondary" onclick="opsAddExpenseLine()">Añadir línea</button></div></div>
+ <div class="invoice-section-title">3 · Tratamiento y desglose ${infoButton('gastos.internal','Diferencia entre gasto fiscal e interno')}</div>
+ <div class="ops-form"><div class="span4 ops-checkline"><input id="ops_management_only" type="checkbox" ${d.managementOnly?'checked':''} onchange="opsExpenseField('managementOnly',this.checked,true)"><label for="ops_management_only">Solo control interno · no incluir en gestoría ni cálculo fiscal.</label></div></div>
+ <div class="section-head" style="margin-top:10px"><div><h4>${d.managementOnly?'Desglose interno':'Desglose fiscal'}</h4><div class="small">${d.managementOnly?'Afecta al resultado real, no a la fiscalidad.':'Admite varios conceptos, IVA, recargo y retenciones en una misma factura.'}</div></div><div class="ops-actions"><button class="ghost" onclick="opsQuickInternal('warehouse')">Atajo · almacén 300 €</button><button class="ghost" onclick="opsQuickInternal('overtime')">Atajo · horas extra</button><button class="secondary" onclick="opsAddExpenseLine()">+ Línea</button></div></div>
  <div class="ops-lines">${O.expenseDraftLines.map((l,i)=>expenseLineHtml(l,i)).join('')}</div>
  <div class="ops-totalbox"><div><small>Base + IVA + RE</small><b>${eur(t.accounting)}</b></div><div><small>Retenciones</small><b>${eur(t.withholding)}</b></div><div><small>A pagar proveedor</small><b>${eur(t.payable)}</b></div><div><small>Pagado indicado</small><b>${d.amountPaid!==''?eur(n(d.amountPaid)):eur(t.payable)}</b></div></div>
+ <div class="invoice-section-title">4 · Observaciones</div><div class="ops-form"><div class="span4"><label>Notas</label><textarea oninput="opsExpenseField('notes',this.value)">${h(d.notes)}</textarea></div></div>
  </div>
- <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3></div><button class="secondary" onclick="opsExportExpenses()">CSV gestoría</button></div>
+ <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Gastos registrados</h3><div class="small">Los importados quedan protegidos; los manuales pueden editarse y, por admin/gerencia, eliminarse.</div></div><button class="secondary" onclick="opsExportExpenses()">Exportar CSV</button></div>
  ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Proveedor</th><th>Factura</th><th>Tipo</th><th>Contable</th><th>Pagado</th><th>Documento</th><th></th></tr></thead><tbody>${rows.map(e=>`<tr><td>${dmy(e.expense_date)}</td><td>${h(storeName(e.store_id))}</td><td><b>${h(e.supplier_name)}</b><div class="ops-tiny">${h(e.supplier_tax_id)}</div></td><td>${h(e.invoice_number||'—')}</td><td>${h(e.document_kind||'factura')}${e.management_only?'<div><span class="badge warnb">Interno</span></div>':''}</td><td class="num">${eur(e.accounting_amount||e.gross_expense)}</td><td class="num">${eur(e.amount_paid)}</td><td>${e.document_id?'<span class="badge ok">Adjunta</span>':'<span class="badge warnb">Sin archivo</span>'}</td><td><div class="ops-actions"><button class="ghost" onclick="opsEditExpense('${e.id}')">Abrir</button>${manager()&&e.source==='manual'?`<button class="danger" onclick="opsDeleteExpense('${e.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay gastos en este trimestre.</div>'}
  </div>`;
 }
@@ -332,7 +348,7 @@ function expenseLineHtml(l,i){
   <div><label>Base</label><input inputmode="decimal" value="${h(l.base)}" oninput="opsExpenseLineField(${i},'base',this.value,true)"></div>
   <div><label>IVA %</label><input inputmode="decimal" value="${h(l.vat)}" oninput="opsExpenseLineField(${i},'vat',this.value,true)"></div>
   <div><label>RE %</label><input inputmode="decimal" value="${h(l.re)}" oninput="opsExpenseLineField(${i},'re',this.value,true)"></div>
-  <div><label>Retención %</label><input inputmode="decimal" value="${h(l.withholding)}" oninput="opsExpenseLineField(${i},'withholding',this.value,true)"><select style="margin-top:5px" onchange="opsExpenseLineField(${i},'model',this.value)"><option value="">Sin modelo</option><option value="111" ${l.model==='111'?'selected':''}>111</option><option value="115" ${l.model==='115'?'selected':''}>115</option></select></div>
+  <div><label>Retención %</label><input inputmode="decimal" value="${h(l.withholding)}" oninput="opsExpenseLineField(${i},'withholding',this.value,true)"><select aria-label="Modelo de retención" style="margin-top:5px" onchange="opsExpenseLineField(${i},'model',this.value)"><option value="">Sin modelo</option><option value="111" ${l.model==='111'?'selected':''}>111</option><option value="115" ${l.model==='115'?'selected':''}>115</option></select></div>
   <button class="ghost" onclick="opsRemoveExpenseLine(${i})" ${O.expenseDraftLines.length===1?'disabled':''}>×</button>
   <div style="grid-column:1/-1" class="small">${h(cat?.aeat_group||'')} · Base ${eur(x.base)} · IVA ${eur(x.vat)} · RE ${eur(x.re)} · Ret. ${eur(x.withholding)} · <b>Imputable IRPF ${eur(x.imputable)}</b></div>
  </div>`;
