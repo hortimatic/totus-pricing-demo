@@ -386,9 +386,16 @@ window.opsSaveExpense=async function(){
    const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:100,fixed_asset:!!l.fixed,notes:''}));
    const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
    if(file){
-     const cat=category(O.expenseDraftLines[0]?.categoryId);
-     const docId=await uploadDoc(file,{store_id:d.storeId||null,doc_type:'factura_recibida',document_date:d.date,supplier_or_customer:d.supplier,tax_id:d.taxId,invoice_number:d.invoice,category_code:cat?.manager_code||'',status:d.paidStatus==='pagado'?'pagada':'pendiente',notes:d.notes},'expense',id);
-     if(docId)await sb.from('ops_expenses').update({document_id:docId}).eq('id',id);
+     try{
+      const cat=category(O.expenseDraftLines[0]?.categoryId);
+      const docId=await uploadDoc(file,{store_id:d.storeId||null,doc_type:'factura_recibida',document_date:d.date,supplier_or_customer:d.supplier,tax_id:d.taxId,invoice_number:d.invoice,category_code:cat?.manager_code||'',status:d.paidStatus==='pagado'?'pagada':'pendiente',notes:d.notes},'expense',id);
+      if(docId){const link=await sb.from('ops_expenses').update({document_id:docId}).eq('id',id);if(link.error)throw link.error}
+     }catch(uploadError){
+      await audit('gastos',d.id?'actualizar':'crear',id,{fecha:d.date,proveedor:d.supplier,total:totals.accounting,adjunto:'fallido'});
+      await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
+      alert('El gasto se ha guardado, pero el archivo adjunto no pudo subirse: '+uploadError.message+'\nPuedes abrir el gasto y adjuntarlo de nuevo.');
+      return;
+     }
    }
    await audit('gastos',d.id?'actualizar':'crear',id,{fecha:d.date,proveedor:d.supplier,total:totals.accounting});
    await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
@@ -403,8 +410,9 @@ window.opsDocFilter=function(k,v,soft=false){O.docFilter[k]=v;if(!soft)render();
 window.opsUploadStandaloneDoc=async function(){
  const file=document.getElementById('ops_doc_file')?.files?.[0];if(!file){alert('Selecciona un archivo.');return}
  try{
-  await uploadDoc(file,{store_id:document.getElementById('ops_doc_store').value||null,doc_type:document.getElementById('ops_doc_type').value,document_date:document.getElementById('ops_doc_date').value||isoToday(),supplier_or_customer:document.getElementById('ops_doc_party').value,tax_id:document.getElementById('ops_doc_tax').value,invoice_number:document.getElementById('ops_doc_invoice').value,status:document.getElementById('ops_doc_status').value},'standalone',null);
-  await audit('documentos','subir',null,{archivo:file.name});await load(true);render();
+  const id=await uploadDoc(file,{store_id:document.getElementById('ops_doc_store').value||null,doc_type:document.getElementById('ops_doc_type').value,document_date:document.getElementById('ops_doc_date').value||isoToday(),supplier_or_customer:document.getElementById('ops_doc_party').value,tax_id:document.getElementById('ops_doc_tax').value,invoice_number:document.getElementById('ops_doc_invoice').value,status:document.getElementById('ops_doc_status').value},'standalone',null);
+  if(!id)return;
+  await audit('documentos','subir',id,{archivo:file.name});await load(true);render();
  }catch(e){alert('No se pudo subir: '+e.message)}
 };
 window.opsDownloadDoc=async function(id){
