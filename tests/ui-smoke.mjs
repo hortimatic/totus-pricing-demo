@@ -280,44 +280,76 @@ await page.waitForTimeout(100);
 assert((await page.locator('#q_out_real').innerText()).includes('4,04'),'Cálculo de coste real incorrecto');
 assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálculo de venta final incorrecto');
 
-// Cajas: isolated page and live cash calculation.
+// Cajas: flujo rápido + avanzado y persistencia.
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');await auditCurrentUi('Cajas');
+await field('Total vendido').fill('433,31');
 await field('Tarjeta').fill('333,31');
-const closeInputs=page.locator('label').filter({hasText:'queda en caja'}).locator('..').locator('input');
-assert(await closeInputs.count()===2,'Hortimatic debe mostrar dos cajas');
-await field('Caja vape · apertura').fill('100');
-await field('Caja vape · queda en caja').fill('130');
-await field('Caja head · apertura').fill('100');
-await field('Caja head · queda en caja').fill('120');
-await field('Salida de caja').fill('50');
+await field('Salida en metálico').fill('50');
 await page.waitForTimeout(100);
-assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo efectivo de cierre incorrecto');
-await page.getByRole('button',{name:'Guardar cierre',exact:true}).click();
+assert((await page.locator('#ops_close_cashsales').innerText()).includes('100,00'),'Cálculo de efectivo rápido incorrecto');
+await page.getByRole('button',{name:'Cerrar día',exact:true}).click();
 await page.waitForTimeout(200);
-assert(fixtures.ops_daily_closings.length===1,'El cierre no se guardó');
-assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre guardado tiene efectivo incorrecto');
-assert(fixtures.ops_daily_closing_drawers.length===2,'No se guardaron las dos cajas de Hortimatic');
+assert(fixtures.ops_daily_closings.length===1,'El cierre rápido no se guardó');
+assert(Number(fixtures.ops_daily_closings[0].cash_sales)===100,'El cierre rápido guardó efectivo incorrecto');
+assert(Number(fixtures.ops_daily_closings[0].reported_total_sales)===433.31,'El cierre no guardó total vendido declarado');
+assert(fixtures.ops_daily_closings[0].entry_mode==='quick','El cierre no quedó en modo rápido');
+await page.getByRole('button',{name:'Abrir',exact:true}).first().click();
+await field('Modo').selectOption('physical');await page.waitForTimeout(100);
+assert(await field('Caja vape · caja final').count()===1,'Modo avanzado no muestra cajas físicas');
+await page.evaluate(()=>opsNewClosing());
 
-// Gastos: internal-only quick helpers.
+// Gastos: atajos internos, maestros, deducibilidad, factura adjunta y selección masiva.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');await auditCurrentUi('Gastos');
-await page.getByRole('button',{name:'Almacén 300 €',exact:true}).click();
+await page.getByRole('button',{name:/Almacén 300/}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Almacén debe quedar como solo control interno');
-assert(await field('Proveedor / servicio').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
-await page.getByRole('button',{name:'Horas extra',exact:true}).click();
+assert(await page.locator('input[placeholder="Nombre del proveedor"]').inputValue()==='Almacén','Proveedor interno almacén incorrecto');
+await page.getByRole('button',{name:/Horas extra/}).click();
 assert(await page.locator('#ops_management_only').isChecked(),'Horas extra debe quedar fuera de fiscalidad');
 await page.evaluate(()=>opsNewExpense());
-await field('Proveedor / servicio').fill('Proveedor QA');
-await field('NIF / CIF proveedor').fill('B12345678');
+
+// Selección desde maestro rellena NIF y defaults.
+await page.getByRole('combobox',{name:'Proveedor del gasto'}).selectOption(ids.supplier);
+await page.waitForTimeout(80);
+assert(await page.locator('input[placeholder="Nombre del proveedor"]').inputValue()==='Proveedor Maestro QA','El maestro no rellenó proveedor');
+assert(await field('NIF / CIF proveedor').inputValue()==='B12345678','El maestro no rellenó NIF');
 await field('Nº factura proveedor').fill('PROV-QA-001');
 await field('Base').fill('100');
-await page.waitForTimeout(180);
+await page.getByRole('combobox',{name:/Tratamiento IRPF/}).selectOption('partial');
+await page.waitForTimeout(80);
+await page.getByRole('textbox',{name:/Porcentaje deducible/}).fill('50');
 await page.locator('#ops_exp_file').setInputFiles({name:'factura-proveedor-qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nFACTURA QA\n%%EOF')});
 await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
 await page.waitForTimeout(250);
-assert(fixtures.ops_expenses.some(x=>x.invoice_number==='PROV-QA-001'),'El gasto con factura no se guardó');
 const savedExpense=fixtures.ops_expenses.find(x=>x.invoice_number==='PROV-QA-001');
-assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta. docs='+JSON.stringify(fixtures.ops_documents)+' dialogs='+dialogs.join(' | ')+' uploads='+storageUploads);
-assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===savedExpense.id),'El documento del gasto no quedó archivado');
+assert(savedExpense,'El gasto con factura real no se guardó');
+assert(savedExpense.supplier_id===ids.supplier,'El gasto no quedó enlazado al maestro de proveedor');
+assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta');
+const savedLine=fixtures.ops_expense_lines.find(x=>x.expense_id===savedExpense.id);
+assert(Math.abs(Number(savedLine.irpf_imputable)-63.025)<0.02,'La deducibilidad parcial del 50 % no se aplicó');
+
+// Abrir gasto y comprobar gestión directa del adjunto.
+let savedExpenseRow=page.locator('tr').filter({hasText:'PROV-QA-001'}).first();
+await savedExpenseRow.getByRole('button',{name:'Abrir',exact:true}).click();
+assert(await page.getByRole('button',{name:'Ver factura',exact:true}).count()===1,'La ficha del gasto no permite ver la factura adjunta');
+assert(await page.getByRole('button',{name:'Quitar factura',exact:true}).count()===1,'La ficha del gasto no permite quitar el adjunto');
+
+// Maestro: crear un proveedor nuevo desde la propia ficha.
+await page.getByRole('button',{name:'+ Nuevo',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+await page.getByRole('dialog').getByLabel('Nombre / razón social').fill('Distribuidor Nuevo QA');
+await page.getByRole('dialog').getByLabel('NIF/CIF').fill('B87654321');
+await page.getByRole('dialog').getByRole('button',{name:'Guardar proveedor'}).click();
+await page.waitForTimeout(180);
+assert(fixtures.ops_suppliers.some(x=>x.name==='Distribuidor Nuevo QA'),'No se creó el proveedor maestro desde Gastos');
+
+// Bulk download: seleccionar el gasto con factura y obtener ZIP.
+await page.evaluate(()=>opsNewExpense());await page.waitForTimeout(50);
+savedExpenseRow=page.locator('tr').filter({hasText:'PROV-QA-001'}).first();
+await savedExpenseRow.getByRole('checkbox').check();
+let expenseZipPromise=page.waitForEvent('download');
+await page.getByRole('button',{name:'Descargar facturas',exact:true}).click();
+const expenseZip=await expenseZipPromise;
+assert((await expenseZip.suggestedFilename()).endsWith('.zip'),'Descarga masiva de facturas de gasto no generó ZIP');
 
 // Facturación: navegación, plantilla/logo único, cálculo y vista previa modal.
 await page.getByRole('button',{name:'Facturación',exact:true}).click();await heading('Facturación');await auditCurrentUi('Facturación');
@@ -468,7 +500,7 @@ assert(validationQa.badExt&&validationQa.badMime&&validationQa.big&&validationQa
 
 // Documentos: UI completo subir -> recargar -> descargar.
 await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
-await field('Proveedor / cliente').fill('Proveedor QA');
+await page.locator('#ops_doc_party').fill('Proveedor QA');
 await field('Nº documento').fill('QA-2026-001');
 await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
 assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Selector documental no cargó archivo');
@@ -493,15 +525,21 @@ const filteredZip=await zipDl;
 const filteredZipObj=await JSZipNode.loadAsync(await fs.readFile(await filteredZip.path()));
 assert(Object.keys(filteredZipObj.files).some(n=>n.endsWith('qa.pdf')),'ZIP filtrado no contiene el documento esperado');
 await qaRow.getByRole('button',{name:'Eliminar',exact:true}).click();
+await page.getByRole('dialog').getByLabel('Motivo obligatorio').fill('QA eliminación documento');
+await page.getByRole('dialog').getByRole('button',{name:'Confirmar'}).click().catch(async()=>await page.getByRole('dialog').getByRole('button',{name:/Eliminar/}).click());
 await page.waitForTimeout(150);
 assert(!fixtures.ops_documents.some(x=>x.id===qaDoc.id),'Eliminar documento no quitó el registro');
 
-// Fiscalidad: counters and simulator.
+// Fiscalidad: origen de datos, señal de gasto y RETA.
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
-await page.getByRole('heading',{name:/Contador IRPF/}).waitFor();
+await page.getByRole('heading',{name:'¿Gastar más o menos?',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Cuota según rendimiento',exact:true}).waitFor();
+await page.getByText('Cuota actual',{exact:true}).waitFor();
+await page.getByRole('heading',{name:/Previsión IRPF/}).waitFor();
 await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
+assert(await page.getByText('Colaboradora familiar activa',{exact:true}).count()===1,'Fiscalidad no separa colaboradora familiar');
 
 // Informes: estructura gestoría + XLSX, PDF and ZIP generators.
 const reportQa=await page.evaluate(()=>{
@@ -566,20 +604,35 @@ const zipNames=Object.keys(zip.files);
 for(const folder of ['01_INGRESOS','02_GASTOS','03_DIARIOS','04_RESUMEN','05_DOCUMENTOS'])assert(zipNames.some(n=>n.includes('/'+folder+'/')),'Paquete gestor sin carpeta '+folder);
 assert(zipNames.some(n=>n.endsWith('/00_LEEME.txt')),'Paquete gestor sin LEEME');
 
-// Administración: configuración general sin duplicar elementos de Facturación.
+// Administración: configuración, Log y Backup separados.
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
 await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');await auditCurrentUi('Configuración');
-await page.getByText('Datos generales y fiscales',{exact:true}).waitFor();
+await page.getByText('Datos generales',{exact:true}).waitFor();
+await page.getByText('Parámetros visibles de cálculo',{exact:true}).waitFor();
+await page.getByText('Almacenamiento',{exact:true}).waitFor();
 assert(await page.locator('#ops_tpl_logo').count()===0,'Configuración vuelve a duplicar la subida de logo');
 assert(await page.getByText('Plantillas y marca',{exact:true}).count()===0,'Configuración vuelve a duplicar las plantillas');
-assert(await page.getByText('Series 2026',{exact:true}).count()===0,'Configuración vuelve a duplicar las series');
-await field('Nombre / titular').waitFor();
-await page.getByText('Almacenamiento documental',{exact:true}).waitFor();
+await field('Margen operativo objetivo %').fill('18');
+await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();
+await page.waitForTimeout(100);
+assert(Number(fixtures.ops_business_settings[0].target_operating_margin_pct)===18,'No se guardó margen objetivo');
+
+await page.getByRole('button',{name:'Log',exact:true}).click();await heading('Log');await auditCurrentUi('Log');
+await page.getByText('Log general',{exact:true}).waitFor();
+
+await page.getByRole('button',{name:'Backup',exact:true}).click();await heading('Backup');await auditCurrentUi('Backup');
+await page.getByText('Backup completo',{exact:true}).waitFor();
+let backupDl=page.waitForEvent('download');
+await page.getByRole('button',{name:'Crear y descargar copia',exact:true}).click();
+const backupFile=await backupDl;
+assert((await backupFile.suggestedFilename()).endsWith('.totusbackup'),'Backup no descarga .totusbackup');
+await page.waitForTimeout(180);
+assert(fixtures.ops_backup_archives.length===1,'Backup no registró histórico');
 
 // Eliminar gasto manual: doble confirmación y cascada de líneas.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
 await page.evaluate(()=>opsNewExpense());
-await field('Proveedor / servicio').fill('Gasto eliminable QA');
+await page.locator('input[placeholder="Nombre del proveedor"]').fill('Gasto eliminable QA');
 await field('Base').fill('12');
 await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
 await page.waitForTimeout(180);
@@ -587,8 +640,10 @@ const disposable=fixtures.ops_expenses.find(x=>x.supplier_name==='Gasto eliminab
 assert(disposable&&fixtures.ops_expense_lines.some(x=>x.expense_id===disposable.id),'No se creó gasto temporal para probar borrado');
 const disposableRow=page.locator('tr').filter({hasText:'Gasto eliminable QA'}).first();
 await disposableRow.getByRole('button',{name:'Eliminar',exact:true}).click();
+await page.getByRole('dialog').getByLabel('Motivo obligatorio').fill('QA borrado gasto');
+await page.getByRole('dialog').getByRole('button',{name:'Eliminar definitivamente'}).click();
 await page.waitForTimeout(180);
-assert(!fixtures.ops_expenses.some(x=>x.id===disposable.id),'Eliminar gasto manual no borró la cabecera');
+assert(!fixtures.ops_expenses.some(x=>x.id===disposable.id),'Eliminar gasto no borró la cabecera');
 assert(!fixtures.ops_expense_lines.some(x=>x.expense_id===disposable.id),'Eliminar gasto manual no borró las líneas');
 
 // Encargado: facturación debe quedar estrictamente en modo consulta.
@@ -602,6 +657,8 @@ assert(await page.getByRole('button',{name:'Guardar borrador',exact:true}).count
 assert(await page.getByRole('button',{name:'+ Nuevo',exact:true}).count()===0,'El encargado no debe poder crear facturas');
 assert(await page.getByRole('button',{name:'Facturas',exact:true}).count()===1,'El encargado debe poder consultar facturas');
 assert(await page.getByRole('button',{name:'Proformas',exact:true}).count()===1,'El encargado debe poder consultar proformas');
+await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');assert(await page.getByRole('button',{name:'Cerrar día',exact:true}).count()===1,'El encargado debe poder cerrar caja');
+await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');assert(await page.getByRole('button',{name:'Guardar gasto',exact:true}).count()===1,'El encargado debe poder registrar gastos');
 
 // Responsive smoke.
 await page.setViewportSize({width:390,height:844});
