@@ -200,7 +200,58 @@ window.opsDownloadManagerIncome=function(){try{dlBlob(wbBlob({'INGRESOS':manager
 function fiscalRows(){const f=extFiscal();const r=extReta();return[['Concepto','Importe'],['Ingresos acumulados',f.income],['Gastos deducibles',f.raw],['Difícil justificación',f.diff],['Rendimiento neto',f.net],['Modelo 130 estimado',f.payable],['Modelo 111',f.m111],['Modelo 115',f.m115],['Reserva total',f.reserve],['Rendimiento mensual RETA',r.monthly]]}
 window.opsManagementWorkbook=function(){const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.cash_withdrawals),N(c.actual_cash)])];const inv=[['Fecha','Tipo','Número','Cliente','Estado','Base','IVA','Total'],...O.invoices.filter(i=>inRange(i.issue_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.issue_date.localeCompare(b.issue_date)).map(i=>[i.issue_date,i.document_type,i.display_number||'',i.customer_name,i.status,N(i.base_amount),N(i.vat_amount),N(i.total_amount)])];dlBlob(wbBlob({Resumen:fiscalRows(),Cierres:close,Gastos:managerExpenseRows(O.reportFrom,O.reportTo),Facturas:inv}),`Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`)};
 window.opsExtFiscalPdf=function(){if(!window.jspdf?.jsPDF)return alert('PDF no disponible');const {jsPDF}=window.jspdf,d=new jsPDF(),f=extFiscal(),r=extReta();d.setFontSize(18);d.text(`Totus Central · Fiscal T${O.quarter} ${O.year}`,15,18);d.setFontSize(10);let y=32;[['Ingresos acumulados',f.income],['Gastos deducibles',f.raw+f.diff],['Rendimiento neto',f.net],['Modelo 130 estimado',f.payable],['Modelo 111',f.m111],['Modelo 115',f.m115],['Reserva fiscal',f.reserve],['RETA mensual proyectado',r.monthly]].forEach(x=>{d.text(x[0],15,y);d.text(euro(x[1]),195,y,{align:'right'});y+=8});d.setFontSize(8);d.text('Control interno basado en los datos de Totus y los cierres de gestoría importados. Validar antes de presentar modelos oficiales.',15,y+8,{maxWidth:180});dlBlob(d.output('blob'),`Fiscal_T${O.quarter}_${O.year}.pdf`)};
-window.opsExtGestorPack=async function(){if(!window.JSZip||!window.XLSX)return alert('ZIP/Excel no disponible');const z=new JSZip();z.file(`GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo)}));z.file(`INGRESOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'INGRESOS':managerIncomeRows(O.reportFrom,O.reportTo)}));for(const st of O.stores)z.file(`Diario_${storeName(st.id).replace(/\s+/g,'_')}_${O.year}.xlsx`,dailyWorkbook(st.id,O.year));z.file(`Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`,(()=>{const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo)).map(c=>[c.business_date,storeName(c.store_id),c.opening_cash,c.cash_sales,c.card_sales,c.bizum_sales,c.online_sales,c.cash_withdrawals,c.actual_cash])];return wbBlob({Resumen:fiscalRows(),Cierres:close,Gastos:managerExpenseRows(O.reportFrom,O.reportTo)})})());for(const doc of O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo)).sort((a,b)=>String(a.document_date).localeCompare(String(b.document_date)))){const {data,error}=await sb.storage.from('business-documents').download(doc.storage_path);if(!error)z.file(`documentos/${doc.document_date||'sin_fecha'}_${String(doc.supplier_or_customer||'doc').replace(/[^\w.-]+/g,'_')}_${doc.original_name}`,data)}dlBlob(await z.generateAsync({type:'blob'}),`PAQUETE_GESTOR_${O.reportFrom}_${O.reportTo}.zip`)};
+function gestorDocFolder(doc,base){
+ const dt=doc.document_date||'sin_fecha';
+ const year=dt.slice(0,4)||'SIN_ANO';
+ const month=dt.slice(5,7)||'SIN_MES';
+ const q=dt.length>=7?'T'+(Math.floor((Number(month)-1)/3)+1):'SIN_TRIMESTRE';
+ const store=doc.store_id?(O.stores.find(x=>x.id===doc.store_id)?.code||'TIENDA'):'GENERAL';
+ const type=String(doc.doc_type||'otro').replace(/[^a-zA-Z0-9_-]+/g,'_');
+ const party=String(doc.supplier_or_customer||'SIN_PROVEEDOR').replace(/[^a-zA-Z0-9._-]+/g,'_');
+ return [base,'05_DOCUMENTOS',year,q,month,store,type,party].join('/');
+}
+window.opsExtGestorPack=async function(){
+ if(!window.JSZip||!window.XLSX)return alert('ZIP/Excel no disponible');
+ const z=new JSZip(),base=`GESTORIA_${O.reportFrom}_${O.reportTo}`;
+ z.file(base+`/01_INGRESOS/INGRESOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'INGRESOS':managerIncomeRows(O.reportFrom,O.reportTo)}));
+ z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo)}));
+ for(const st of O.stores){
+  z.file(base+`/03_DIARIOS/Diario_${storeName(st.id).replace(/\s+/g,'_')}_${O.year}.xlsx`,dailyWorkbook(st.id,O.year));
+ }
+ const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],
+   ...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo))
+    .sort((a,b)=>String(a.business_date).localeCompare(String(b.business_date))||storeName(a.store_id).localeCompare(storeName(b.store_id)))
+    .map(c=>[c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.cash_withdrawals),N(c.actual_cash)])];
+ z.file(base+`/04_RESUMEN/Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`,wbBlob({
+   Resumen:fiscalRows(),
+   Cierres:close,
+   Gastos:managerExpenseRows(O.reportFrom,O.reportTo),
+   Ingresos:managerIncomeRows(O.reportFrom,O.reportTo)
+ }));
+ const internalExpenseIds=new Set(O.expenses.filter(e=>e.management_only).map(e=>e.id));
+ const docs=O.documents
+  .filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo))
+  .filter(d=>!(d.linked_entity_type==='expense'&&internalExpenseIds.has(d.linked_entity_id)))
+  .sort((a,b)=>String(a.document_date||'').localeCompare(String(b.document_date||''))||String(a.supplier_or_customer||'').localeCompare(String(b.supplier_or_customer||'')));
+ for(const doc of docs){
+   const {data,error}=await sb.storage.from('business-documents').download(doc.storage_path);
+   if(error)continue;
+   const inv=String(doc.invoice_number||'SIN_NUMERO').replace(/[^a-zA-Z0-9._-]+/g,'_');
+   const original=String(doc.original_name||'documento').replace(/[^a-zA-Z0-9._-]+/g,'_');
+   z.file(gestorDocFolder(doc,base)+`/${doc.document_date||'sin_fecha'}_${inv}_${original}`,data);
+ }
+ z.file(base+'/00_LEEME.txt',
+   'PAQUETE DE GESTORIA GENERADO POR TOTUS CENTRAL\r\n\r\n'+
+   '01_INGRESOS: estructura de ingresos facilitada por gestoría.\r\n'+
+   '02_GASTOS: estructura de gastos facilitada por gestoría.\r\n'+
+   '03_DIARIOS: libros diarios de Hortimatic y NewOldSmok.\r\n'+
+   '04_RESUMEN: libro global de control.\r\n'+
+   '05_DOCUMENTOS: año > trimestre > mes > establecimiento > tipo > proveedor/cliente.\r\n\r\n'+
+   'Los gastos marcados como SOLO CONTROL INTERNO no se incluyen en los ficheros ni documentos para gestoría.\r\n'+
+   'Periodo: '+O.reportFrom+' a '+O.reportTo+'\r\n'
+ );
+ dlBlob(await z.generateAsync({type:'blob'}),`PAQUETE_GESTOR_${O.reportFrom}_${O.reportTo}.zip`);
+};
 function extReports(){return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Descargas</div><h3>Informes, Excel diario y gestoría</h3><div class="small">Orden cronológico y columnas alineadas con tus hojas y los informes de gestoría.</div></div></div><div class="ops-filters"><div><label>Desde</label><input type="date" value="${H(O.reportFrom)}" onchange="O.reportFrom=this.value"></div><div><label>Hasta</label><input type="date" value="${H(O.reportTo)}" onchange="O.reportTo=this.value"></div></div><div class="ops-grid-3" style="margin-top:14px"><div class="ops-card"><h4>Gastos · formato gestoría</h4><p class="small">Orden, fecha, factura, identificación, concepto, IVA, RE, IRPF y retenciones.</p><button class="secondary" onclick="opsDownloadManagerExpenses()">Descargar XLSX</button></div><div class="ops-card"><h4>Ingresos · formato gestoría</h4><p class="small">Resumen mensual por Azuqueca/Hortimatic y Alcalá/NewOldSmok.</p><button class="secondary" onclick="opsDownloadManagerIncome()">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario Hortimatic</h4><p class="small">12 hojas: Día · Gastos · Precio · Tarjeta · Salida de caja.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='HORTIMATIC')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Excel diario NewOldSmok</h4><p class="small">Misma estructura que tu libro actual.</p><button class="secondary" onclick="opsDownloadDailyExcel('${O.stores.find(s=>s.code==='NEWOLDSMOK')?.id||''}')">Descargar XLSX</button></div><div class="ops-card"><h4>Libro completo Totus</h4><p class="small">Resumen, cierres, gastos y facturación en un único Excel.</p><button class="secondary" onclick="opsManagementWorkbook()">Descargar XLSX</button></div><div class="ops-card"><h4>Informe fiscal</h4><p class="small">130, 111, 115, resultado y RETA orientativo.</p><button class="secondary" onclick="opsExtFiscalPdf()">Descargar PDF</button></div><div class="ops-card"><h4>Documentos</h4><p class="small">Archivos de la franja seleccionada ordenados por fecha.</p><button class="secondary" onclick="opsZipReportDocs()">Descargar ZIP</button></div><div class="ops-card"><h4>Paquete gestor</h4><p class="small">Gastos + ingresos + diarios + libro Totus + documentos.</p><button class="primary" onclick="opsExtGestorPack()">Preparar paquete</button></div></div></div>`}
 function replaceBody(base,body){const box=document.createElement('div');box.innerHTML=base;const wrap=box.querySelector('.ops-wrap');if(!wrap)return base;while(wrap.children.length>1)wrap.lastElementChild.remove();wrap.insertAdjacentHTML('beforeend',body);return box.innerHTML}
 const baseManagement=window.opsManagementHtml;
