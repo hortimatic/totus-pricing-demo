@@ -777,7 +777,7 @@ window.opsExportAdminLog=function(){
  dlBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`Totus_log_${today()}.csv`);
 };
 
-const BACKUP_TABLES=['ops_business_settings','ops_stores','ops_cash_drawers','ops_daily_closings','ops_daily_closing_drawers','ops_expense_categories','ops_suppliers','ops_personnel','ops_expenses','ops_expense_lines','ops_customers','ops_document_templates','ops_invoice_series','ops_sales_invoices','ops_sales_invoice_lines','ops_documents','ops_tax_payments','ops_fiscal_adjustments','ops_income_adjustments','ops_historical_income_periods','ops_legacy_daily_rows','ops_gestor_source_rows','ops_gestor_quarter_summary','ops_reconciliation_notes','ops_reta_brackets','ops_entity_revisions'];
+const BACKUP_TABLES=['brands','families','providers','products','product_variants','product_provider_prices','product_competitor_prices','price_history','consultations','consultation_history','team_members','ops_business_settings','ops_stores','ops_cash_drawers','ops_daily_closings','ops_daily_closing_drawers','ops_expense_categories','ops_suppliers','ops_personnel','ops_expenses','ops_expense_lines','ops_customers','ops_document_templates','ops_invoice_series','ops_sales_invoices','ops_sales_invoice_lines','ops_documents','ops_tax_payments','ops_fiscal_adjustments','ops_income_adjustments','ops_historical_income_periods','ops_legacy_daily_rows','ops_gestor_source_rows','ops_gestor_quarter_summary','ops_fiscal_reference_periods','ops_import_batches','ops_reconciliation_notes','ops_reta_brackets','ops_audit_log','ops_entity_revisions'];
 async function buildBackupBlob(){
  if(!admin())throw new Error('Solo administración puede generar copias.');
  const zip=new JSZip(),manifest={format:'totusbackup',version:1,created_at:new Date().toISOString(),app:'Totus Central',tables:{},files:[]};
@@ -789,25 +789,56 @@ async function buildBackupBlob(){
  zip.file('manifest.json',JSON.stringify(manifest,null,2));
  return{blob:await zip.generateAsync({type:'blob'}),manifest};
 }
+async function persistBackup(blob,manifest,name,{download=false,notes=''}={}){
+ const buf=await blob.arrayBuffer(),sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf))).map(b=>b.toString(16).padStart(2,'0')).join('');
+ const path=`${O.year}/${crypto.randomUUID()}_${name}`;
+ const up=await sb.storage.from('totus-backups').upload(path,blob,{contentType:'application/octet-stream',upsert:false});if(up.error)throw up.error;
+ const ins=await sb.from('ops_backup_archives').insert({file_path:path,file_name:name,file_size:blob.size,sha256:sha,format_version:manifest.version,created_by:authSession?.user?.id||null,notes}).select().single();
+ if(ins.error){await sb.storage.from('totus-backups').remove([path]);throw ins.error}
+ if(download)dlBlob(blob,name);
+ return ins.data;
+}
 window.opsCreateBackup=async function(){
  try{
   const {blob,manifest}=await buildBackupBlob(),name=`Totus_${today()}_${new Date().toTimeString().slice(0,8).replaceAll(':','')}.totusbackup`;
-  const buf=await blob.arrayBuffer(),sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf))).map(b=>b.toString(16).padStart(2,'0')).join('');
-  const path=`${O.year}/${crypto.randomUUID()}_${name}`;
-  const up=await sb.storage.from('totus-backups').upload(path,blob,{contentType:'application/octet-stream',upsert:false});if(up.error)throw up.error;
-  const ins=await sb.from('ops_backup_archives').insert({file_path:path,file_name:name,file_size:blob.size,sha256:sha,format_version:manifest.version,created_by:authSession?.user?.id||null}).select().single();if(ins.error){await sb.storage.from('totus-backups').remove([path]);throw ins.error}
-  dlBlob(blob,name);await audit('backup','crear',ins.data.id,{archivo:name,tamano:blob.size});await featureLoad(true);render();
+  const rec=await persistBackup(blob,manifest,name,{download:true,notes:'Copia manual'});
+  await audit('backup','crear',rec.id,{archivo:name,tamano:blob.size});await featureLoad(true);render();
  }catch(e){alert('No se pudo crear la copia: '+e.message)}
 };
 window.opsDownloadBackup=async function(id){const b=E.backupRows.find(x=>x.id===id);if(!b)return;const {data,error}=await sb.storage.from('totus-backups').download(b.file_path);if(error)return alert(error.message);dlBlob(data,b.file_name)};
 window.opsDeleteBackup=async function(id){const b=E.backupRows.find(x=>x.id===id);if(!b)return;const reason=await O.core.askReason('Eliminar copia',`Se eliminará la copia ${b.file_name}.`,'Eliminar copia');if(!reason)return;const rm=await sb.storage.from('totus-backups').remove([b.file_path]);if(rm.error)return alert(rm.error.message);const del=await sb.from('ops_backup_archives').delete().eq('id',id);if(del.error)return alert(del.error.message);await audit('backup','eliminar',id,{archivo:b.file_name,motivo:reason});await featureLoad(true);render()};
+async function readBackupFile(file){
+ const zip=await JSZip.loadAsync(file),mf=zip.file('manifest.json');if(!mf)throw new Error('No contiene manifest.json');
+ const manifest=JSON.parse(await mf.async('string'));if(manifest.format!=='totusbackup'||manifest.version!==1)throw new Error('Formato de copia no compatible');
+ const missing=BACKUP_TABLES.filter(t=>!zip.file('data/'+t+'.json'));
+ return{zip,manifest,missing};
+}
 window.opsValidateBackupUpload=async function(){
  const file=document.getElementById('ops_backup_file')?.files?.[0];if(!file)return alert('Selecciona una copia .totusbackup.');
- try{const zip=await JSZip.loadAsync(file),mf=zip.file('manifest.json');if(!mf)throw new Error('No contiene manifest.json');const manifest=JSON.parse(await mf.async('string'));if(manifest.format!=='totusbackup'||manifest.version!==1)throw new Error('Formato de copia no compatible');const missing=BACKUP_TABLES.filter(t=>!zip.file('data/'+t+'.json'));openOpsModal('Copia validada',`<div class="ops-help-copy"><b>${H(file.name)}</b><br>Creada: ${H(manifest.created_at||'—')}<br>Tablas: ${Object.keys(manifest.tables||{}).length}<br>Archivos: ${(manifest.files||[]).length}<br>${missing.length?'<span class="badge warnb">Faltan tablas: '+H(missing.join(', '))+'</span>':'<span class="badge ok">Estructura completa</span>'}</div><div class="ops-note warn" style="margin-top:12px">La restauración destructiva se habilitará solo cuando la validación integral y la copia previa automática estén verificadas.</div>`) }catch(e){alert('Copia no válida: '+e.message)}
+ try{const {manifest,missing}=await readBackupFile(file);openOpsModal('Copia validada',`<div class="ops-help-copy"><b>${H(file.name)}</b><br>Creada: ${H(manifest.created_at||'—')}<br>Tablas: ${Object.keys(manifest.tables||{}).length}<br>Archivos: ${(manifest.files||[]).length}<br>${missing.length?'<span class="badge warnb">Faltan tablas: '+H(missing.join(', '))+'</span>':'<span class="badge ok">Estructura completa y restaurable</span>'}</div>`)}catch(e){alert('Copia no válida: '+e.message)}
+};
+window.opsRestoreBackupUpload=async function(){
+ if(!admin())return;
+ const file=document.getElementById('ops_backup_file')?.files?.[0];if(!file)return alert('Selecciona una copia .totusbackup.');
+ try{
+  const {zip,manifest,missing}=await readBackupFile(file);if(missing.length)return alert('La copia no es completa para esta versión. Faltan: '+missing.join(', '));
+  const reason=await askReason('Restaurar copia completa',`Vas a sustituir los datos actuales de Totus por "${file.name}". Antes se guardará automáticamente una copia PRE_RESTORE del estado actual.`,'Restaurar');
+  if(!reason)return;
+  const current=await buildBackupBlob(),preName=`PRE_RESTORE_${today()}_${new Date().toTimeString().slice(0,8).replaceAll(':','')}.totusbackup`;
+  await persistBackup(current.blob,current.manifest,preName,{download:false,notes:'Copia automática previa a restauración: '+file.name});
+  for(const item of (manifest.files||[])){
+    const zf=zip.file('storage/'+item.bucket+'/'+item.path);if(!zf)throw new Error('Falta archivo físico en la copia: '+item.path);
+    const blob=await zf.async('blob');const up=await sb.storage.from(item.bucket).upload(item.path,blob,{upsert:true});if(up.error)throw new Error(item.path+': '+up.error.message);
+  }
+  const tables={};for(const t of BACKUP_TABLES){tables[t]=JSON.parse(await zip.file('data/'+t+'.json').async('string'))}
+  const {data,error}=await sb.rpc('ops_restore_backup_data',{p_tables:tables,p_reason:reason});if(error)throw error;
+  await window.opsLoadData(true);E.loaded=false;await featureLoad(true);render();
+  openOpsModal('Restauración completada',`<div class="ops-help-copy"><span class="badge ok">Correcto</span><br>Se restauraron ${H(String(data?.tables||BACKUP_TABLES.length))} tablas. La copia automática PRE_RESTORE permanece guardada por seguridad.</div>`);
+ }catch(e){alert('No se pudo restaurar: '+e.message)}
 };
 function adminBackupHtml(){
  if(!admin())return '<div class="ops-card">Solo administración.</div>';
- return `${window.adminStripHtml?window.adminStripHtml('backup'):''}<div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Copia portátil</div><h3>Backup completo</h3><div class="small">Datos + documentos + recursos corporativos en un único .totusbackup.</div></div><button class="primary" onclick="opsCreateBackup()">Crear y descargar copia</button></div><div class="ops-note">La copia también se guarda de forma privada en Supabase y registra SHA-256.</div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Validación</div><h3>Comprobar una copia</h3></div><button class="secondary" onclick="opsValidateBackupUpload()">Validar archivo</button></div><input id="ops_backup_file" type="file" accept=".totusbackup,application/octet-stream"></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Histórico</div><h3>Copias guardadas</h3></div></div>${E.backupRows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Archivo</th><th>Tamaño</th><th>SHA-256</th><th></th></tr></thead><tbody>${E.backupRows.map(b=>`<tr><td>${H(new Date(b.created_at).toLocaleString('es-ES'))}</td><td><b>${H(b.file_name)}</b></td><td>${(N(b.file_size)/1048576).toFixed(1).replace('.',',')} MB</td><td><code>${H(String(b.sha256).slice(0,16))}…</code></td><td><div class="ops-actions"><button class="ghost" onclick="opsDownloadBackup('${b.id}')">Descargar</button><button class="danger" onclick="opsDeleteBackup('${b.id}')">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">Aún no hay copias guardadas.</div>'}</div>`;
+ return `${window.adminStripHtml?window.adminStripHtml('backup'):''}<div class="ops-grid"><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Copia portátil</div><h3>Backup completo</h3><div class="small">Datos + documentos + recursos corporativos en un único .totusbackup.</div></div><button class="primary" onclick="opsCreateBackup()">Crear y descargar copia</button></div><div class="ops-note">La copia también se guarda de forma privada en Supabase y registra SHA-256.</div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Restauración</div><h3>Subir una copia</h3></div><div class="ops-actions"><button class="secondary" onclick="opsValidateBackupUpload()">Validar</button><button class="danger" onclick="opsRestoreBackupUpload()">Restaurar</button></div></div><input id="ops_backup_file" type="file" accept=".totusbackup,application/octet-stream"><div class="small">Restaurar exige motivo y genera automáticamente una copia PRE_RESTORE antes de modificar datos.</div></div></div><div class="ops-card"><div class="section-head"><div><div class="eyebrow">Histórico</div><h3>Copias guardadas</h3></div></div>${E.backupRows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Archivo</th><th>Tamaño</th><th>SHA-256</th><th></th></tr></thead><tbody>${E.backupRows.map(b=>`<tr><td>${H(new Date(b.created_at).toLocaleString('es-ES'))}</td><td><b>${H(b.file_name)}</b></td><td>${(N(b.file_size)/1048576).toFixed(1).replace('.',',')} MB</td><td><code>${H(String(b.sha256).slice(0,16))}…</code></td><td><div class="ops-actions"><button class="ghost" onclick="opsDownloadBackup('${b.id}')">Descargar</button><button class="danger" onclick="opsDeleteBackup('${b.id}')">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">Aún no hay copias guardadas.</div>'}</div>`;
 }
 function bodyForTab(tab){
  if(!E.loaded)return null;
