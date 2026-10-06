@@ -5,7 +5,7 @@
 const O=window.TotusGestion={
   loaded:false,loading:false,tab:'resumen',
   year:new Date().getFullYear(),quarter:Math.floor(new Date().getMonth()/3)+1,storeId:'all',
-  settings:null,stores:[],categories:[],suppliers:[],documents:[],expenses:[],expenseLines:[],
+  settings:null,stores:[],categories:[],suppliers:[],personnel:[],documents:[],expenses:[],expenseLines:[],
   closings:[],drawers:[],closingDrawers:[],series:[],invoices:[],invoiceLines:[],
   taxPayments:[],retaBrackets:[],fiscalAdjustments:[],incomeAdjustments:[],gestorQuarterSummary:[],reconciliationNotes:[],
   closeDraft:null,expenseDraft:null,expenseDraftLines:[],invoiceDraft:null,invoiceDraftLines:[],
@@ -120,11 +120,12 @@ async function load(force=false){
   if(O.loaded&&!force)return;
   O.loading=true;
   try{
-    const [settings,stores,categories,suppliers,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments,gestorQuarterSummary,reconciliationNotes]=await Promise.all([
+    const [settings,stores,categories,suppliers,personnel,documents,expenses,expenseLines,closings,drawers,closingDrawers,series,invoices,invoiceLines,taxPayments,retaBrackets,fiscalAdjustments,incomeAdjustments,gestorQuarterSummary,reconciliationNotes]=await Promise.all([
       selectAll('ops_business_settings'),
       selectAll('ops_stores','sort_order',true),
       selectAll('ops_expense_categories','sort_order',true),
       selectAll('ops_suppliers','name',true),
+      selectAll('ops_personnel','full_name',true),
       selectAll('ops_documents','created_at',false),
       selectAll('ops_expenses','expense_date',false),
       selectAll('ops_expense_lines','sort_order',true),
@@ -144,7 +145,7 @@ async function load(force=false){
     O.settings=settings[0]||{};
     O.stores=stores.filter(x=>x.active!==false);
     O.categories=categories.filter(x=>x.active!==false);
-    O.suppliers=suppliers;
+    O.suppliers=suppliers; O.personnel=personnel;
     O.documents=documents; O.expenses=expenses; O.expenseLines=expenseLines;
     O.closings=closings; O.drawers=drawers.filter(x=>x.active!==false); O.closingDrawers=closingDrawers;
     O.series=series; O.invoices=invoices; O.invoiceLines=invoiceLines; O.taxPayments=taxPayments;
