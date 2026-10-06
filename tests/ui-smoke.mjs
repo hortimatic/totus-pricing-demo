@@ -266,7 +266,7 @@ await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
 await page.waitForTimeout(250);
 assert(fixtures.ops_expenses.some(x=>x.invoice_number==='PROV-QA-001'),'El gasto con factura no se guardó');
 const savedExpense=fixtures.ops_expenses.find(x=>x.invoice_number==='PROV-QA-001');
-assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta');
+assert(savedExpense.document_id,'El gasto no quedó enlazado a su factura adjunta. docs='+JSON.stringify(fixtures.ops_documents)+' dialogs='+dialogs.join(' | ')+' uploads='+storageUploads);
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='expense'&&x.linked_entity_id===savedExpense.id),'El documento del gasto no quedó archivado');
 
 // Facturación: invoice/proforma separation, line calculator and PDF preview.
