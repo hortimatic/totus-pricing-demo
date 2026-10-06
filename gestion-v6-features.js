@@ -9,6 +9,7 @@ const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
 const qBounds=(y,q)=>{const sm=(q-1)*3+1,end=new Date(y,q*3,0);return{start:`${y}-${String(sm).padStart(2,'0')}-01`,end:`${y}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`}};
 const yearQEnd=(y,q)=>qBounds(y,q).end;
 const monthName=m=>['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'][m-1];
+const reportDate=v=>{const x=String(v||'');return /^\d{4}-\d{2}-\d{2}$/.test(x)?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):x};
 const euro=v=>eur(Number(v)||0);
 async function featureLoad(force=false){
  if(E.loaded&&!force)return;
@@ -238,7 +239,7 @@ function managerExpenseRows(from,to){
  const headers=['Orden','Fecha','Nºfra.rec.','Nºfra.proveedor','Rt','Identificación','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
  const rows=[];
  E.gestorRows.filter(r=>inRange(r.expense_date,from,to)).forEach(r=>rows.push([
-   r.order_no,r.expense_date,r.received_invoice_ref,r.supplier_invoice_no,'',
+   N(r.order_no),reportDate(r.expense_date),r.received_invoice_ref||'',r.supplier_invoice_no||'','',
    (r.supplier_tax_id+' '+r.supplier_name).trim(),r.concept_text,
    N(r.base_vat),N(r.vat_rate),N(r.vat_amount),N(r.re_base),N(r.re_rate),N(r.re_amount),
    N(r.imputable_irpf),N(r.withholding_base),N(r.withholding_rate),N(r.withholding_amount)
@@ -256,21 +257,55 @@ function managerExpenseRows(from,to){
     const concept=(c?.name||l.description||'').toUpperCase();
     const base=N(l.base_amount),vat=N(l.vat_amount),re=N(l.re_amount),tax=vat+re;
     rows.push([
-      ++order,e.expense_date,'',e.invoice_number||'','',idText,concept,
+      ++order,reportDate(e.expense_date),'',e.invoice_number||'','',idText,concept,
       base,N(l.vat_rate),vat,N(l.re_base),N(l.re_rate),re,
       deductible?base:0,N(l.withholding_base),N(l.withholding_rate),N(l.withholding_amount)
     ]);
     if(tax){
       rows.push([
-        ++order,e.expense_date,'',e.invoice_number||'','',idText,'IVA SOPORTADO(RECARGO - REAGYP)',
+        ++order,reportDate(e.expense_date),'',e.invoice_number||'','',idText,'IVA SOPORTADO(RECARGO - REAGYP)',
         0,0,0,0,0,0,deductible?tax:0,0,0,0
       ]);
     }
   }));
- rows.sort((x,y)=>String(x[1]).localeCompare(String(y[1]))||N(x[0])-N(y[0]));
- return [headers,...rows];
+ const parseDate=x=>String(x).split('/').reverse().join('-');
+ rows.sort((x,y)=>parseDate(x[1]).localeCompare(parseDate(y[1]))||N(x[0])-N(y[0]));
+ const total=rows.reduce((a,r)=>{
+   [7,9,10,12,13,14,16].forEach(i=>a[i]=(a[i]||0)+N(r[i]));
+   return a;
+ },[]);
+ const totalRow=['','', '', '', '', '', 'TOTAL ACUMULADO',total[7]||0,'',total[9]||0,total[10]||0,'',total[12]||0,total[13]||0,total[14]||0,'',total[16]||0];
+ return[headers,...rows,totalRow];
 }
-function managerIncomeRows(from,to){const headers=['Orden','Fecha','Nº factura','Rect.','Identificación del Cliente','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];const groups=new Map();E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to).forEach(x=>groups.set(x.store_id+'|'+x.period_start.slice(0,7),{store:x.store_id,date:x.period_end,total:N(x.total_income),historical:true}));O.closings.filter(c=>c.include_in_income!==false&&inRange(c.business_date,from,to)&&!coveredByHistoricalIncome(c)).forEach(c=>{const k=c.store_id+'|'+c.business_date.slice(0,7),v=groups.get(k)||{store:c.store_id,date:new Date(+c.business_date.slice(0,4),+c.business_date.slice(5,7),0).toISOString().slice(0,10),total:0};v.total+=N(c.cash_sales)+N(c.card_sales)+N(c.bizum_sales)+N(c.online_sales)+N(c.other_income);groups.set(k,v)});let i=0;const rows=[...groups.values()].sort((a,b)=>a.date.localeCompare(b.date)||storeName(a.store).localeCompare(storeName(b.store))).map(v=>{const m=+v.date.slice(5,7),y=v.date.slice(2,4),sn=storeName(v.store).toUpperCase(),ref=`${monthName(m)}${y}${sn.includes('NEW')?'ALC':''}`;return[++i,v.date,ref,'',`VENTAS ${monthName(m)} ${sn.includes('HORTI')?'AZUQUECA':'ALCALA'}`,'700 VENTAS - INGRESOS',v.total,0,0,0,0,0,v.total,0,0,0]});return[headers,...rows]}
+function managerExpenseSummaryRows(from,to){
+ const detail=managerExpenseRows(from,to).slice(1,-1);
+ const groups=new Map();
+ for(const r of detail){
+  const concept=String(r[6]||'').trim()||'SIN CONCEPTO';
+  if(!groups.has(concept))groups.set(concept,{concept,base:0,vat:0,reBase:0,re:0,irpf:0,retBase:0,ret:0});
+  const g=groups.get(concept);
+  g.base+=N(r[7]);g.vat+=N(r[9]);g.reBase+=N(r[10]);g.re+=N(r[12]);g.irpf+=N(r[13]);g.retBase+=N(r[14]);g.ret+=N(r[16]);
+ }
+ return [['Descripción','Base IVA','Cuota IVA','Base R. Equiv.','Cuota R. Equiv.','Imputable IRPF','Base retención','Cuota retenida'],
+   ...[...groups.values()].sort((a,b)=>a.concept.localeCompare(b.concept)).map(g=>[g.concept,g.base,g.vat,g.reBase,g.re,g.irpf,g.retBase,g.ret])];
+}
+function managerIncomeRows(from,to){
+ const headers=['Orden','Fecha','Nº factura','Rect.','Identificación del Cliente','Concepto','Base IVA','%','Cuota IVA','Base R. Equiv.','% R.Eq.','Cuota R.Equiv.','Imputable a IRPF','Base retención','% ret.','Cuota retenida'];
+ const groups=new Map();
+ E.historicalIncome.filter(x=>x.period_start>=from&&x.period_end<=to).forEach(x=>groups.set(x.store_id+'|'+x.period_start.slice(0,7),{store:x.store_id,date:x.period_end,total:N(x.total_income),historical:true}));
+ O.closings.filter(c=>c.include_in_income!==false&&inRange(c.business_date,from,to)&&!coveredByHistoricalIncome(c)).forEach(c=>{
+   const k=c.store_id+'|'+c.business_date.slice(0,7),v=groups.get(k)||{store:c.store_id,date:new Date(+c.business_date.slice(0,4),+c.business_date.slice(5,7),0).toISOString().slice(0,10),total:0};
+   v.total+=N(c.cash_sales)+N(c.card_sales)+N(c.bizum_sales)+N(c.online_sales)+N(c.other_income);groups.set(k,v)
+ });
+ let i=0;
+ const rows=[...groups.values()].sort((a,b)=>a.date.localeCompare(b.date)||storeName(a.store).localeCompare(storeName(b.store))).map(v=>{
+   const m=+v.date.slice(5,7),y=v.date.slice(2,4),sn=storeName(v.store).toUpperCase(),alc=sn.includes('NEW');
+   const ref=`${monthName(m)}${y}${alc?'ALC':''}`;
+   return[++i,reportDate(v.date),ref,'',`VENTAS ${monthName(m)} ${alc?'ALCALA':'AZUQUECA'}`,'VENTAS - INGRESOS',v.total,0,0,0,0,0,v.total,0,0,0]
+ });
+ const total=rows.reduce((a,r)=>a+N(r[6]),0);
+ return[headers,...rows,['','','','','','TOTAL ACUMULADO',total,'',0,0,'',0,total,0,'',0]];
+}
 function wbBlob(sheets){
  if(!window.XLSX)throw new Error('Excel no disponible');
  const wb=XLSX.utils.book_new();
@@ -323,7 +358,7 @@ function dailyWorkbook(storeId,year){
  return wbBlob(sheets);
 }
 window.opsDownloadDailyExcel=function(storeId){try{dlBlob(dailyWorkbook(storeId,O.year),`Gastos_y_ventas_${storeName(storeId).replace(/\s+/g,'_')}_${O.year}.xlsx`)}catch(e){alert(e.message)}};
-window.opsDownloadManagerExpenses=function(){try{dlBlob(wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo)}),`GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`)}catch(e){alert(e.message)}};
+window.opsDownloadManagerExpenses=function(){try{dlBlob(wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo),'DESGLOSE CONCEPTOS':managerExpenseSummaryRows(O.reportFrom,O.reportTo)}),`GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`)}catch(e){alert(e.message)}};
 window.opsDownloadManagerIncome=function(){try{dlBlob(wbBlob({'INGRESOS':managerIncomeRows(O.reportFrom,O.reportTo)}),`INGRESOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`)}catch(e){alert(e.message)}};
 function fiscalRows(){const f=fiscalProjection();const r=retaProjection();return[['Concepto','Importe'],['Ingresos acumulados',f.income],['Gastos deducibles',f.raw],['Difícil justificación',f.diff],['Rendimiento neto',f.net],['Modelo 130 estimado',f.payable],['Modelo 111',f.m111],['Modelo 115',f.m115],['Reserva total',f.reserve],['Rendimiento mensual RETA',r.monthly]]}
 window.opsManagementWorkbook=function(){const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.cash_withdrawals),N(c.actual_cash)])];const inv=[['Fecha','Tipo','Número','Cliente','Estado','Base','IVA','Total'],...O.invoices.filter(i=>inRange(i.issue_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.issue_date.localeCompare(b.issue_date)).map(i=>[i.issue_date,i.document_type,i.display_number||'',i.customer_name,i.status,N(i.base_amount),N(i.vat_amount),N(i.total_amount)])];dlBlob(wbBlob({Resumen:fiscalRows(),Cierres:close,Gastos:managerExpenseRows(O.reportFrom,O.reportTo),Facturas:inv}),`Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`)};
@@ -342,7 +377,7 @@ window.opsGestorPack=async function(){
  if(!window.JSZip||!window.XLSX)return alert('ZIP/Excel no disponible');
  const z=new JSZip(),base=`GESTORIA_${O.reportFrom}_${O.reportTo}`;
  z.file(base+`/01_INGRESOS/INGRESOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'INGRESOS':managerIncomeRows(O.reportFrom,O.reportTo)}));
- z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo)}));
+ z.file(base+`/02_GASTOS/GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`,wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo),'DESGLOSE CONCEPTOS':managerExpenseSummaryRows(O.reportFrom,O.reportTo)}));
  for(const st of O.stores){
   z.file(base+`/03_DIARIOS/Diario_${storeName(st.id).replace(/\s+/g,'_')}_${O.year}.xlsx`,dailyWorkbook(st.id,O.year));
  }
