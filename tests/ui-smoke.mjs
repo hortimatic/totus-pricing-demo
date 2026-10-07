@@ -725,9 +725,27 @@ await page.waitForTimeout(180);
 assert(storageDownloads===beforeStorageDownloads+1,'Descarga documental no consultó Supabase Storage');
 assert(fixtures.ops_documents.some(x=>x.original_name==='qa.pdf'),'El documento independiente no persistió');
 const qaRow=page.locator('tr').filter({hasText:'qa.pdf'}).first();
+assert(await qaRow.getByRole('button',{name:'Vista previa',exact:true}).count()===1,'Los documentos PDF no ofrecen vista previa directa');
 await qaRow.getByRole('combobox',{name:'Estado de qa.pdf',exact:true}).selectOption('revisada');
 await page.waitForTimeout(120);
 assert(qaDoc.status==='revisada','Cambiar estado documental no persistió');
+
+// CSV/Excel también deben abrirse dentro de Totus, nunca descargar automáticamente al pulsar Vista previa.
+await page.locator('#ops_doc_party').fill('Proveedor CSV QA');
+await field('Nº documento').fill('CSV-2026-001');
+await page.locator('#ops_doc_file').setInputFiles({name:'qa.csv',mimeType:'text/csv',buffer:Buffer.from('Concepto;Importe\nUno;10\nDos;20\n')});
+await page.getByRole('button',{name:'Subir',exact:true}).click();
+await page.waitForTimeout(220);
+const csvDoc=fixtures.ops_documents.find(x=>x.original_name==='qa.csv');
+assert(csvDoc,'El CSV de prueba no quedó guardado');
+const csvRow=page.locator('tr').filter({hasText:'qa.csv'}).first();
+const beforeCsvPreview=storageDownloads;
+await csvRow.getByRole('button',{name:'Vista previa',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('.ops-tabular-preview').count()===1,'CSV/Excel no usa vista previa tabular dentro de Totus');
+assert(storageDownloads===beforeCsvPreview+1,'Vista previa tabular no recuperó el archivo desde Storage');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+
 let zipDl=page.waitForEvent('download');
 await page.getByRole('button',{name:'ZIP filtrado',exact:true}).click();
 const filteredZip=await zipDl;
