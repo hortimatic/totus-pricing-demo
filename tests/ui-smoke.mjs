@@ -790,7 +790,7 @@ for(const idx of [2,3]){
  const wb=XLSXNode.readFile(await daily.path(),{cellStyles:true});
  assert(wb.SheetNames.length===12,'El diario no contiene 12 hojas mensuales');
  const firstSheet=wb.Sheets[wb.SheetNames[0]],firstRows=XLSXNode.utils.sheet_to_json(firstSheet,{header:1,raw:false});
- assert(/^Enero 2026$/.test(String(firstRows[0]?.[0]||'')),'El diario no conserva el título mensual · hoja='+wb.SheetNames[0]+' · fila0='+JSON.stringify(firstRows[0]||null)+' · A1='+JSON.stringify(firstSheet.A1||null));
+ assert(/^ENERO 2026$/.test(String(firstRows[0]?.[0]||'')),'El diario no conserva el título mensual de referencia · hoja='+wb.SheetNames[0]+' · fila0='+JSON.stringify(firstRows[0]||null)+' · A1='+JSON.stringify(firstSheet.A1||null));
  assert(firstRows[1].slice(0,5).join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
  const totalRow=firstRows.length;assert(firstSheet['C'+totalRow].f&&firstSheet['D'+totalRow].f&&firstSheet['E'+totalRow].f,'Los totales mensuales del diario no son fórmulas reales');
