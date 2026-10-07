@@ -248,7 +248,7 @@ function newClosingDraft(){
 function closingDrawerState(draft,drawer){
   if(draft.drawers[drawer.id])return draft.drawers[drawer.id];
   let opening=0;
-  const prev=O.closings.filter(c=>c.store_id===draft.storeId&&c.business_date<draft.date).sort((a,b)=>b.business_date.localeCompare(a.business_date))[0];
+  const prev=O.closings.filter(c=>c.store_id===draft.storeId&&c.status==='cerrado'&&c.business_date<draft.date).sort((a,b)=>b.business_date.localeCompare(a.business_date))[0];
   if(prev){
     const row=O.closingDrawers.find(x=>x.closing_id===prev.id&&x.drawer_id===drawer.id);
     if(row)opening=n(row.closing_cash);
@@ -411,7 +411,9 @@ window.opsSaveClosing=async function(status='cerrado'){
     }});
     const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
     await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,control:c.control,diferencia:c.diff,cajas:drawerRows.length,estado:status});
-    await load(true);O.closeDraft=newClosingDraft();render();
+    await load(true);
+    if(status==='borrador')window.opsEditClosing(id);
+    else{O.closeDraft=newClosingDraft();render()}
   }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
 };
 
