@@ -272,19 +272,37 @@ function templateMiniPreview(tpl,d,t){
  return `<div class="mini-doc-style ${H(style)}" style="--tpl-primary:${H(tpl.primary_color||'#17202A')};--tpl-secondary:${H(tpl.secondary_color||'#3B82F6')};--tpl-text:${H(tpl.text_color||'#17202A')}"><div class="mini-head" style="border-color:${H(tpl.secondary_color||'#3B82F6')}"><div class="mini-logo ${logoText?'':'empty'}">${H(logoText||'SIN LOGO')}</div><div><b>${H(title)}</b><small>${H(O.series.find(s=>s.id===d.seriesId)?.prefix||'SERIE-')}####</small></div></div>${tpl.header_text?`<div class="mini-header-copy">${H(tpl.header_text)}</div>`:''}<div class="mini-client"><b>${H(d.customer||'Cliente')}</b><small>${H(d.taxId||'NIF/CIF')}</small></div><div class="mini-line"></div><div class="mini-line short"></div><div class="mini-total" style="color:${H(tpl.primary_color||'#17202A')}">Total ${euro(t.total)}</div>${tpl.footer_text?`<div class="mini-footer-copy">${H(tpl.footer_text)}</div>`:''}</div>`;
 }
 function miniPreview(d,t){const tpl=E.templates.find(x=>x.id===d.templateId)||{};return templateMiniPreview(tpl,d,t)}
-window.opsDocField=function(k,v,rer=false){const d=ensureDraft();d[k]=v;if(k==='storeId'&&rer){const s=seriesFor(d).find(x=>x.store_id===v)||seriesFor(d)[0];d.seriesId=s?.id||'';}if(rer)render()};
+window.opsDocField=function(k,v,rer=false){const d=ensureDraft();d[k]=v;
+ if(k==='storeId'&&rer){const s=seriesFor(d).find(x=>x.store_id===v)||seriesFor(d)[0];d.seriesId=s?.id||''}
+ if(k==='paidStatus'){if(v==='pendiente')d.paidDate='';else if(!d.paidDate)d.paidDate=today();rer=true}
+ if(rer)render()};
 window.opsDocLine=function(i,k,v,re=false){O.invoiceDraftLines[i][k]=v;if(re){clearTimeout(window.__docCalc);window.__docCalc=setTimeout(render,100)}};
 window.opsAddDocLine=()=>{O.invoiceDraftLines.push({description:'',qty:'1',unit:'',discount:'0',vat:'21'});render()};
 window.opsRemoveDocLine=i=>{if(O.invoiceDraftLines.length>1){O.invoiceDraftLines.splice(i,1);render()}};
 window.opsSelectCustomer=function(id){const d=ensureDraft();d.customerId=id;const c=E.customers.find(x=>x.id===id);if(c){d.customer=c.name;d.taxId=c.tax_id||'';d.email=c.email||'';d.address=[c.address,c.postal_code,c.city,c.province,c.country].filter(Boolean).join(', ');d.payment=c.default_payment_method||'transferencia'}render()};
 window.opsSaveCustomerFromDraft=async function(){if(!manager())return alert('Facturación en modo consulta.');const d=ensureDraft();if(!d.customer.trim())return alert('Indica el nombre del cliente.');let row={name:d.customer.trim(),tax_id:d.taxId.trim(),email:d.email.trim(),address:d.address.trim(),default_payment_method:d.payment,active:true,updated_at:new Date().toISOString()};let res;if(d.customerId)res=await sb.from('ops_customers').update(row).eq('id',d.customerId).select().single();else res=await sb.from('ops_customers').insert(row).select().single();if(res.error)return alert(res.error.message);await featureLoad(true);d.customerId=res.data.id;render()};
 window.opsSaveDocument=async function(){if(!manager())return alert('Facturación en modo consulta.');
- const d=ensureDraft();if(!d.seriesId||!d.date||!d.customer.trim())return alert('Serie, fecha y cliente son obligatorios.');if(O.invoiceDraftLines.some(l=>!l.description.trim()||!N(l.qty)))return alert('Completa las líneas del documento.');
+ const d=ensureDraft();
+ if(!d.seriesId||!d.date||!d.customer.trim())return alert('Serie, fecha y cliente son obligatorios.');
+ if(d.dueDate&&d.dueDate<d.date)return alert('El vencimiento no puede ser anterior a la fecha del documento.');
+ if(d.paidDate&&d.paidDate<d.date)return alert('La fecha de cobro no puede ser anterior a la fecha del documento.');
+ if(d.paidStatus!=='pendiente'&&!d.paidDate)return alert('Indica la fecha de cobro.');
+ if(!O.invoiceDraftLines.length)return alert('Añade al menos una línea.');
+ for(const [i,l] of O.invoiceDraftLines.entries()){
+   if(!String(l.description||'').trim())return alert('Falta la descripción en la línea '+(i+1)+'.');
+   const qty=N(l.qty),unit=N(l.unit),disc=N(l.discount),vat=N(l.vat);
+   if(qty<=0)return alert('La cantidad de la línea '+(i+1)+' debe ser mayor que cero.');
+   if(d.invoiceKind!=='rectifying'&&unit<0)return alert('Una factura normal no puede llevar precios negativos. Usa una rectificativa.');
+   if(disc<0||disc>100)return alert('El descuento de la línea '+(i+1)+' debe estar entre 0 % y 100 %.');
+   if(vat<0||vat>100)return alert('El IVA de la línea '+(i+1)+' no es válido.');
+ }
  try{
-  const external=d.origin==='externa';let num=external?parseInt(d.externalNumber,10):null;if(external&&(!num||num<1))return alert('Indica el número usado fuera.');
+  const external=d.origin==='externa';let num=external?parseInt(d.externalNumber,10):null;if(external&&(!num||num<1))return alert('Indica el número correlativo usado fuera.');
   const payload={id:d.id||null,series_id:d.seriesId,store_id:d.storeId||null,issue_date:d.date,due_date:d.dueDate||null,operation_date:d.operationDate||null,origin:d.origin,document_type:d.documentType,invoice_kind:d.invoiceKind||'invoice',customer_id:d.customerId||null,customer_name:d.customer.trim(),customer_tax_id:d.taxId.trim(),customer_address:d.address.trim(),customer_email:d.email.trim(),concept:d.concept||'',payment_method:d.payment,paid_status:d.paidStatus||'pendiente',paid_date:d.paidDate||null,template_id:d.templateId||null,terms_text:d.terms||'',footer_text:d.footer||'',purchase_order_ref:d.poRef||'',include_in_income:!!d.includeIncome,notes:d.notes||''};
   const lines=O.invoiceDraftLines.map((l,i)=>({sort_order:(i+1)*10,description:l.description.trim(),quantity:N(l.qty),unit_price_base:N(l.unit),discount_pct:N(l.discount),vat_rate:N(l.vat)}));
   const file=external?document.getElementById('ops_external_doc_file')?.files?.[0]:null;
+  const previousExternal=d.id?O.invoices.find(x=>x.id===d.id)?.source_document_id:null;
+  if(external&&!file&&!previousExternal)return alert('Adjunta el documento original emitido fuera de Totus.');
   if(file)window.__opsValidateDocumentFile(file);
   const {data:id,error}=await sb.rpc('ops_save_document_draft',{p_document:payload,p_lines:lines});if(error)throw error;
   if(external){
