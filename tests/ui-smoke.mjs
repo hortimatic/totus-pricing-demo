@@ -86,6 +86,22 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    if(body.action==='list') return route.fulfill(out({users:[{email,registered:true,confirmed:true,email_confirmed_at:'2026-01-01T00:00:00Z',last_sign_in_at:'2026-10-06T10:00:00Z',auth_created_at:'2026-01-01T00:00:00Z'}]}));
    if(body.action==='email_log') return route.fulfill(out({emails:[]}));
    if(body.action==='audit_log') return route.fulfill(out({actions:[]}));
+   if(body.action==='update_member'){
+     const row=fixtures.team_members.find(x=>String(x.email).toLowerCase()===String(body.email||'').toLowerCase());
+     if(!row)return route.fulfill(out({error:'member not found'},404));
+     Object.assign(row,{full_name:body.full_name,role:body.role,active:body.active!==false,phone:body.phone||'',job_title:body.job_title||'',store:body.store||'',employee_notes:body.employee_notes||''});
+     return route.fulfill(out({ok:true,message:'Usuario actualizado.'}));
+   }
+   if(body.action==='create'){
+     if(fixtures.team_members.some(x=>String(x.email).toLowerCase()===String(body.email||'').toLowerCase()))return route.fulfill(out({error:'already exists'},409));
+     fixtures.team_members.push({email:body.email,full_name:body.full_name,role:body.role,active:true,phone:body.phone||'',job_title:body.job_title||'',store:body.store||'',employee_notes:body.employee_notes||''});
+     return route.fulfill(out({ok:true,message:'Usuario creado.'}));
+   }
+   if(body.action==='set_active'){
+     const row=fixtures.team_members.find(x=>String(x.email).toLowerCase()===String(body.email||'').toLowerCase());if(row)row.active=!!body.active;
+     return route.fulfill(out({ok:true,message:'Estado actualizado.'}));
+   }
+   if(body.action==='hard_delete'){fixtures.team_members=fixtures.team_members.filter(x=>String(x.email).toLowerCase()!==String(body.email||'').toLowerCase());return route.fulfill(out({ok:true,message:'Usuario eliminado.'}));}
    return route.fulfill(out({ok:true}));
  }
  if(u.pathname==='/functions/v1/ops-restore-backup'){
