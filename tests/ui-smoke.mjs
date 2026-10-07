@@ -663,12 +663,32 @@ await page.getByRole('dialog').getByRole('button',{name:'Confirmar'}).click().ca
 await page.waitForTimeout(150);
 assert(!fixtures.ops_documents.some(x=>x.id===qaDoc.id),'Eliminar documento no quitó el registro');
 
-// Fiscalidad: origen de datos, señal de gasto y RETA.
+// Fiscalidad: cifras 1T/2T contrastadas con las Fuentes finales.
 fixtures.ops_historical_income_periods.push(
- {id:'hist-h-apr',store_id:ids.h,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:14294.96,cash_income:5380,other_income:0,total_income:19674.96,official_total_income:18379.97,gestor_reported_income:18379.97,fiscal_basis_income:19674.96,source:'gestoria',verified_by_gestor:true,notes:'QA base fiscal separada del listado gestor'},
- {id:'hist-n-apr',store_id:ids.n,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:7705.16,cash_income:3650,other_income:0,total_income:11355.16,official_total_income:7374.98,gestor_reported_income:7374.98,fiscal_basis_income:11355.16,source:'gestoria',verified_by_gestor:true,notes:'QA base fiscal separada del listado gestor'}
+ {id:'hist-h-q1',store_id:ids.h,period_start:'2026-01-01',period_end:'2026-03-31',card_sales:0,cash_income:0,other_income:0,total_income:49469.51,official_total_income:49469.51,gestor_reported_income:49469.51,fiscal_basis_income:49469.51,source:'gestoria',verified_by_gestor:true,notes:'QA FINAL 1T'},
+ {id:'hist-n-q1',store_id:ids.n,period_start:'2026-01-01',period_end:'2026-03-31',card_sales:0,cash_income:0,other_income:0,total_income:31809.88,official_total_income:31809.88,gestor_reported_income:31809.88,fiscal_basis_income:31809.88,source:'gestoria',verified_by_gestor:true,notes:'QA FINAL 1T'},
+ {id:'hist-h-q2',store_id:ids.h,period_start:'2026-04-01',period_end:'2026-06-30',card_sales:0,cash_income:0,other_income:0,total_income:52846.33,official_total_income:49603.68,gestor_reported_income:49603.68,fiscal_basis_income:52846.33,source:'gestoria',verified_by_gestor:true,notes:'QA FINAL 2T'},
+ {id:'hist-n-q2',store_id:ids.n,period_start:'2026-04-01',period_end:'2026-06-30',card_sales:0,cash_income:0,other_income:0,total_income:34845.73,official_total_income:26326.31,gestor_reported_income:26326.31,fiscal_basis_income:34845.73,source:'gestoria',verified_by_gestor:true,notes:'QA FINAL 2T'}
 );
-fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'El listado de gestoría difiere de las ventas reconstruidas.',resolution:'Conservar el listado como discrepancia; la base fiscal validada usa las ventas reconstruidas confirmadas por el modelo 130.',amount_difference:5275.17,active:true});
+fixtures.ops_fiscal_reference_periods.push(
+ {id:'ref-h-q1',store_id:ids.h,period_month:'2026-01-01',source_name:'FINAL 1T',income_amount:49469.51,expense_amount:37595.88,through_date:'2026-03-31',authoritative:true},
+ {id:'ref-n-q1',store_id:ids.n,period_month:'2026-01-01',source_name:'FINAL 1T',income_amount:31809.88,expense_amount:25211.52,through_date:'2026-03-31',authoritative:true},
+ {id:'ref-h-q2',store_id:ids.h,period_month:'2026-04-01',source_name:'FINAL 2T',income_amount:52846.33,expense_amount:44896.81,through_date:'2026-06-30',authoritative:true},
+ {id:'ref-n-q2',store_id:ids.n,period_month:'2026-04-01',source_name:'FINAL 2T',income_amount:34845.73,expense_amount:27233.92,through_date:'2026-06-30',authoritative:true}
+);
+fixtures.ops_gestor_natural_rows.push(
+ {id:'gest-q1',source_file:'GASTOS 1T',fiscal_year:2026,quarter:1,order_no:9991,expense_date:'2026-03-31',received_invoice_ref:'',supplier_invoice_no:'',supplier_tax_id:'',supplier_name:'CIERRE GESTOR 1T',concept_code:'',concept_text:'TOTAL FISCAL QA',base_vat:0,vat_rate:0,vat_amount:9189.44,re_base:0,re_rate:0,re_amount:1874.60,imputable_irpf:63436.97,withholding_base:0,withholding_rate:0,withholding_amount:782.18,tax_support_line:false,raw_line:'QA'},
+ {id:'gest-q2',source_file:'GASTOS 2T',fiscal_year:2026,quarter:2,order_no:9992,expense_date:'2026-06-30',received_invoice_ref:'',supplier_invoice_no:'',supplier_tax_id:'',supplier_name:'CIERRE GESTOR 2T',concept_code:'',concept_text:'TOTAL FISCAL QA',base_vat:0,vat_rate:0,vat_amount:10365.34,re_base:0,re_rate:0,re_amount:2024.77,imputable_irpf:76241.07,withholding_base:0,withholding_rate:0,withholding_amount:1044.24,tax_support_line:false,raw_line:'QA'}
+);
+fixtures.ops_tax_payments.push(
+ {id:'tax-111-q1',tax_type:'111',fiscal_year:2026,quarter:1,amount:228.71,status:'pagado',payment_date:'2026-04-20',period_label:'1T 2026'},
+ {id:'tax-115-q1',tax_type:'115',fiscal_year:2026,quarter:1,amount:553.47,status:'pagado',payment_date:'2026-04-20',period_label:'1T 2026'},
+ {id:'tax-130-q1',tax_type:'130',fiscal_year:2026,quarter:1,amount:3390.06,status:'pagado',payment_date:'2026-04-20',period_label:'1T 2026'},
+ {id:'tax-111-q2',tax_type:'111',fiscal_year:2026,quarter:2,amount:478.23,status:'pagado',payment_date:'2026-07-20',period_label:'2T 2026'},
+ {id:'tax-115-q2',tax_type:'115',fiscal_year:2026,quarter:2,amount:566.01,status:'pagado',payment_date:'2026-07-20',period_label:'2T 2026'},
+ {id:'tax-130-q2',tax_type:'130',fiscal_year:2026,quarter:2,amount:2175.69,status:'pagado',payment_date:'2026-07-20',period_label:'2T 2026'}
+);
+fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'El listado de gestoría difiere de las ventas reconstruidas.',resolution:'Conservar el listado como discrepancia; la base fiscal validada usa 87.692,06 € confirmados por el modelo 130.',amount_difference:11762.07,active:true});
 await page.evaluate(async()=>{window.TotusGestion.quarter=2;window.TotusGestionFeatures&&await window.TotusGestionFeatures.load(true)});
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
 await page.getByRole('heading',{name:'¿Gastar más o menos?',exact:true}).waitFor();
@@ -682,12 +702,20 @@ await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 assert(await page.getByText('Colaboradora familiar activa',{exact:true}).count()===1,'Fiscalidad no separa colaboradora familiar');
-const incomeSplit=await page.evaluate(()=>({fiscal:window.__TotusOpsTest.incomeTotal('2026-04-01','2026-04-30','all'),operational:window.__TotusOpsTest.operationalIncomeTotal('2026-04-01','2026-04-30','all')}));
-assert(Math.abs(incomeSplit.fiscal-31030.12)<0.01,'Fiscalidad no usa la base de ventas validada');
-assert(Math.abs(incomeSplit.operational-31030.12)<0.01,'Gestión no conserva el ingreso operativo real');
-const gestorReported=await page.evaluate(()=>window.TotusGestion.features.historicalIncome.reduce((a,x)=>a+Number(x.gestor_reported_income||0),0));
-assert(Math.abs(gestorReported-25754.95)<0.01,'No se conserva por separado la cifra reportada por INGRESOS(1).pdf');
-assert(Math.abs(incomeSplit.fiscal-gestorReported-5275.17)<0.01,'La conciliación entre base fiscal y listado gestor no cuadra');
+const sourceFiscal=await page.evaluate(()=>({
+ q1:window.__TotusOpsTest.fiscalProjection(2026,1,0),
+ q2:window.__TotusOpsTest.fiscalProjection(2026,2,0),
+ h1:window.__TotusOpsTest.incomeTotal('2026-01-01','2026-06-30','all'),
+ operationalH1:window.__TotusOpsTest.operationalIncomeTotal('2026-01-01','2026-06-30','all'),
+ gestorReportedQ2:window.TotusGestion.features.historicalIncome.filter(x=>x.period_start>='2026-04-01'&&x.period_end<='2026-06-30').reduce((a,x)=>a+Number(x.gestor_reported_income||0),0)
+}));
+assert(Math.abs(sourceFiscal.q1.income-81279.39)<0.01&&Math.abs(sourceFiscal.q1.raw-63436.97)<0.01,'1T no conserva ventas/gastos FINAL verificados');
+assert(Math.abs(sourceFiscal.q1.payable-3390.06)<0.01,'Modelo 130 1T no reproduce 3.390,06 €');
+assert(Math.abs(sourceFiscal.q2.income-168971.45)<0.01&&Math.abs(sourceFiscal.q2.raw-139678.04)<0.01,'Acumulado 1S no conserva las bases fiscales verificadas');
+assert(Math.abs(sourceFiscal.q2.payable-2175.69)<0.01,'Modelo 130 2T no reproduce 2.175,69 €');
+assert(Math.abs(sourceFiscal.h1-168971.45)<0.01&&Math.abs(sourceFiscal.operationalH1-168971.45)<0.01,'Ventas operativas/fiscales 1S no cuadran con Fuentes');
+assert(Math.abs(sourceFiscal.gestorReportedQ2-75929.99)<0.01,'No se conserva el listado INGRESOS(1).pdf de 75.929,99 €');
+assert(Math.abs(87692.06-sourceFiscal.gestorReportedQ2-11762.07)<0.01,'La conciliación de ingresos 2T no cuadra');
 await page.getByRole('heading',{name:'Conciliaciones documentadas',exact:true}).waitFor();
 assert(await page.getByText('INGRESOS(1).pdf',{exact:true}).count()===1,'Fiscalidad no muestra la fuente de conciliación');
 await page.getByRole('heading',{name:'Pago / modelo fiscal',exact:true}).waitFor();
