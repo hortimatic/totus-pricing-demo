@@ -2,7 +2,7 @@
 'use strict';
 const O=window.TotusGestion;
 if(!O) return;
-O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],reconciliationNotes:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
+O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],fiscalReference:[],gestorRows:[],gestorSummary:[],reconciliationNotes:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.features;
 const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal,askReason}=O.core;
 const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
@@ -14,13 +14,13 @@ const REFERENCE_SEMESTER_2026_BYTES=43056409;
 const euro=v=>eur(Number(v)||0);
 async function featureLoad(force=false){
  if(E.loaded&&!force)return;
- const [customers,templates,legacy,hist,gestor,summary,reconciliationNotes,auditRows,revisionRows,backupRows,storage]=await Promise.all([
+ const [customers,templates,legacy,hist,fiscalReference,gestor,summary,reconciliationNotes,auditRows,revisionRows,backupRows,storage]=await Promise.all([
    all('ops_customers','name',true),all('ops_document_templates','name',true),all('ops_legacy_daily_rows','row_date',true),
-   all('ops_historical_income_periods','period_start',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),all('ops_reconciliation_notes','created_at',true),
+   all('ops_historical_income_periods','period_start',true),all('ops_fiscal_reference_periods','period_month',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),all('ops_reconciliation_notes','created_at',true),
    manager()?all('ops_audit_log','created_at',false):Promise.resolve([]),manager()?all('ops_entity_revisions','created_at',false):Promise.resolve([]),admin()?all('ops_backup_archives','created_at',false):Promise.resolve([]),
    sb.rpc('ops_storage_usage').then(r=>r.error?null:r.data).catch(()=>null)
  ]);
- E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;E.reconciliationNotes=reconciliationNotes;E.auditRows=auditRows;E.revisionRows=revisionRows;E.backupRows=backupRows;
+ E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.fiscalReference=fiscalReference;E.gestorRows=gestor;E.gestorSummary=summary;E.reconciliationNotes=reconciliationNotes;E.auditRows=auditRows;E.revisionRows=revisionRows;E.backupRows=backupRows;
  E.storageUsage=storage||{documents_count:O.documents.length,documents_bytes:sum(O.documents,d=>N(d.size_bytes)),assets_count:templates.filter(t=>N(t.logo_size_bytes)>0).length,assets_bytes:sum(templates,t=>N(t.logo_size_bytes)),total_bytes:sum(O.documents,d=>N(d.size_bytes))+sum(templates,t=>N(t.logo_size_bytes))};
  E.loaded=true;
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
@@ -99,8 +99,11 @@ function supportedTaxCosts(from,to){
 }
 function storeOperatingRows(from,to){
  return O.stores.filter(s=>s.active!==false).map(s=>{
-   const income=operationalIncomeTotal(from,to,s.id),expense=realExpense(from,to,s.id);
-   return{store:s,income,expense,result:income-expense,margin:income?((income-expense)/income*100):0};
+   const income=operationalIncomeTotal(from,to,s.id);
+   const verified=E.fiscalReference.filter(x=>x.store_id===s.id&&x.authoritative!==false&&x.expense_amount!=null&&x.period_month>=from.slice(0,7)+'-01'&&x.period_month<=to);
+   const useVerified=to<='2026-06-30'&&verified.length>0;
+   const expense=useVerified?sum(verified,x=>N(x.expense_amount)):realExpense(from,to,s.id);
+   return{store:s,income,expense,result:income-expense,margin:income?((income-expense)/income*100):0,expenseSource:useVerified?'Informe final verificado':'Operativa registrada'};
  });
 }
 function supportedRetention(from,to){return sum(O.fiscalAdjustments.filter(a=>a.kind==='retencion_soportada'&&inRange(a.adjustment_date,from,to)),a=>N(a.amount));}
