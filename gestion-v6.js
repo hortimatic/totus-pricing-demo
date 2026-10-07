@@ -152,7 +152,7 @@ function askReason(title,message,actionLabel='Confirmar'){
 }
 function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}',this)"><span aria-hidden="true">i</span></button>`}
 
-O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal,askReason};
+O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal,askReason,uploadDoc,validateDocFile};
 
 async function load(force=false){
   if(O.loading)return;
