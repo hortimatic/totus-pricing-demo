@@ -2,7 +2,7 @@
 'use strict';
 const O=window.TotusGestion;
 if(!O) return;
-O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
+O.features=O.features||{loaded:false,customers:[],templates:[],legacyRows:[],historicalIncome:[],gestorRows:[],gestorSummary:[],reconciliationNotes:[],auditRows:[],revisionRows:[],backupRows:[],storageUsage:{documents_count:0,documents_bytes:0,assets_count:0,assets_bytes:0,total_bytes:0},billingPanel:'documents',customerDraft:null,invoiceMode:'factura',templateId:null,invoiceStatus:'all'};
 const E=O.features;
 const {h:H,n:N,isoToday:today,sum,inRange,storeName,manager,adminOnly:admin,statusBadge,dlBlob,audit,selectAll,infoButton,openOpsModal,closeOpsModal,askReason}=O.core;
 const all=(table,order=null,asc=true)=>selectAll(table,order,asc);
@@ -13,13 +13,13 @@ const reportDate=v=>{const x=String(v||'');return /^\d{4}-\d{2}-\d{2}$/.test(x)?
 const euro=v=>eur(Number(v)||0);
 async function featureLoad(force=false){
  if(E.loaded&&!force)return;
- const [customers,templates,legacy,hist,gestor,summary,auditRows,revisionRows,backupRows,storage]=await Promise.all([
+ const [customers,templates,legacy,hist,gestor,summary,reconciliationNotes,auditRows,revisionRows,backupRows,storage]=await Promise.all([
    all('ops_customers','name',true),all('ops_document_templates','name',true),all('ops_legacy_daily_rows','row_date',true),
-   all('ops_historical_income_periods','period_start',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),
+   all('ops_historical_income_periods','period_start',true),all('ops_gestor_natural_rows','expense_date',true),all('ops_gestor_quarter_summary','quarter',true),all('ops_reconciliation_notes','created_at',true),
    manager()?all('ops_audit_log','created_at',false):Promise.resolve([]),manager()?all('ops_entity_revisions','created_at',false):Promise.resolve([]),admin()?all('ops_backup_archives','created_at',false):Promise.resolve([]),
    sb.rpc('ops_storage_usage').then(r=>r.error?null:r.data).catch(()=>null)
  ]);
- E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;E.auditRows=auditRows;E.revisionRows=revisionRows;E.backupRows=backupRows;
+ E.customers=customers;E.templates=templates;E.legacyRows=legacy;E.historicalIncome=hist;E.gestorRows=gestor;E.gestorSummary=summary;E.reconciliationNotes=reconciliationNotes;E.auditRows=auditRows;E.revisionRows=revisionRows;E.backupRows=backupRows;
  E.storageUsage=storage||{documents_count:O.documents.length,documents_bytes:sum(O.documents,d=>N(d.size_bytes)),assets_count:templates.filter(t=>N(t.logo_size_bytes)>0).length,assets_bytes:sum(templates,t=>N(t.logo_size_bytes)),total_bytes:sum(O.documents,d=>N(d.size_bytes))+sum(templates,t=>N(t.logo_size_bytes))};
  E.loaded=true;
  if(!E.templateId)E.templateId=(templates.find(t=>t.default_invoice)||templates[0])?.id||null;
@@ -105,7 +105,8 @@ function spendingSignal(){
 function importedStatusHtml(){
  const confirmed=E.historicalIncome.filter(x=>x.verified_by_gestor).length,provisional=E.historicalIncome.filter(x=>!x.verified_by_gestor).length;
  const pendingExpenses=O.expenses.filter(x=>x.source==='importacion_excel'&&!x.fiscal_reviewed&&!x.management_only).length;
- return `<div class="ops-note"><b>Estado de fuentes 2026</b> · Ingresos: <span class="badge ok">${confirmed} periodos confirmados</span> <span class="badge warnb">${provisional} provisionales</span> · Gastos Excel pendientes de revisión fiscal: <b>${pendingExpenses}</b>. Los provisionales afectan al control real, no a la deducción fiscal.</div>`;
+ const reconciliation=(E.reconciliationNotes||[]).filter(x=>x.active!==false&&x.fiscal_year===O.year).length;
+ return `<div class="ops-note"><b>Estado de fuentes 2026</b> · Ingresos: <span class="badge ok">${confirmed} periodos confirmados</span> <span class="badge warnb">${provisional} provisionales</span> · Gastos Excel pendientes de revisión fiscal: <b>${pendingExpenses}</b> · Conciliaciones documentadas: <b>${reconciliation}</b>. Los provisionales afectan al control real, no a la deducción fiscal.</div>`;
 }
 function dashboardHtml(){
  const b=qBounds(O.year,O.quarter),inc=incomeTotal(b.start,b.end,O.storeId),fiscalExp=deductibleExpenseTotal(b.start,b.end,O.storeId),internal=internalExpense(b.start,b.end,O.storeId),realExp=realExpense(b.start,b.end,O.storeId),f=fiscalProjection(),r=retaProjection();const assets=N(E.storageUsage?.assets_bytes);const used=N(E.storageUsage?.total_bytes),limit=N(O.settings?.storage_limit_bytes||1073741824),pct=limit?used/limit*100:0;
@@ -786,6 +787,10 @@ function fiscalProjectionHtml(){
  </div>
  <div class="ops-grid">
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Personal</div><h3>Costes laborales y colaboradores</h3></div></div><div class="ops-metric-line"><span>Empleados históricos registrados</span><b>${people.filter(x=>x.person_type==='employee').length}</b></div><div class="ops-metric-line"><span>Colaboradora familiar activa</span><b>${activeFamily.length?H(activeFamily.map(x=>x.full_name).join(', ')):'—'}</b></div><div class="small">Nóminas y Seguridad Social empresa se mantienen separadas del RETA titular y de la colaboradora familiar. La aportación a colaboradora solo se contabiliza cuando se registra realmente como gasto.</div></div>
+ </div>
+ <div class="ops-card">
+  <div class="section-head"><div><div class="eyebrow">Fuentes y cuadre</div><div class="ops-title-line"><h3>Conciliaciones documentadas</h3>${infoButton('fiscal.conciliacion','Por qué pueden existir diferencias con una fuente')}</div><div class="small">Totus conserva la fuente original y explica cualquier diferencia aplicada al cálculo. No se corrigen datos históricos inventando.</div></div></div>
+  ${(()=>{const rows=(E.reconciliationNotes||[]).filter(x=>x.active!==false&&x.fiscal_year===O.year&&(x.quarter==null||N(x.quarter)<=O.quarter));return rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Periodo</th><th>Fuente</th><th>Incidencia</th><th>Diferencia</th><th>Criterio aplicado</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${x.quarter?'T'+H(String(x.quarter))+' · ':''}${H(String(x.fiscal_year||''))}</td><td>${H(x.source_name||'—')}</td><td><b>${H(String(x.issue_type||'').replaceAll('_',' '))}</b><div class="small">${H(x.detail||'')}</div></td><td class="num">${x.amount_difference==null?'—':euro(x.amount_difference)}</td><td>${H(x.resolution||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay diferencias documentadas para este periodo.</div>'})()}
  </div>
  ${taxPaymentsHtml()}`;
 }
