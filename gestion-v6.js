@@ -19,6 +19,10 @@ function h(v){ return esc(v); }
 function isoToday(){ return new Date().toISOString().slice(0,10); }
 function dmy(v){ if(!v)return '—'; const [y,m,d]=String(v).slice(0,10).split('-'); return d+'/'+m+'/'+y; }
 function qtrFromDate(v){ const m=+(String(v).slice(5,7)||1); return Math.floor((m-1)/3)+1; }
+function focusPeriodForDate(v){
+ const s=String(v||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return;
+ O.year=Number(s.slice(0,4));O.quarter=qtrFromDate(s);
+}
 function safeSegment(v){
  return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,120);
 }
@@ -432,7 +436,7 @@ window.opsSaveClosing=async function(status='cerrado'){
     }});
     const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
     await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,control:c.control,diferencia:c.diff,cajas:drawerRows.length,estado:status});
-    await load(true);
+    focusPeriodForDate(d.date);await load(true);
     if(status==='borrador')window.opsEditClosing(id);
     else{O.closeDraft=newClosingDraft();render()}
   }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
@@ -741,13 +745,13 @@ window.opsSaveExpense=async function(){
       }
      }catch(uploadError){
       await audit('gastos',d.id?'actualizar':'crear',id,{fecha:d.date,proveedor:d.supplier,total:totals.accounting,adjunto:'fallido'});
-      await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
+      focusPeriodForDate(d.date);await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
       alert('El gasto se ha guardado, pero el archivo adjunto no pudo subirse: '+uploadError.message+'\nPuedes abrir el gasto y adjuntarlo de nuevo.');
       return;
      }
    }
    await audit('gastos',d.id?'actualizar':'crear',id,{fecha:d.date,proveedor:d.supplier,total:totals.accounting});
-   await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
+   focusPeriodForDate(d.date);await load(true);O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render();
  }catch(e){alert('No se pudo guardar el gasto: '+e.message)}finally{O.saving=false}
 };
 
