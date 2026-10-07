@@ -256,7 +256,7 @@ async function xlsxXmlStyle(path,sheetNo=1,ref='A1'){
  const fills=[...block(styles,'fills').matchAll(new RegExp('<fill>[\\s\\S]*?</fill>','g'))].map(m=>m[0]);
  const font=fonts[fontId]||'',fill=fills[fillId]||'';
  const rgb=(xml,tagName)=>(((xml.match(new RegExp('<'+tagName+'\\b[^>]*\\brgb="([^"]+)"')))||[])[1]||'');
- return {styleId,fontId,fillId,fontRgb:rgb6(rgb(font,'color')),fillRgb:rgb6(rgb(fill,'fgColor'))};
+ return {styleId,fontId,fillId,fontRgb:rgb6(rgb(font,'color')),fillRgb:rgb6(rgb(fill,'fgColor')),tag,xf,font:font.slice(0,300),fill:fill.slice(0,300)};
 }
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
