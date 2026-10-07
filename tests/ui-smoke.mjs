@@ -807,11 +807,26 @@ assert(await page.getByRole('button',{name:'Proformas',exact:true}).count()===1,
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');assert(await page.getByRole('button',{name:'Cerrar día',exact:true}).count()===1,'El encargado debe poder cerrar caja');
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');assert(await page.getByRole('button',{name:'Guardar gasto',exact:true}).count()===1,'El encargado debe poder registrar gastos');
 
-// Responsive smoke.
+// Responsive smoke: no basta con Inicio, revisar todos los módulos operativos.
 await page.setViewportSize({width:390,height:844});
 await page.locator('.app-home-logo').click();await heading('Totus Central');
-const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
-assert(overflow<=8,'Desbordamiento global móvil: '+overflow+'px');
+for(const item of [
+  ['Inicio',null,'Totus Central'],
+  ['Pricing','Pricing','Precio rápido'],
+  ['Cajas','Cajas','Cajas'],
+  ['Gastos','Gastos','Gastos'],
+  ['Facturación','Facturación','Facturación'],
+  ['Documentos','Documentos','Documentos'],
+  ['Fiscalidad','Fiscalidad','Fiscalidad'],
+  ['Informes','Informes','Informes']
+]){
+  const [label,button,head]=item;
+  if(button)await page.getByRole('button',{name:button,exact:true}).first().click();
+  await heading(head);
+  await page.waitForTimeout(40);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  assert(overflow<=8,label+' provoca desbordamiento global móvil: '+overflow+'px');
+}
 
 // No unexpected JS dialogs/errors should have fired during non-destructive smoke.
 assert(!dialogs.some(x=>/no se pudo|error/i.test(x)),'Se detectó diálogo de error: '+dialogs.join(' | '));
