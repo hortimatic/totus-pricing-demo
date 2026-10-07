@@ -92,7 +92,7 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
      Object.assign(row,{full_name:body.full_name,role:body.role,active:body.active!==false,phone:body.phone||'',job_title:body.job_title||'',store:body.store||'',employee_notes:body.employee_notes||''});
      return route.fulfill(out({ok:true,message:'Usuario actualizado.'}));
    }
-   if(body.action==='create'){
+   if(body.action==='create_user'){
      if(fixtures.team_members.some(x=>String(x.email).toLowerCase()===String(body.email||'').toLowerCase()))return route.fulfill(out({error:'already exists'},409));
      fixtures.team_members.push({email:body.email,full_name:body.full_name,role:body.role,active:true,phone:body.phone||'',job_title:body.job_title||'',store:body.store||'',employee_notes:body.employee_notes||''});
      return route.fulfill(out({ok:true,message:'Usuario creado.'}));
