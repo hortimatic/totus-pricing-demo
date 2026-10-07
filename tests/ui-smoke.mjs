@@ -264,12 +264,19 @@ async function auditCurrentUi(section){
    return !(wrap?.querySelector(':scope > label')?.textContent||'').trim();
   }).map(el=>el.id||el.name||el.type||el.tagName);
   const emptyButtons=[...document.querySelectorAll('button:not([disabled])')].filter(b=>!(b.textContent||'').trim()&&!b.getAttribute('aria-label')&&!b.getAttribute('title')).length;
-  return{dupIds,missingHandlers:[...new Set(missingHandlers)],unlabeled,emptyButtons};
+  const badSelects=[...document.querySelectorAll('select:not([disabled])')].flatMap((s,i)=>{
+    const opts=[...s.options],vals=opts.map(o=>o.value),duplicateValues=[...new Set(vals.filter((v,j)=>v!==''&&vals.indexOf(v)!==j))];
+    const emptyText=opts.filter(o=>!(o.textContent||'').trim()).length;
+    const noOptions=opts.length===0;
+    return noOptions||emptyText||duplicateValues.length?[{name:s.getAttribute('aria-label')||s.id||'select#'+i,noOptions,emptyText,duplicateValues}]:[];
+  });
+  return{dupIds,missingHandlers:[...new Set(missingHandlers)],unlabeled,emptyButtons,badSelects};
  });
  assert(a.dupIds.length===0,section+' tiene IDs duplicados: '+a.dupIds.join(', '));
  assert(a.missingHandlers.length===0,section+' tiene handlers inexistentes: '+a.missingHandlers.join(', '));
  assert(a.unlabeled.length===0,section+' tiene campos activos sin etiqueta: '+a.unlabeled.join(', '));
  assert(a.emptyButtons===0,section+' tiene botones activos sin nombre');
+ assert(a.badSelects.length===0,section+' tiene desplegables defectuosos: '+JSON.stringify(a.badSelects));
 }
 
 await page.goto(base,{waitUntil:'networkidle'});
