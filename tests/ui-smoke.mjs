@@ -474,6 +474,28 @@ assert(fixtures.ops_document_templates.length===templatesBeforeDuplicate+1,'Dupl
 const duplicatedTemplate=fixtures.ops_document_templates.at(-1);
 assert(!duplicatedTemplate.logo_path&&Number(duplicatedTemplate.logo_size_bytes||0)===0,'La plantilla duplicada heredó indebidamente el archivo de logo');
 
+// Clientes: ficha completa reutilizable.
+await page.locator('.billing-nav').getByRole('button',{name:'Clientes',exact:true}).click();
+await page.getByRole('heading',{name:'Ficha de cliente',exact:true}).waitFor();
+await auditCurrentUi('Facturación · Clientes');
+await field('Nombre / razón social').fill('Cliente Maestro QA');
+await field('NIF/CIF').fill('B11112222');
+await field('Email').fill('cliente@qa.test');
+await field('Teléfono').fill('600000000');
+await field('Dirección').fill('Calle Mayor 1');
+await field('Código postal').fill('28801');
+await field('Ciudad').fill('Alcalá de Henares');
+await field('Provincia').fill('Madrid');
+await field('País').fill('España');
+await page.getByRole('combobox',{name:'Forma de pago por defecto del cliente'}).selectOption('domiciliado');
+await field('Notas internas').fill('Cliente de prueba reutilizable');
+await page.getByRole('button',{name:'Crear cliente',exact:true}).click();
+await page.waitForTimeout(160);
+const masterCustomer=fixtures.ops_customers.find(x=>x.name==='Cliente Maestro QA');
+assert(masterCustomer,'No se creó la ficha maestra de cliente');
+assert(masterCustomer.city==='Alcalá de Henares'&&masterCustomer.postal_code==='28801'&&masterCustomer.phone==='600000000','La ficha de cliente no conserva dirección/contacto completos');
+assert(masterCustomer.default_payment_method==='domiciliado','La ficha de cliente no conserva forma de pago');
+
 // Series también están dentro de Facturación.
 await page.locator('.billing-nav').getByRole('button',{name:'Series',exact:true}).click();
 await page.getByRole('heading',{name:'Series 2026',exact:true}).waitFor();
