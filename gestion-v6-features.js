@@ -119,6 +119,13 @@ function retainedModel(model,from,to){
 function fiscalProjection(y=O.year,q=O.quarter,planned=0){
  const from=`${y}-01-01`,end=yearQEnd(y,q),qb=qBounds(y,q);const income=incomeTotal(from,end,'all');const raw=deductibleExpenseTotal(from,end,'all')+N(planned);const pre=income-raw;const diff=difficult(Math.max(0,pre));const net=pre-diff;const rate=N(O.settings?.irpf_prepayment_rate||20);const gross=Math.max(0,net)*rate/100;const prev=sum(O.taxPayments.filter(t=>t.tax_type==='130'&&t.fiscal_year===y&&N(t.quarter)<q&&t.status==='pagado'),t=>N(t.amount));const ret=supportedRetention(from,end);const payable=Math.max(0,gross-prev-ret);const m111=retainedModel('111',qb.start,qb.end);const m115=retainedModel('115',qb.start,qb.end);return{from,end,qb,income,raw,diff,net,gross,prev,ret,payable,m111,m115,reserve:payable+m111+m115,qIncome:incomeTotal(qb.start,qb.end,'all'),qExpense:deductibleExpenseTotal(qb.start,qb.end,'all')};
 }
+window.__opsUpdateFiscalSimulation=function(){
+ const actual=fiscalProjection(O.year,O.quarter,0),sim=fiscalProjection(O.year,O.quarter,N(O.plannedSpend));
+ const a=document.getElementById('ops_sim_130'),b=document.getElementById('ops_sim_reserve'),d=document.getElementById('ops_sim_delta');
+ if(a)a.textContent=euro(sim.payable);
+ if(b)b.textContent=euro(sim.reserve);
+ if(d)d.textContent=euro(actual.payable-sim.payable);
+};
 function retaProjection(){
  const cutoff=(O.year===new Date().getFullYear())?today():`${O.year}-12-31`,from=`${O.year}-01-01`;const net=Math.max(0,incomeTotal(from,cutoff)-deductibleExpenseTotal(from,cutoff,'all'));const days=Math.max(1,Math.round((new Date(cutoff)-new Date(from))/86400000)+1),annual=net/(days/365),monthly=annual/12*(1-N(O.settings?.reta_generic_deduction_pct||7)/100);const b=O.retaBrackets.find(x=>(x.min_net_monthly==null||monthly>N(x.min_net_monthly)||(x.min_inclusive&&monthly===N(x.min_net_monthly)))&&(x.max_net_monthly==null||monthly<N(x.max_net_monthly)||(x.max_inclusive&&monthly===N(x.max_net_monthly))));const rate=N(O.settings?.reta_total_rate||31.5)/100;return{monthly,annual,bracket:b,minQuota:b?N(b.min_base)*rate:0,maxQuota:b?N(b.max_base)*rate:0};
 }
