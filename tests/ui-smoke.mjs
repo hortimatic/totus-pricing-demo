@@ -323,9 +323,10 @@ await page.locator('.home-widget').first().waitFor();
 await auditCurrentUi('Inicio');
 assert(await page.locator('.home-zone').count()===4,'Inicio debe estar organizado en 4 contenedores funcionales');
 assert(await page.locator('.home-widget').count()===8,'Inicio debe exponer 8 widgets de trabajo');
-for(const name of ['Ampliar estudio','Ver cajas','Nuevo gasto','Nueva factura','Subir / buscar','Abrir previsión fiscal','Informe T2','Backup']){
+for(const name of ['Ampliar estudio','Ver cajas','Nuevo gasto','Nueva factura','Subir / buscar','Abrir previsión fiscal','Backup']){
   assert(await page.getByRole('button',{name,exact:true}).count()===1,'Inicio no expone la acción rápida: '+name);
 }
+assert(await page.getByRole('button',{name:/^Informe T[1-4]$/}).count()===1,'Inicio no ofrece informe rápido del trimestre activo');
 await page.locator('#portal_q_cost').fill('3,20');
 await page.locator('#portal_q_pvp').fill('5,70');
 await page.locator('#portal_q_comp').fill('6,00');
