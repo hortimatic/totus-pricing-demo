@@ -860,11 +860,21 @@ function dailyWorkbook(storeId,year){
  }
  return wbBlob(sheets);
 }
+function managementClosingRows(from,to){
+ return [['Fecha','Establecimiento','Apertura','Efectivo vendido','Tarjeta','Bizum','Online','Otros cobros','Retirada de caja','Gastos pagados desde caja','Entrada extra a caja','Salida extra de caja','Metálico final','Ventas calculadas','Total control','Diferencia','Estado'],
+  ...O.closings.filter(c=>inRange(c.business_date,from,to)).sort((a,b)=>String(a.business_date).localeCompare(String(b.business_date))||storeName(a.store_id).localeCompare(storeName(b.store_id))).map(c=>[
+   c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.other_income),
+   N(c.cash_withdrawals),N(c.cash_expenses_declared),N(c.cash_extra_in),N(c.cash_extra_out),N(c.actual_cash),
+   N(c.cash_sales)+N(c.card_sales)+N(c.bizum_sales)+N(c.online_sales)+N(c.other_income),
+   c.reported_total_sales==null?'':N(c.reported_total_sales),c.reported_total_sales==null?'':N(c.difference),c.status||''
+  ])
+ ];
+}
 window.opsDownloadDailyExcel=function(storeId){try{dlBlob(dailyWorkbook(storeId,O.year),`Gastos_y_ventas_${storeName(storeId).replace(/\s+/g,'_')}_${O.year}.xlsx`)}catch(e){alert(e.message)}};
 window.opsDownloadManagerExpenses=function(){try{dlBlob(wbBlob({'GASTOS':managerExpenseRows(O.reportFrom,O.reportTo),'DESGLOSE CONCEPTOS':managerExpenseSummaryRows(O.reportFrom,O.reportTo)}),`GASTOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`)}catch(e){alert(e.message)}};
 window.opsDownloadManagerIncome=function(){try{dlBlob(wbBlob({'INGRESOS':managerIncomeRows(O.reportFrom,O.reportTo)}),`INGRESOS_${O.reportFrom}_${O.reportTo}_gestoria.xlsx`)}catch(e){alert(e.message)}};
 function fiscalRows(){const f=fiscalProjection();const r=retaProjection();return[['Concepto','Importe'],['Ingresos acumulados',f.income],['Gastos deducibles',f.raw],['Difícil justificación',f.diff],['Rendimiento neto',f.net],['Modelo 130 estimado',f.payable],['Modelo 111',f.m111],['Modelo 115',f.m115],['Reserva total',f.reserve],['Rendimiento mensual RETA',r.monthly]]}
-window.opsManagementWorkbook=function(){const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.cash_withdrawals),N(c.actual_cash)])];const inv=[['Fecha','Tipo','Número','Cliente','Estado','Base','IVA','Total'],...O.invoices.filter(i=>inRange(i.issue_date,O.reportFrom,O.reportTo)).sort((a,b)=>a.issue_date.localeCompare(b.issue_date)).map(i=>[i.issue_date,i.document_type,i.display_number||'',i.customer_name,i.status,N(i.base_amount),N(i.vat_amount),N(i.total_amount)])];dlBlob(wbBlob({Resumen:fiscalRows(),Cierres:close,Gastos:managerExpenseRows(O.reportFrom,O.reportTo),Facturas:inv}),`Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`)};
+window.opsManagementWorkbook=function(){const close=managementClosingRows(O.reportFrom,O.reportTo);const inv=[['Fecha','Tipo','Número','Cliente','NIF/CIF','Estado','Cobro','Base','IVA','Total','Serie'],...O.invoices.filter(i=>inRange(i.issue_date,O.reportFrom,O.reportTo)).sort((a,b)=>iDate(a).localeCompare(iDate(b))).map(i=>[i.issue_date,i.invoice_kind==='rectifying'?'rectificativa':i.document_type,i.display_number||'',i.customer_name,i.customer_tax_id||'',i.status,i.paid_status||'',N(i.base_amount),N(i.vat_amount),N(i.total_amount),O.series.find(s=>s.id===i.series_id)?.code||''])];dlBlob(wbBlob({Resumen:fiscalRows(),Cierres:close,Gastos:managerExpenseRows(O.reportFrom,O.reportTo),'Desglose conceptos':managerExpenseSummaryRows(O.reportFrom,O.reportTo),Facturas:inv}),`Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`)};
 window.opsFiscalPdf=function(){if(!window.jspdf?.jsPDF)return alert('PDF no disponible');const {jsPDF}=window.jspdf,d=new jsPDF(),f=fiscalProjection(),r=retaProjection();d.setFontSize(18);d.text(`Totus Central · Fiscal T${O.quarter} ${O.year}`,15,18);d.setFontSize(10);let y=32;[['Ingresos acumulados',f.income],['Gastos deducibles',f.raw+f.diff],['Rendimiento neto',f.net],['Modelo 130 estimado',f.payable],['Modelo 111',f.m111],['Modelo 115',f.m115],['Reserva fiscal',f.reserve],['RETA mensual proyectado',r.monthly]].forEach(x=>{d.text(x[0],15,y);d.text(euro(x[1]),195,y,{align:'right'});y+=8});d.setFontSize(8);d.text('Control interno basado en los datos de Totus y los cierres de gestoría importados. Validar antes de presentar modelos oficiales.',15,y+8,{maxWidth:180});dlBlob(d.output('blob'),`Fiscal_T${O.quarter}_${O.year}.pdf`)};
 function gestorDocFolder(doc,base){
  const dt=doc.document_date||'sin_fecha';
@@ -884,10 +894,7 @@ window.opsGestorPack=async function(){
  for(const st of O.stores){
   z.file(base+`/03_DIARIOS/Diario_${storeName(st.id).replace(/\s+/g,'_')}_${O.year}.xlsx`,dailyWorkbook(st.id,O.year));
  }
- const close=[['Fecha','Establecimiento','Apertura','Efectivo','Tarjeta','Bizum','Online','Salida','Caja final'],
-   ...O.closings.filter(c=>inRange(c.business_date,O.reportFrom,O.reportTo))
-    .sort((a,b)=>String(a.business_date).localeCompare(String(b.business_date))||storeName(a.store_id).localeCompare(storeName(b.store_id)))
-    .map(c=>[c.business_date,storeName(c.store_id),N(c.opening_cash),N(c.cash_sales),N(c.card_sales),N(c.bizum_sales),N(c.online_sales),N(c.cash_withdrawals),N(c.actual_cash)])];
+ const close=managementClosingRows(O.reportFrom,O.reportTo);
  z.file(base+`/04_RESUMEN/Totus_Gestion_${O.reportFrom}_${O.reportTo}.xlsx`,wbBlob({
    Resumen:fiscalRows(),
    Cierres:close,
