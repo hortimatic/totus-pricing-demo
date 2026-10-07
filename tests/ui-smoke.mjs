@@ -267,6 +267,9 @@ async function auditCurrentUi(section){
 
 await page.goto(base,{waitUntil:'networkidle'});
 await heading('Totus Central');await auditCurrentUi('Inicio');
+for(const name of ['Abrir Pricing','Abrir Cajas','Abrir Gastos','Abrir Facturación','Abrir Documentos','Abrir Fiscalidad','Abrir Informes','Abrir Administración']){
+  assert(await page.getByRole('button',{name,exact:true}).count()===1,'Inicio no expone como botón real: '+name);
+}
 
 // Pricing and decimal-focus regression.
 await page.getByRole('button',{name:'Pricing',exact:true}).first().click();
@@ -282,6 +285,13 @@ assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálcul
 
 // Cajas: cada caja física se abre/cierra por separado y la tienda suma sus cifras.
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');await auditCurrentUi('Cajas');
+const infoBtn=page.locator('.ops-info-btn').first();
+if(await infoBtn.count()){
+  await infoBtn.click();
+  assert(await page.locator('.ops-help-panel').count()===1,'La ayuda contextual no usa panel compacto');
+  assert(await page.locator('.ops-modal').count()===0,'La ayuda contextual sigue usando el modal grande');
+  await page.locator('.ops-help-close').click();
+}
 const drawerCards=page.locator('.ops-drawer-card');
 assert(await drawerCards.count()===2,'Hortimatic debe mostrar sus dos cajas físicas');
 const vape=drawerCards.filter({hasText:'Caja vape'}).first();
