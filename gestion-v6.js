@@ -511,18 +511,43 @@ window.opsSelectSupplier=function(id){
  render();
 };
 function supplierEditorHtml(p={}){
- return `<div class="ops-form"><div class="span2"><label>Nombre / razón social</label><input id="ops_sup_name" aria-label="Nombre / razón social" value="${h(p.name||'')}"></div><div><label>NIF/CIF</label><input id="ops_sup_tax" aria-label="NIF/CIF" value="${h(p.tax_id||'')}"></div><div><label>Email</label><input id="ops_sup_email" aria-label="Email" value="${h(p.email||'')}"></div><div><label>Teléfono</label><input id="ops_sup_phone" aria-label="Teléfono" value="${h(p.phone||'')}"></div><div class="span2"><label>Dirección</label><input id="ops_sup_address" aria-label="Dirección" value="${h(p.address||'')}"></div><div><label>Forma de pago habitual</label><select id="ops_sup_payment" aria-label="Forma de pago habitual">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${(p.default_payment_method||'transferencia')===x?'selected':''}>${x}</option>`).join('')}</select></div><div><label>Categoría habitual</label><select id="ops_sup_category" aria-label="Categoría habitual"><option value="">Sin predeterminar</option>${O.categories.map(c=>`<option value="${c.id}" ${p.default_category_id===c.id?'selected':''}>${h(c.manager_code?c.manager_code+' · '+c.name:c.name)}</option>`).join('')}</select></div><div><label>IVA habitual %</label><input id="ops_sup_vat" aria-label="IVA habitual %" inputmode="decimal" value="${h(p.default_vat_rate??21)}"></div><div><label>RE habitual %</label><input id="ops_sup_re" aria-label="RE habitual %" inputmode="decimal" value="${h(p.default_re_rate??0)}"></div><div><label>Retención habitual %</label><input id="ops_sup_wh" aria-label="Retención habitual %" inputmode="decimal" value="${h(p.default_withholding_rate??0)}"></div><div class="span4"><label>Notas</label><textarea id="ops_sup_notes" aria-label="Notas">${h(p.notes||'')}</textarea></div></div><div class="ops-preview-actions"><button class="primary" id="ops_sup_save">Guardar proveedor</button><button class="ghost" id="ops_sup_cancel">Cancelar</button></div>`;
+ const catOpts=O.categories.map(c=>`<option value="${c.id}" ${p.default_category_id===c.id?'selected':''}>${h(c.manager_code?c.manager_code+' · '+c.name:c.name)}</option>`).join('');
+ return `<div class="supplier-editor-sections">
+  <section class="template-group"><div class="template-group-head"><div><div class="eyebrow">Identificación</div><h4>Empresa / profesional</h4></div></div><div class="ops-form">
+   <div class="span2"><label>Nombre / razón social</label><input id="ops_sup_name" aria-label="Nombre / razón social" value="${h(p.name||'')}"></div>
+   <div><label>NIF/CIF</label><input id="ops_sup_tax" aria-label="NIF/CIF" value="${h(p.tax_id||'')}"></div>
+   <div><label>Email</label><input id="ops_sup_email" type="email" aria-label="Email" value="${h(p.email||'')}"></div>
+   <div><label>Teléfono</label><input id="ops_sup_phone" aria-label="Teléfono" value="${h(p.phone||'')}"></div>
+   <div class="span2"><label>Dirección</label><input id="ops_sup_address" aria-label="Dirección" value="${h(p.address||'')}"></div>
+   <div><label>Código postal</label><input id="ops_sup_postal" aria-label="Código postal" value="${h(p.postal_code||'')}"></div>
+   <div><label>Ciudad</label><input id="ops_sup_city" aria-label="Ciudad" value="${h(p.city||'')}"></div>
+   <div><label>Provincia</label><input id="ops_sup_province" aria-label="Provincia" value="${h(p.province||'')}"></div>
+   <div><label>País</label><input id="ops_sup_country" aria-label="País" value="${h(p.country||'España')}"></div>
+  </div></section>
+  <section class="template-group"><div class="template-group-head"><div><div class="eyebrow">Valores por defecto</div><h4>Cómo suele facturarnos</h4></div>${infoButton('gastos.proveedor','Datos que Totus reutiliza al crear un gasto')}</div><div class="ops-form">
+   <div><label>Forma de pago habitual</label><select id="ops_sup_payment" aria-label="Forma de pago habitual">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${(p.default_payment_method||'transferencia')===x?'selected':''}>${x}</option>`).join('')}</select></div>
+   <div><label>Documento habitual</label><select id="ops_sup_doc_kind" aria-label="Documento habitual">${[['factura','Factura'],['rectificativa','Rectificativa / abono'],['ticket','Ticket'],['recibo','Recibo'],['otro','Otro']].map(x=>`<option value="${x[0]}" ${(p.default_document_kind||'factura')===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
+   <div class="span2"><label>Categoría habitual</label><select id="ops_sup_category" aria-label="Categoría habitual"><option value="">Sin predeterminar</option>${catOpts}</select></div>
+   <div><label>IVA habitual %</label><input id="ops_sup_vat" aria-label="IVA habitual %" inputmode="decimal" value="${h(p.default_vat_rate??21)}"></div>
+   <div><label>RE habitual %</label><input id="ops_sup_re" aria-label="RE habitual %" inputmode="decimal" value="${h(p.default_re_rate??0)}"></div>
+   <div><label>Retención habitual %</label><input id="ops_sup_wh" aria-label="Retención habitual %" inputmode="decimal" value="${h(p.default_withholding_rate??0)}"></div>
+   <div><label>Modelo retención</label><select id="ops_sup_wh_model" aria-label="Modelo retención"><option value="" ${!p.default_withholding_model?'selected':''}>Sin modelo</option><option value="111" ${p.default_withholding_model==='111'?'selected':''}>111</option><option value="115" ${p.default_withholding_model==='115'?'selected':''}>115</option></select></div>
+   <div class="checkline"><input id="ops_sup_deductible" type="checkbox" ${p.default_deductible_irpf!==false?'checked':''}><label for="ops_sup_deductible">Deducible IRPF por defecto</label></div>
+   <div><label>Porcentaje deducible habitual %</label><input id="ops_sup_deduct_pct" aria-label="Porcentaje deducible habitual %" inputmode="decimal" value="${h(p.default_deductible_pct??100)}"></div>
+  </div></section>
+  <section class="template-group"><div class="template-group-head"><div><div class="eyebrow">Interno</div><h4>Notas</h4></div></div><label>Notas</label><textarea id="ops_sup_notes" aria-label="Notas">${h(p.notes||'')}</textarea></section>
+ </div><div class="ops-preview-actions"><button class="primary" id="ops_sup_save">Guardar proveedor</button><button class="ghost" id="ops_sup_cancel">Cancelar</button></div>`;
 }
 window.opsOpenSupplierEditor=function(id=''){
  const p=O.suppliers.find(x=>x.id===id)||{};
  const m=openOpsModal(id?'Editar proveedor':'Nuevo proveedor',supplierEditorHtml(p));
  m.querySelector('#ops_sup_cancel').onclick=closeOpsModal;
  m.querySelector('#ops_sup_save').onclick=async()=>{
-  const row={name:m.querySelector('#ops_sup_name').value.trim(),tax_id:m.querySelector('#ops_sup_tax').value.trim(),email:m.querySelector('#ops_sup_email').value.trim(),phone:m.querySelector('#ops_sup_phone').value.trim(),address:m.querySelector('#ops_sup_address').value.trim(),default_payment_method:m.querySelector('#ops_sup_payment').value,default_category_id:m.querySelector('#ops_sup_category').value||null,default_vat_rate:n(m.querySelector('#ops_sup_vat').value),default_re_rate:n(m.querySelector('#ops_sup_re').value),default_withholding_rate:n(m.querySelector('#ops_sup_wh').value),notes:m.querySelector('#ops_sup_notes').value,active:true,updated_at:new Date().toISOString()};
+  const row={name:m.querySelector('#ops_sup_name').value.trim(),tax_id:m.querySelector('#ops_sup_tax').value.trim(),email:m.querySelector('#ops_sup_email').value.trim(),phone:m.querySelector('#ops_sup_phone').value.trim(),address:m.querySelector('#ops_sup_address').value.trim(),postal_code:m.querySelector('#ops_sup_postal').value.trim(),city:m.querySelector('#ops_sup_city').value.trim(),province:m.querySelector('#ops_sup_province').value.trim(),country:m.querySelector('#ops_sup_country').value.trim()||'España',default_payment_method:m.querySelector('#ops_sup_payment').value,default_document_kind:m.querySelector('#ops_sup_doc_kind').value,default_category_id:m.querySelector('#ops_sup_category').value||null,default_vat_rate:n(m.querySelector('#ops_sup_vat').value),default_re_rate:n(m.querySelector('#ops_sup_re').value),default_withholding_rate:n(m.querySelector('#ops_sup_wh').value),default_withholding_model:m.querySelector('#ops_sup_wh_model').value||null,default_deductible_irpf:m.querySelector('#ops_sup_deductible').checked,default_deductible_pct:n(m.querySelector('#ops_sup_deduct_pct').value),notes:m.querySelector('#ops_sup_notes').value,active:true,updated_at:new Date().toISOString()};
   if(!row.name)return m.querySelector('#ops_sup_name').focus();
   const res=id?await sb.from('ops_suppliers').update(row).eq('id',id).select().single():await sb.from('ops_suppliers').insert({...row,source:'manual',created_by:authSession?.user?.id||null}).select().single();
   if(res.error){alert('No se pudo guardar el proveedor: '+res.error.message);return}
-  closeOpsModal();await load(true);O.expenseDraft.supplierId=res.data.id;O.expenseDraft.supplier=res.data.name;O.expenseDraft.taxId=res.data.tax_id||'';render();
+  closeOpsModal();await load(true);window.opsSelectSupplier(res.data.id);
  };
 };
 window.opsOpenSupplierManager=function(){
