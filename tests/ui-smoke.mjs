@@ -605,7 +605,7 @@ const beforeExternalUpload=storageUploads;
 await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
 await page.waitForTimeout(250);
 const externalInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Externo QA');
-assert(externalInvoice&&externalInvoice.status==='emitida','Factura externa no quedó emitida');
+assert(externalInvoice&&externalInvoice.status==='emitida','Factura externa no quedó emitida · invoice='+JSON.stringify(externalInvoice||null)+' · dialogs='+dialogs.slice(-8).join(' | '));
 assert(externalInvoice.number===77,'Factura externa no conservó su número');
 assert(storageUploads===beforeExternalUpload+1,'PDF externo no llegó a Storage');
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='sales_invoice_source'&&x.linked_entity_id===externalInvoice.id),'PDF externo no quedó archivado');
