@@ -676,6 +676,19 @@ await page.waitForTimeout(180);
 const rectInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Factura QA'&&x.invoice_kind==='rectifying');
 assert(rectInvoice&&rectInvoice.series_id===ids.seriesHR,'Rectificativa no usa su serie independiente');
 
+// Flujo tipo editor: crear y emitir sin salir del documento.
+await page.getByRole('button',{name:'Facturas',exact:true}).click();
+await field('Cliente / razón social').fill('Cliente Directa QA');
+await field('Descripción').fill('Factura directa QA');
+await field('Precio base').fill('25');
+await page.getByRole('button',{name:'Guardar y emitir',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Guardar y emitir no terminó en vista previa interna');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+await page.waitForTimeout(120);
+const directInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Directa QA');
+assert(directInvoice?.status==='emitida'&&directInvoice.display_number,'Guardar y emitir no dejó la factura emitida y numerada');
+
 // Factura externa: documento original + numeración externa + registro emitido.
 await page.getByRole('button',{name:'Facturas',exact:true}).click();
 await field('Origen').selectOption('externa');
@@ -690,7 +703,7 @@ await page.getByRole('dialog').waitFor();
 assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Factura externa seleccionada no abre vista previa interna');
 await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 const beforeExternalUpload=storageUploads;
-await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
+await page.getByRole('button',{name:'Registrar externa',exact:true}).click();
 await page.waitForTimeout(250);
 const externalInvoice=fixtures.ops_sales_invoices.find(x=>x.customer_name==='Cliente Externo QA');
 assert(externalInvoice&&externalInvoice.status==='emitida','Factura externa no quedó emitida · invoice='+JSON.stringify(externalInvoice||null)+' · dialogs='+dialogs.slice(-8).join(' | '));
