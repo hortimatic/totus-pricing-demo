@@ -119,14 +119,13 @@
 .ops-info-btn span{display:block;transform:translateY(-.2px)}
 .ops-info-btn:hover,.ops-info-btn:focus-visible{color:#d8ffef;border-color:rgba(105,230,177,.52);background:rgba(105,230,177,.11);outline:none}
 
-.ops-help-layer{position:fixed;inset:0;z-index:100000;background:rgba(2,8,16,.06);display:flex;justify-content:flex-end;align-items:flex-start;padding:78px 18px 18px;pointer-events:auto}
-.ops-help-panel{width:min(390px,calc(100vw - 36px));max-height:min(520px,calc(100vh - 96px));overflow:auto;border:1px solid rgba(105,230,177,.22);border-radius:15px;background:rgba(9,20,29,.97);box-shadow:0 16px 48px rgba(0,0,0,.30);transform:translateX(14px);opacity:0;transition:.16s ease}
-.ops-help-layer.open .ops-help-panel{transform:none;opacity:1}
-.ops-help-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-bottom:1px solid var(--line)}
-.ops-help-head h3{margin:2px 0 0;font-size:16px}
-.ops-help-close{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);font-size:20px;cursor:pointer}
-.ops-help-body{padding:15px;color:#c9d5dc;line-height:1.58;font-size:13px}
-@media(max-width:620px){.ops-help-layer{padding:68px 10px 10px;align-items:flex-start}.ops-help-panel{width:min(360px,calc(100vw - 20px));max-height:60vh}}
+.ops-help-popover{position:fixed;z-index:100000;max-height:min(520px,calc(100vh - 20px));overflow:auto;border:1px solid rgba(105,230,177,.22);border-radius:14px;background:rgba(9,20,29,.985);box-shadow:0 16px 42px rgba(0,0,0,.34);animation:opsHelpIn .14s ease-out}
+@keyframes opsHelpIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.ops-help-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line)}
+.ops-help-head h3{margin:2px 0 0;font-size:15px}
+.ops-help-close{width:29px;height:29px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);font-size:19px;cursor:pointer;flex:0 0 auto}
+.ops-help-body{padding:14px;color:#c9d5dc;line-height:1.55;font-size:13px}
+@media(max-width:620px){.ops-help-popover{max-height:min(55vh,430px)}}
 .ops-modal-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(2,8,16,.24);backdrop-filter:blur(1px);display:flex;align-items:center;justify-content:center;padding:24px}
 .ops-modal{width:min(560px,94vw);max-height:84vh;overflow:auto;border:1px solid var(--line);border-radius:16px;background:linear-gradient(180deg,#111b28,#0b121c);box-shadow:0 18px 48px rgba(0,0,0,.38)}
 .ops-modal.wide{width:min(1180px,96vw);height:min(900px,94vh);display:flex;flex-direction:column}
