@@ -640,6 +640,7 @@ window.opsQuickInternal=function(kind){
  render();
 };
 window.opsNewExpense=function(){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()];render()};
+window.opsNewInternalExpense=function(){O.expenseDraft=newExpenseDraft();O.expenseDraft.managementOnly=true;O.expenseDraft.documentKind='otro';O.expenseDraft.fiscalReviewed=false;O.expenseDraftLines=[defaultExpenseLine()];render();};
 window.opsEditExpense=function(id){
  const e=O.expenses.find(x=>x.id===id);if(!e)return;
  O.expenseDraft={id:e.id,storeId:e.store_id||'',date:e.expense_date,supplierId:e.supplier_id||'',supplier:e.supplier_name||'',taxId:e.supplier_tax_id||'',invoice:e.invoice_number||'',documentKind:e.document_kind||'factura',payment:e.payment_method||'transferencia',paidStatus:e.paid_status||'pagado',paidDate:e.paid_date||'',amountPaid:String(e.amount_paid??''),notes:e.notes||'',fiscalReviewed:!!e.fiscal_reviewed,managementOnly:!!e.management_only};
