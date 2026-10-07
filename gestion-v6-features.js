@@ -732,8 +732,8 @@ window.opsSaveTaxPayment=async function(){
   const {data,error}=await sb.from('ops_tax_payments').insert(row).select().single();if(error)throw error;
   if(file){
    try{
-    window.__opsValidateDocumentFile(file);
-    const docId=await uploadDoc(file,{store_id:null,doc_type:'impuesto',document_date:date||today(),supplier_or_customer:'AEAT',tax_id:'',invoice_number:`Modelo ${type} · T${quarter} ${year}`,category_code:type,status:status==='pagado'?'archivada':'pendiente',notes},'tax_payment',data.id);
+    O.core.validateDocFile(file);
+    const docId=await O.core.uploadDoc(file,{store_id:null,doc_type:'impuesto',document_date:date||today(),supplier_or_customer:'AEAT',tax_id:'',invoice_number:`Modelo ${type} · T${quarter} ${year}`,category_code:type,status:status==='pagado'?'archivada':'pendiente',notes},'tax_payment',data.id);
     if(!docId)throw new Error('No se pudo crear el registro documental del justificante.');
     const up=await sb.from('ops_tax_payments').update({document_id:docId}).eq('id',data.id).select('id,document_id').single();
     if(up.error)throw up.error;
