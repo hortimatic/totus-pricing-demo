@@ -290,7 +290,8 @@ await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('
 const infoBtn=page.locator('.ops-info-btn').first();
 if(await infoBtn.count()){
   await infoBtn.click();
-  assert(await page.locator('.ops-help-panel').count()===1,'La ayuda contextual no usa panel compacto');
+  assert(await page.locator('.ops-help-popover').count()===1,'La ayuda contextual no usa el panel flotante');
+  assert(await page.locator('.ops-help-layer').count()===0,'La ayuda contextual sigue creando una capa a pantalla completa');
   assert(await page.locator('.ops-modal').count()===0,'La ayuda contextual sigue usando el modal grande');
   await page.locator('.ops-help-close').click();
 }
