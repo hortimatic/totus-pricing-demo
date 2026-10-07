@@ -731,18 +731,27 @@ window.opsDuplicateTemplate=function(id){
  };
 };
 window.opsSaveSeries=async function(id){if(!admin())return;const s=O.series.find(x=>x.id===id),prefix=document.getElementById('ser_p_'+id).value.trim(),next=parseInt(document.getElementById('ser_n_'+id).value,10),padding=parseInt(document.getElementById('ser_d_'+id).value,10);const max=Math.max(0,...O.invoices.filter(x=>x.series_id===id&&x.number!=null).map(x=>N(x.number)));if(!prefix||!next||next<=max)return alert(`El siguiente número debe ser mayor que ${max}.`);if(padding<1||padding>10)return alert('Dígitos entre 1 y 10.');const {error}=await sb.from('ops_invoice_series').update({prefix,next_number:next,padding}).eq('id',id);if(error)return alert(error.message);await window.opsLoadData(true);render()};
+async function tabularDocumentPreview(blob,name){
+ if(!window.XLSX)return '<div class="ops-empty">La vista tabular no está disponible en este navegador.</div>';
+ const wb=XLSX.read(await blob.arrayBuffer(),{type:'array'}),sheetName=wb.SheetNames[0],ws=wb.Sheets[sheetName];
+ const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''}),shown=rows.slice(0,100),maxCols=Math.min(30,Math.max(1,...shown.map(r=>r.length)));
+ const body=shown.map((r,ri)=>'<tr>'+Array.from({length:maxCols},(_,ci)=>`<${ri===0?'th':'td'}>${H(r[ci]??'')}</${ri===0?'th':'td'}>`).join('')+'</tr>').join('');
+ return `<div class="ops-tabular-preview"><div class="small">${H(name)} · hoja ${H(sheetName||'1')}${rows.length>100?' · mostrando 100 de '+rows.length+' filas':''}</div><div class="ops-table-wrap"><table class="ops-table">${body}</table></div></div>`;
+}
 window.opsPreviewDoc=async function(id){
  const d=O.documents.find(x=>x.id===id);if(!d)return;
- if(!['application/pdf','image/jpeg','image/png','image/webp'].includes(d.mime_type||''))return opsDownloadDoc(id);
  try{
   const {data,error}=await sb.storage.from('business-documents').download(d.storage_path);if(error)throw error;
-  const url=URL.createObjectURL(data);
-  const isPdf=(d.mime_type||'')==='application/pdf';
-  const html=isPdf?`<iframe class="ops-pdf-frame" title="${H(d.original_name)}"></iframe>`:`<div class="ops-image-preview"><img alt="${H(d.original_name)}"></div>`;
-  const modal=openOpsModal(d.original_name,html+`<div class="ops-preview-actions"><button type="button" class="secondary" id="ops_doc_preview_download">Descargar</button><button type="button" class="ghost" id="ops_doc_preview_close">Cerrar</button></div>`,{wide:true});
-  modal.dataset.objectUrl=url;
-  if(isPdf)modal.querySelector('iframe').src=url;else modal.querySelector('img').src=url;
-  modal.querySelector('#ops_doc_preview_download').onclick=()=>dlBlob(data,d.original_name);
+  const mime=(d.mime_type||'').toLowerCase(),name=String(d.original_name||'documento'),ext=name.toLowerCase().split('.').pop();
+  const isPdf=mime==='application/pdf'||ext==='pdf',isImage=['image/jpeg','image/png','image/webp'].includes(mime)||['jpg','jpeg','png','webp'].includes(ext),isTable=['xlsx','xls','csv'].includes(ext)||/spreadsheet|excel|csv/.test(mime);
+  let html='',url='';
+  if(isPdf){url=URL.createObjectURL(data);html=`<iframe class="ops-pdf-frame" title="${H(name)}"></iframe>`}
+  else if(isImage){url=URL.createObjectURL(data);html=`<div class="ops-image-preview"><img alt="${H(name)}"></div>`}
+  else if(isTable){html=await tabularDocumentPreview(data,name)}
+  else html=`<div class="ops-empty"><b>Vista previa no disponible para este formato.</b><div class="small">Puedes descargar el archivo desde esta misma ventana.</div></div>`;
+  const modal=openOpsModal(name,html+`<div class="ops-preview-actions"><button type="button" class="secondary" id="ops_doc_preview_download">Descargar</button><button type="button" class="ghost" id="ops_doc_preview_close">Cerrar</button></div>`,{wide:true});
+  if(url){modal.dataset.objectUrl=url;if(isPdf)modal.querySelector('iframe').src=url;else modal.querySelector('img').src=url}
+  modal.querySelector('#ops_doc_preview_download').onclick=()=>dlBlob(data,name);
   modal.querySelector('#ops_doc_preview_close').onclick=closeOpsModal;
  }catch(e){alert('No se pudo abrir el documento: '+e.message)}
 };
