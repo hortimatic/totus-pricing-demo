@@ -568,7 +568,12 @@ await field('Descripción').fill('Servicio QA');
 await field('Cant.').fill('2');
 await field('Precio base').fill('100');
 await field('Dto %').fill('10');
-await page.waitForTimeout(200);
+await page.waitForTimeout(100);
+await page.getByRole('button',{name:'Duplicar línea 1',exact:true}).click();
+assert(await page.locator('.invoice-lines .ops-line').count()===2,'El editor de factura no permite duplicar líneas');
+await page.getByRole('button',{name:'Eliminar línea 2',exact:true}).click();
+assert(await page.locator('.invoice-lines .ops-line').count()===1,'El editor de factura no permite eliminar la línea duplicada');
+await page.waitForTimeout(100);
 assert((await page.locator('.ops-invoice-total').innerText()).includes('217,80'),'Total de proforma incorrecto');
 
 await page.getByRole('button',{name:'Vista previa',exact:true}).click();
@@ -638,6 +643,11 @@ await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).cl
 await page.waitForTimeout(150);
 assert(normalInvoice.status==='emitida'&&normalInvoice.display_number,'Factura normal no emitida/numerada');
 invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
+assert(await invoiceRow.getByRole('button',{name:'Vista previa',exact:true}).count()===1,'La factura emitida no ofrece vista previa directa');
+await invoiceRow.getByRole('button',{name:'Vista previa',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'La vista previa de factura emitida no se abre dentro de Totus');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 await invoiceRow.getByRole('button',{name:'Marcar cobrada',exact:true}).click();
 await page.waitForTimeout(160);
 assert(normalInvoice.paid_status==='pagada','Marcar cobrada no persistió');
@@ -668,6 +678,12 @@ assert(externalInvoice.number===77,'Factura externa no conservó su número');
 assert(Number(fixtures.ops_invoice_series.find(x=>x.id===ids.seriesH)?.next_number)>=78,'Factura externa no avanzó la serie interna y podría provocar duplicados');
 assert(storageUploads===beforeExternalUpload+1,'PDF externo no llegó a Storage');
 assert(fixtures.ops_documents.some(x=>x.linked_entity_type==='sales_invoice_source'&&x.linked_entity_id===externalInvoice.id),'PDF externo no quedó archivado');
+const externalRow=page.locator('tr').filter({hasText:'Cliente Externo QA'}).first();
+assert(await externalRow.getByRole('button',{name:'Original',exact:true}).count()===1,'Factura externa no ofrece vista previa del original');
+await externalRow.getByRole('button',{name:'Original',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'El original externo no se abre dentro de Totus');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 
 
 // Validación de tipos/tamaño documental.
