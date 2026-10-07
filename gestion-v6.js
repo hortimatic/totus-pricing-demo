@@ -84,6 +84,7 @@ const OPS_HELP={
  'facturas.series':['Series de numeración','Cada serie pertenece a un año, establecimiento y tipo de documento. Al emitir, Totus asigna el siguiente número y evita retrocesos o cruces de año/tienda.'],
  'facturas.includeIncome':['Sumar a ingresos','Actívalo únicamente cuando esa venta no esté ya incluida en los cierres diarios. Evita duplicar ingresos en informes y previsiones.'],
  'facturas.external':['Documento externo','Úsalo cuando la factura ya se emitió fuera de Totus. Debes indicar el número utilizado y adjuntar el original; Totus lo registra sin renumerarlo.'],
+ 'facturas.clientes':['Clientes reutilizables','Guarda una vez los datos fiscales, contacto, dirección y forma de pago habitual. Al seleccionar el cliente en una factura o proforma, Totus reutiliza esos datos y puedes ajustar el documento concreto sin perder la ficha maestra.'],
  'facturas.template.style':['Estilo de plantilla','Limpia: diseño sobrio. Corporativa: cabecera con mayor presencia de marca. Compacta: reduce espacios para documentos con muchas líneas. Los colores y la tipografía se pueden personalizar después.'],
  'facturas.template.logo':['Logo corporativo','El logo se gestiona únicamente aquí, por plantilla. Puedes subirlo, ocultarlo sin borrarlo, cambiar tamaño y posición, o retirarlo de la plantilla.'],
  'facturas.template.copy':['Textos del documento','Configura títulos, cabecera, condiciones de pago, datos bancarios y pie. Estos valores se aplican por defecto y pueden ajustarse en cada factura antes de emitir.'],
