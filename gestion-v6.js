@@ -371,7 +371,8 @@ window.opsEditClosing=function(id){
     drawers[x.drawer_id]={
       opening:String(x.opening_cash??''),closing:String(x.closing_cash??''),
       card:String(x.card_sales??''),bizum:String(x.bizum_sales??''),online:String(x.online_sales??''),other:String(x.other_income??''),
-      withdrawals:String(x.cash_withdrawals??''),cashExpenses:String(x.cash_expenses_declared??'')
+      withdrawals:String(x.cash_withdrawals??''),cashExpenses:String(x.cash_expenses_declared??''),
+      extraIn:String(x.cash_extra_in??''),extraOut:String(x.cash_extra_out??'')
     };
   });
   let legacyAllocation=false;
@@ -380,10 +381,11 @@ window.opsEditClosing=function(id){
     if(first){
       first.card=String(c.card_sales||'');first.bizum=String(c.bizum_sales||'');first.online=String(c.online_sales||'');first.other=String(c.other_income||'');
       first.withdrawals=String(c.cash_withdrawals||'');first.cashExpenses=String(c.cash_expenses_declared||'');
-      legacyAllocation=!!(n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income)+n(c.cash_withdrawals)+n(c.cash_expenses_declared));
+      first.extraIn=String(c.cash_extra_in||'');first.extraOut=String(c.cash_extra_out||'');
+      legacyAllocation=!!(n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income)+n(c.cash_withdrawals)+n(c.cash_expenses_declared)+n(c.cash_extra_in)+n(c.cash_extra_out));
     }
   }
-  O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,notes:c.notes||'',status:c.status,drawers,legacyAllocation};render();window.scrollTo({top:0,behavior:'smooth'});
+  O.closeDraft={id:c.id,storeId:c.store_id,date:c.business_date,notes:c.notes||'',status:c.status,controlTotal:c.reported_total_sales==null?'':String(c.reported_total_sales),drawers,legacyAllocation};render();window.scrollTo({top:0,behavior:'smooth'});
 };
 window.opsReopenClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Reabrir cierre','El cierre volverá a borrador para poder corregirlo.','Reabrir');if(!reason)return;const {error}=await sb.rpc('ops_set_closing_status_controlled',{p_closing_id:d.id,p_status:'borrador',p_reason:reason});if(error)return alert(error.message);await load(true);window.opsEditClosing(d.id)};
 window.opsDeleteClosing=async function(){const d=O.closeDraft;if(!manager()||!d?.id)return;const reason=await askReason('Eliminar cierre',`Eliminarás el cierre de ${storeName(d.storeId)} del ${dmy(d.date)}. Se conservará snapshot administrativo.`,'Eliminar cierre');if(!reason)return;const {error}=await sb.rpc('ops_delete_closing_controlled',{p_closing_id:d.id,p_reason:reason});if(error)return alert(error.message);await load(true);O.closeDraft=newClosingDraft();render()};
@@ -392,16 +394,21 @@ window.opsSaveClosing=async function(status='cerrado'){
   if(O.closings.some(x=>x.id!==d.id&&x.store_id===d.storeId&&x.business_date===d.date))return alert('Ya existe un cierre para esa tienda y fecha. Ábrelo desde el histórico.');
   const ds=O.drawers.filter(x=>x.store_id===d.storeId);if(!ds.length)return alert('Esta tienda no tiene cajas configuradas.');
   if(ds.some(dr=>String(closingDrawerState(d,dr).closing).trim()===''))return alert('Indica cuánto queda en cada caja.');
+  if(status==='cerrado'){
+    if(String(d.controlTotal??'').trim()==='')return alert('Indica el total de ventas según TPV/cierre para comprobar el cuadre antes de cerrar el día.');
+    if(c.diff==null||Math.abs(c.diff)>.01)return alert('El cierre NO CUADRA. Revisa efectivo, tarjeta y movimientos de caja. Si necesitas parar, guárdalo como borrador.');
+  }
   O.saving=true;
   try{
-    const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,notes:d.notes||'',status,entry_mode:'physical'};
+    const payload={id:d.id||null,store_id:d.storeId,business_date:d.date,notes:d.notes||'',status,entry_mode:'physical',reported_total_sales:String(d.controlTotal??'').trim()===''?null:n(d.controlTotal)};
     const drawerRows=ds.map(dr=>{const x=closingDrawerState(d,dr);return{
       drawer_id:dr.id,opening_cash:n(x.opening),closing_cash:n(x.closing),
       card_sales:n(x.card),bizum_sales:n(x.bizum),online_sales:n(x.online),other_income:n(x.other),
-      cash_withdrawals:n(x.withdrawals),cash_expenses_declared:n(x.cashExpenses),notes:''
+      cash_withdrawals:n(x.withdrawals),cash_expenses_declared:n(x.cashExpenses),
+      cash_extra_in:n(x.extraIn),cash_extra_out:n(x.extraOut),notes:''
     }});
     const {data:id,error}=await sb.rpc('ops_save_closing',{p_closing:payload,p_drawers:drawerRows});if(error)throw error;
-    await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,cajas:drawerRows.length});
+    await audit('cajas',d.id?'actualizar':'crear',id,{fecha:d.date,tienda:storeName(d.storeId),ventas:c.total,control:c.control,diferencia:c.diff,cajas:drawerRows.length,estado:status});
     await load(true);O.closeDraft=newClosingDraft();render();
   }catch(e){alert('No se pudo guardar el cierre: '+e.message)}finally{O.saving=false}
 };
