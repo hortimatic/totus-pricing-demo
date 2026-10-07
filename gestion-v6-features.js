@@ -802,6 +802,30 @@ function fiscalProjectionHtml(){
   <div class="ops-kpi warn"><small>Reserva fiscal</small><strong>${euro(f.reserve)}</strong></div>
   <div class="ops-kpi ${g.state==='tight'?'bad':g.state==='room'?'good':'warn'}"><small>${H(g.title)}</small><strong>${euro(g.result)}</strong><div class="sub">Objetivo ${g.targetPct.toFixed(1).replace('.',',')} % = ${euro(g.target)}</div></div>
  </div>
+ <div class="ops-card">
+  <div class="section-head"><div><div class="eyebrow">T${O.quarter} · visión de negocio</div><div class="ops-title-line"><h3>Resultado operativo por tienda</h3>${infoButton('fiscal.tiendas','Cómo leer el resultado por tienda')}</div><div class="small">Ventas y gastos registrados en vuestra operativa. Sirve para comparar establecimientos; no reparte artificialmente los gastos fiscales comunes.</div></div></div>
+  <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Establecimiento</th><th>Ventas</th><th>Gastos registrados</th><th>Resultado</th><th>Margen</th></tr></thead><tbody>
+   ${storeRows.map(x=>`<tr><td><b>${H(x.store.name)}</b></td><td class="num">${euro(x.income)}</td><td class="num">${euro(x.expense)}</td><td class="num"><b>${euro(x.result)}</b></td><td class="num">${x.margin.toFixed(2).replace('.',',')} %</td></tr>`).join('')}
+   <tr class="total-row"><td><b>TOTAL NEGOCIO</b></td><td class="num"><b>${euro(storeIncome)}</b></td><td class="num"><b>${euro(storeExpense)}</b></td><td class="num"><b>${euro(storeResult)}</b></td><td class="num"><b>${storeIncome?(storeResult/storeIncome*100).toFixed(2).replace('.',','):'0,00'} %</b></td></tr>
+  </tbody></table></div>
+  <div class="ops-note" style="margin-top:10px">La fiscalidad exacta se calcula consolidada porque los libros del gestor no asignan de forma fiable todos los gastos a una tienda. Totus no inventa ese reparto.</div>
+ </div>
+ <div class="ops-grid">
+  <div class="ops-card">
+   <div class="section-head"><div><div class="eyebrow">Impuestos soportados</div><div class="ops-title-line"><h3>IVA y recargo de equivalencia</h3>${infoButton('fiscal.iva_re','Qué significan estas cifras')}</div><div class="small">Información de coste soportado en compras. Estás configurado en recargo de equivalencia: Totus no lo presenta como liquidación periódica de IVA.</div></div></div>
+   <div class="ops-metric-line"><span>IVA soportado T${O.quarter}</span><b>${euro(taxQ.vat)}</b></div>
+   <div class="ops-metric-line"><span>Recargo equivalencia T${O.quarter}</span><b>${euro(taxQ.re)}</b></div>
+   <div class="ops-metric-line"><span>IVA + RE soportado T${O.quarter}</span><b>${euro(taxQ.total)}</b></div>
+   <div class="ops-metric-line"><span>IVA + RE acumulado ${O.year}</span><b>${euro(taxYtd.total)}</b></div>
+  </div>
+  <div class="ops-card">
+   <div class="section-head"><div><div class="eyebrow">Fiscal consolidado</div><h3>Números usados para impuestos</h3><div class="small">Estos son los importes que alimentan la previsión del modelo 130.</div></div></div>
+   <div class="ops-metric-line"><span>Ventas fiscales T${O.quarter}</span><b>${euro(f.qIncome)}</b></div>
+   <div class="ops-metric-line"><span>Gastos fiscales T${O.quarter}</span><b>${euro(f.qExpense)}</b></div>
+   <div class="ops-metric-line"><span>Resultado antes de difícil justificación</span><b>${euro(f.qIncome-f.qExpense)}</b></div>
+   <div class="small">Para 1T/2T 2026, Totus contrasta estas cifras con las fuentes de gestoría y los modelos presentados.</div>
+  </div>
+ </div>
  <div class="ops-grid">
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Gestión</div><h3>¿Gastar más o menos?</h3></div></div><div class="ops-note ${g.state==='tight'?'bad':g.state==='room'?'ok':'warn'}"><b>${H(g.title)}</b><br>${H(g.text)}</div><div class="ops-metric-line"><span>Resultado real acumulado</span><b>${euro(g.result)}</b></div><div class="ops-metric-line"><span>Margen objetivo</span><b>${euro(g.target)}</b></div><div class="ops-metric-line"><span>Colchón sobre objetivo</span><b>${euro(g.headroom)}</b></div><div class="small">No recomienda gastar por gastar: solo ayuda a decidir sobre compras necesarias, inversión o gastos reales que ya tengas previstos.</div></div>
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">RETA ${O.year}</div><div class="ops-title-line"><h3>Cuota según rendimiento</h3>${infoButton('fiscal.reta','Cómo se estima el tramo RETA')}</div></div></div>
