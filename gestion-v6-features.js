@@ -908,9 +908,23 @@ function managerExpenseRows(from,to){
   const headers=['Orden','Fecha','Nº fra. recibida','Nº fra. proveedor','Rt','NIF/CIF','Razón social','Concepto','Base IVA','% IVA','Cuota IVA','Base R.E.','% R.E.','Cuota R.E.','Imputable a IRPF','Base retención','% retención','Cuota retenida','Total factura','Neto pagado'];
   const rows=[];
   const source=E.gestorRows.filter(r=>inRange(r.expense_date,from,to)&&!r.tax_support_line);
+  const importedOperational=O.expenses.filter(e=>e.source==='importacion_gestor'&&inRange(e.expense_date,from,to));
+  const correctedInvoice=r=>{
+    const original=String(r.supplier_invoice_no||'').trim();
+    if(original&&!original.endsWith('-'))return original;
+    const matches=importedOperational.filter(e=>
+      e.expense_date===r.expense_date &&
+      (
+        (r.supplier_tax_id&&String(e.supplier_tax_id||'').replace(/[^A-Z0-9]/gi,'').toUpperCase()===String(r.supplier_tax_id).replace(/[^A-Z0-9]/gi,'').toUpperCase()) ||
+        String(e.supplier_name||'').toUpperCase().includes(String(r.supplier_name||'').split(' ')[0].toUpperCase())
+      ) &&
+      (!original||String(e.invoice_number||'').startsWith(original))
+    );
+    return matches.length===1&&matches[0].invoice_number?matches[0].invoice_number:original;
+  };
   const sourceGroups=new Map();
   source.forEach(r=>{
-    const key=[r.expense_date,r.received_invoice_ref||'',r.supplier_invoice_no||'',r.supplier_tax_id||'',r.supplier_name||''].join('|');
+    const key=[r.expense_date,r.received_invoice_ref||'',correctedInvoice(r),r.supplier_tax_id||'',r.supplier_name||''].join('|');
     if(!sourceGroups.has(key))sourceGroups.set(key,[]);
     sourceGroups.get(key).push(r);
   });
@@ -918,7 +932,7 @@ function managerExpenseRows(from,to){
     const gross=sum(group,r=>N(r.base_vat)+N(r.vat_amount)+N(r.re_amount));
     const withheld=sum(group,r=>N(r.withholding_amount));
     group.forEach((r,idx)=>rows.push([
-      N(r.order_no),reportDate(r.expense_date),r.received_invoice_ref||'',r.supplier_invoice_no||'','',
+      N(r.order_no),reportDate(r.expense_date),r.received_invoice_ref||'',correctedInvoice(r),'',
       r.supplier_tax_id||'',r.supplier_name||'',r.concept_text,
       N(r.base_vat),N(r.vat_rate),N(r.vat_amount),N(r.re_base),N(r.re_rate),N(r.re_amount),
       N(r.base_vat)+N(r.vat_amount)+N(r.re_amount),N(r.withholding_base),N(r.withholding_rate),N(r.withholding_amount),
