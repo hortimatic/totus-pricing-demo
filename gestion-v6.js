@@ -183,11 +183,12 @@ function filteredClosings(from,to,store='all'){
  return O.closings.filter(x=>inRange(x.business_date,from,to)&&(store==='all'||x.store_id===store));
 }
 function closingCsvRows(from,to){
- return [['Fecha','Establecimiento','Apertura','Efectivo vendido','Tarjeta','Bizum','Online','Otras entradas','Salida caja','Gastos caja','Caja final','Total ventas','Notas'],
+ return [['Fecha','Establecimiento','Apertura','Efectivo vendido','Tarjeta','Bizum','Online','Otros cobros','Retirada de caja','Gastos pagados desde caja','Entrada extra a caja','Salida extra de caja','Metálico final','Ventas calculadas','Total control','Diferencia','Estado','Notas'],
   ...filteredClosings(from,to,O.storeId).sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[
    c.business_date,storeName(c.store_id),c.opening_cash,c.cash_sales,c.card_sales,c.bizum_sales,c.online_sales,c.other_income,
-   c.cash_withdrawals,c.cash_expenses_declared,c.actual_cash,
-   n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income),c.notes||''
+   c.cash_withdrawals,c.cash_expenses_declared,c.cash_extra_in||0,c.cash_extra_out||0,c.actual_cash,
+   n(c.cash_sales)+n(c.card_sales)+n(c.bizum_sales)+n(c.online_sales)+n(c.other_income),
+   c.reported_total_sales??'',c.reported_total_sales==null?'':c.difference,c.status||'',c.notes||''
   ])];
 }
 window.opsExportClosings=function(){
@@ -283,7 +284,7 @@ function drawerClosingHtml(d,dr,dis){
     <div><label>Tarjeta</label><input aria-label="Tarjeta" inputmode="decimal" value="${h(x.card)}" oninput="opsDrawerField('${dr.id}','card',this.value)" ${dis}></div>
     <div><label>Bizum</label><input aria-label="Bizum" inputmode="decimal" value="${h(x.bizum)}" oninput="opsDrawerField('${dr.id}','bizum',this.value)" ${dis}></div>
     <div><label>Pedidos online</label><input aria-label="Pedidos online" inputmode="decimal" value="${h(x.online)}" oninput="opsDrawerField('${dr.id}','online',this.value)" ${dis}></div>
-    <div><label>Otros pagos / entradas</label><input aria-label="Otros pagos / entradas" inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
+    <div><label>Otros cobros</label><input aria-label="Otros cobros" inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
     <div><label>Salida / retirada</label><input aria-label="Salida / retirada" inputmode="decimal" value="${h(x.withdrawals)}" oninput="opsDrawerField('${dr.id}','withdrawals',this.value)" ${dis}></div>
     <div><label>Gastos pagados desde caja</label><input aria-label="Gastos pagados desde caja" inputmode="decimal" value="${h(x.cashExpenses)}" oninput="opsDrawerField('${dr.id}','cashExpenses',this.value)" ${dis}></div>
     <div><label>Entrada extra a caja</label><input aria-label="Entrada extra a caja" inputmode="decimal" value="${h(x.extraIn)}" oninput="opsDrawerField('${dr.id}','extraIn',this.value)" ${dis}></div>
@@ -342,8 +343,8 @@ function closingsHtml(){
    <textarea aria-label="Observaciones del cierre" oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea>
   </div>
 
-  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Totales diarios de tienda, obtenidos de la suma de sus cajas.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
-  ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Apertura</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Otras</th><th>Salida</th><th>Gastos caja</th><th>Caja final</th><th>Total venta</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.opening_cash)}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.other_income)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.cash_expenses_declared)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
+  <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Totales diarios de tienda, obtenidos de la suma de sus cajas. Los cierres históricos sin total de control muestran “—” en cuadre.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
+  ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Fecha</th><th>Tienda</th><th>Apertura</th><th>Efectivo</th><th>Tarjeta</th><th>Bizum</th><th>Online</th><th>Otros cobros</th><th>Retirada</th><th>Gastos caja</th><th>Entrada extra</th><th>Salida extra</th><th>Metálico final</th><th>Total calculado</th><th>Control</th><th>Diferencia</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr><td>${dmy(row.business_date)}</td><td>${h(storeName(row.store_id))}</td><td class="num">${eur(row.opening_cash)}</td><td class="num">${eur(row.cash_sales)}</td><td class="num">${eur(row.card_sales)}</td><td class="num">${eur(row.bizum_sales)}</td><td class="num">${eur(row.online_sales)}</td><td class="num">${eur(row.other_income)}</td><td class="num">${eur(row.cash_withdrawals)}</td><td class="num">${eur(row.cash_expenses_declared)}</td><td class="num">${eur(row.cash_extra_in||0)}</td><td class="num">${eur(row.cash_extra_out||0)}</td><td class="num">${eur(row.actual_cash)}</td><td class="num"><b>${eur(n(row.cash_sales)+n(row.card_sales)+n(row.bizum_sales)+n(row.online_sales)+n(row.other_income))}</b></td><td class="num">${row.reported_total_sales==null?'—':eur(row.reported_total_sales)}</td><td class="num">${row.reported_total_sales==null?'—':eur(row.difference)}</td><td>${statusBadge(row.status)}</td><td><button class="ghost" onclick="opsEditClosing('${row.id}')">${row.status==='cerrado'&&!manager()?'Ver':'Abrir'}</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay cierres en este periodo.</div>'}
   </div>`;
 }
 window.opsCloseField=function(k,v,rerender=false){
