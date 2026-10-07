@@ -245,8 +245,9 @@ async function auditCurrentUi(section){
     const code=el.getAttribute(attr)||'';
     for(const m of code.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)){
      const name=m[1];
+     if(m.index>0&&code[m.index-1]==='.')continue;
      if(['if','confirm','alert','Number','String','Math','setTimeout'].includes(name))continue;
-     if(typeof window[name]!=='function'&&!['find','filter','map','includes'].includes(name))missingHandlers.push(name);
+     if(typeof window[name]!=='function')missingHandlers.push(name);
     }
    }
   }
