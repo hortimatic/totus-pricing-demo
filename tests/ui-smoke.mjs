@@ -679,8 +679,8 @@ await page.getByRole('button',{name:'Guardar',exact:true}).click();
 await page.waitForTimeout(220);
 const tax130=fixtures.ops_tax_payments.find(x=>x.tax_type==='130'&&Number(x.quarter)===3&&Number(x.fiscal_year)===2026);
 assert(tax130&&Math.abs(Number(tax130.amount)-1234.56)<0.01,'Fiscalidad no guardó el modelo 130 registrado');
-assert(tax130.document_id,'El modelo fiscal no quedó vinculado a su justificante');
-assert(fixtures.ops_documents.some(x=>x.id===tax130.document_id&&x.linked_entity_type==='tax_payment'),'El justificante fiscal no quedó archivado correctamente');
+assert(tax130.document_id,'El modelo fiscal no quedó vinculado a su justificante · tax='+JSON.stringify(tax130)+' · docs='+JSON.stringify(fixtures.ops_documents)+' · dialogs='+dialogs.slice(-6).join(' | '));
+assert(fixtures.ops_documents.some(x=>x.id===tax130.document_id&&x.linked_entity_type==='tax_payment'),'El justificante fiscal no quedó archivado correctamente · tax='+JSON.stringify(tax130)+' · docs='+JSON.stringify(fixtures.ops_documents));
 
 // Informes: estructura gestoría + XLSX, PDF and ZIP generators.
 const reportQa=await page.evaluate(()=>{
