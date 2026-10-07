@@ -1,17 +1,9 @@
 name: Totus Central QA
-# qa-revision: 17
+# qa-revision: 18
 
 on:
   workflow_dispatch:
-  push:
-    branches: [desarrollo-v6]
-    paths:
-      - 'index.html'
-      - '*.js'
-      - '*.css'
-      - 'tests/**'
-      - 'migrations/**'
-      - '.github/workflows/totus-central-qa.yml'
+
 
 
 concurrency:
