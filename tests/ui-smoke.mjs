@@ -256,7 +256,8 @@ async function xlsxXmlStyle(path,sheetNo=1,ref='A1'){
  const fills=[...block(styles,'fills').matchAll(new RegExp('<fill>[\\s\\S]*?</fill>','g'))].map(m=>m[0]);
  const font=fonts[fontId]||'',fill=fills[fillId]||'';
  const rgb=(xml,tagName)=>(((xml.match(new RegExp('<'+tagName+'\\b[^>]*\\brgb="([^"]+)"')))||[])[1]||'');
- return {styleId,fontId,fillId,fontRgb:rgb6(rgb(font,'color')),fillRgb:rgb6(rgb(fill,'fgColor')),tag,xf,font:font.slice(0,300),fill:fill.slice(0,300)};
+ const hasYellowFont=/rgb="(?:FF)?FFFF00"/i.test(styles);
+ return {styleId,fontId,fillId,fontRgb:rgb6(rgb(font,'color')),fillRgb:rgb6(rgb(fill,'fgColor')),hasYellowFont,tag,xf,font:font.slice(0,300),fill:fill.slice(0,300)};
 }
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
@@ -813,7 +814,7 @@ for(const idx of [2,3]){
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
  const totalRow=firstRows.length;assert(firstSheet['C'+totalRow].f&&firstSheet['D'+totalRow].f&&firstSheet['E'+totalRow].f,'Los totales mensuales del diario no son fórmulas reales');
  const titleXmlStyle=await xlsxXmlStyle(dailyPath,1,'A1');
- assert(titleXmlStyle.fillRgb==='000000'&&titleXmlStyle.fontRgb==='FFFF00','El título mensual no conserva negro/amarillo del Excel original · '+JSON.stringify(titleXmlStyle));
+ assert(fillRgb(firstSheet.A1)==='000000'&&titleXmlStyle.hasYellowFont,'El título mensual no conserva negro/amarillo del Excel original · cell='+JSON.stringify(firstSheet.A1?.s||null)+' · xml='+JSON.stringify(titleXmlStyle));
  assert(fillRgb(firstSheet.A2)==='4F81BD','La cabecera diaria no conserva el azul del Excel original');
  const summaryLabels=firstRows.slice(-6).map(r=>r[1]);
  assert(summaryLabels.join('|')==='Otros|SS y nóminas|Pedidos|Gastos fijos|IRPF|TOTAL','Falta el resumen por colores/categorías del diario');
