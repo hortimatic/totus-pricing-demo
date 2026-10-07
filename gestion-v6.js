@@ -285,6 +285,8 @@ function drawerClosingHtml(d,dr,dis){
     <div><label>Otros pagos / entradas</label><input aria-label="Otros pagos / entradas" inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
     <div><label>Salida / retirada</label><input aria-label="Salida / retirada" inputmode="decimal" value="${h(x.withdrawals)}" oninput="opsDrawerField('${dr.id}','withdrawals',this.value)" ${dis}></div>
     <div><label>Gastos pagados desde caja</label><input aria-label="Gastos pagados desde caja" inputmode="decimal" value="${h(x.cashExpenses)}" oninput="opsDrawerField('${dr.id}','cashExpenses',this.value)" ${dis}></div>
+    <div><label>Entrada extra a caja</label><input aria-label="Entrada extra a caja" inputmode="decimal" value="${h(x.extraIn)}" oninput="opsDrawerField('${dr.id}','extraIn',this.value)" ${dis}></div>
+    <div><label>Salida extra de caja</label><input aria-label="Salida extra de caja" inputmode="decimal" value="${h(x.extraOut)}" oninput="opsDrawerField('${dr.id}','extraOut',this.value)" ${dis}></div>
    </div>
    <div class="ops-close-summary compact">
     <div><small>Efectivo vendido</small><b id="ops_drawer_cash_${dr.id}">${eur(c.cashSales)}</b></div>
@@ -300,7 +302,7 @@ function closingsHtml(){
   const pb=periodBounds(O.year,O.quarter,false),rows=filteredClosings(pb.start,pb.end,O.storeId).slice(0,100);
   const locked=!!(d.id&&d.status==='cerrado'&&!manager()),dis=locked?'disabled':'';
   return `<div class="ops-card">
-   <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario por cajas</h3>${infoButton('cajas','Cada caja se abre y se cierra por separado. El total de tienda es la suma de todas.')}</div><div class="small">Registra cada caja física de forma independiente. Totus suma después efectivo, tarjeta, Bizum, online, otros cobros, retiradas y gastos para obtener el cierre total de la tienda.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}${manager()&&d.id&&d.status==='cerrado'?'<button class="ghost" onclick="opsReopenClosing()">Reabrir</button>':''}${manager()&&d.id?'<button class="danger" onclick="opsDeleteClosing()">Eliminar</button>':''}<button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Guardar cambios':'Cerrar día'}</button></div></div>
+   <div class="section-head"><div><div class="eyebrow">${d.id?'Cierre registrado':'Nuevo cierre'}</div><div class="ops-title-line"><h3>Cierre diario por cajas</h3>${infoButton('cajas','Cada caja se abre y se cierra por separado. El total de tienda es la suma de todas.')}</div><div class="small">Registra cada caja física de forma independiente. Totus suma después efectivo, tarjeta, Bizum, online, otros cobros, retiradas y gastos para obtener el cierre total de la tienda.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewClosing()">Nuevo cierre</button>':''}${manager()&&d.id&&d.status==='cerrado'?'<button class="ghost" onclick="opsReopenClosing()">Reabrir</button>':''}${manager()&&d.id?'<button class="danger" onclick="opsDeleteClosing()">Eliminar</button>':''}<button class="secondary" onclick="opsSaveClosing('borrador')" ${dis}>Guardar borrador</button><button class="primary" onclick="opsSaveClosing('cerrado')" ${dis}>${d.id?'Cerrar / guardar':'Cerrar día'}</button></div></div>
    ${locked?'<div class="ops-note warn">Cierre cerrado. Puedes consultarlo; administración o gerencia pueden reabrirlo o corregirlo con trazabilidad.</div>':''}
    ${d.legacyAllocation?'<div class="ops-note warn"><b>Cierre anterior al desglose por caja.</b> Los cobros no efectivos históricos se muestran asignados a la primera caja solo para conservar el total. Puedes corregir el reparto si conoces el dato real.</div>':''}
 
@@ -324,11 +326,18 @@ function closingsHtml(){
     <div><small>Otros pagos</small><b id="ops_close_other">${eur(c.other)}</b></div>
     <div><small>Retiradas</small><b id="ops_close_withdrawals">${eur(c.withdrawals)}</b></div>
     <div><small>Gastos caja</small><b id="ops_close_cash_expenses">${eur(c.cashExpenses)}</b></div>
+    <div><small>Entradas extra</small><b id="ops_close_extra_in">${eur(c.extraIn)}</b></div>
+    <div><small>Salidas extra</small><b id="ops_close_extra_out">${eur(c.extraOut)}</b></div>
     <div><small>Metálico final</small><b id="ops_close_end">${eur(c.closing)}</b></div>
-    <div><small>Ventas del día</small><b id="ops_close_total">${eur(c.total)}</b></div>
+    <div><small>Ventas calculadas</small><b id="ops_close_total">${eur(c.total)}</b></div>
    </div>
-   <div class="ops-note" style="margin-top:10px">El total de tienda es la suma de todas las cajas. En cada caja: efectivo vendido = metálico final + retiradas + gastos pagados desde caja − apertura.</div>
-   <div class="invoice-section-title">4 · Observaciones</div>
+   <div class="ops-note" style="margin-top:10px">El efectivo vendido se reconstruye con apertura, metálico final, retirada, gastos y movimientos extraordinarios. Las entradas extra no se consideran ventas.</div>
+   <div class="invoice-section-title">4 · Comprobación del cierre ${infoButton('cajas.cuadre','Cómo comprobar que el cierre cuadra')}</div>
+   <div class="ops-form">
+    <div><label>Total ventas según TPV / cierre</label><input aria-label="Total ventas según TPV / cierre" inputmode="decimal" value="${h(d.controlTotal??'')}" oninput="opsCloseField('controlTotal',this.value)" ${dis}></div>
+    <div><label>Diferencia</label><div class="ops-control-result ${c.diff==null?'neutral':Math.abs(c.diff)<=.01?'ok':'bad'}" id="ops_close_diff">${c.diff==null?'Introduce el total de control':Math.abs(c.diff)<=.01?'CUADRA · '+eur(c.diff):'NO CUADRA · '+eur(c.diff)}</div></div>
+   </div>
+   <div class="invoice-section-title">5 · Observaciones</div>
    <textarea aria-label="Observaciones del cierre" oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea>
   </div>
 
@@ -347,7 +356,8 @@ window.opsDrawerField=function(id,k,v){
 };
 function updateCloseSummary(){
   const c=closeCalc();
-  [['ops_close_open',c.opening],['ops_close_cashsales',c.cashSales],['ops_close_card',c.card],['ops_close_bizum',c.bizum],['ops_close_online',c.online],['ops_close_other',c.other],['ops_close_withdrawals',c.withdrawals],['ops_close_cash_expenses',c.cashExpenses],['ops_close_end',c.closing],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)});
+  [['ops_close_open',c.opening],['ops_close_cashsales',c.cashSales],['ops_close_card',c.card],['ops_close_bizum',c.bizum],['ops_close_online',c.online],['ops_close_other',c.other],['ops_close_withdrawals',c.withdrawals],['ops_close_cash_expenses',c.cashExpenses],['ops_close_extra_in',c.extraIn],['ops_close_extra_out',c.extraOut],['ops_close_end',c.closing],['ops_close_total',c.total]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)});
+  const diff=document.getElementById('ops_close_diff');if(diff){diff.className='ops-control-result '+(c.diff==null?'neutral':Math.abs(c.diff)<=.01?'ok':'bad');diff.textContent=c.diff==null?'Introduce el total de control':Math.abs(c.diff)<=.01?'CUADRA · '+eur(c.diff):'NO CUADRA · '+eur(c.diff)}
   O.drawers.filter(x=>x.store_id===O.closeDraft?.storeId).forEach(dr=>{const x=drawerCalc(O.closeDraft,dr);[['ops_drawer_total_'+dr.id,x.total],['ops_drawer_cash_'+dr.id,x.cashSales],['ops_drawer_card_'+dr.id,x.card],['ops_drawer_other_'+dr.id,x.bizum+x.online+x.other],['ops_drawer_close_'+dr.id,x.closing]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.textContent=eur(v)})});
 }
 window.opsNewClosing=function(){O.closeDraft=newClosingDraft();render()};
