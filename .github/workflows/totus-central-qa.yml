@@ -32,7 +32,7 @@ jobs:
       - name: Install Playwright
         run: |
           npm init -y
-          npm install playwright xlsx jszip
+          npm install playwright xlsx-js-style jszip
           npx playwright install --with-deps chromium
       - name: Start static server
         run: |
