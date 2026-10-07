@@ -105,9 +105,22 @@ function openOpsModal(title,html,{wide=false}={}){
  document.body.appendChild(wrap);__opsModal=wrap;return wrap;
 }
 window.opsCloseModal=closeOpsModal;
+function openOpsHelp(title,copy){
+ const old=document.querySelector('.ops-help-layer');if(old)old.remove();
+ const wrap=document.createElement('div');wrap.className='ops-help-layer';
+ wrap.innerHTML=`<aside class="ops-help-panel" role="dialog" aria-modal="false" aria-labelledby="ops_help_title"><div class="ops-help-head"><div><div class="eyebrow">Información</div><h3 id="ops_help_title">${h(title)}</h3></div><button type="button" class="ops-help-close" aria-label="Cerrar información">×</button></div><div class="ops-help-body">${h(copy)}</div></aside>`;
+ const close=()=>{document.removeEventListener('keydown',esc);wrap.remove()};
+ const esc=e=>{if(e.key==='Escape')close()};
+ wrap.querySelector('.ops-help-close').onclick=close;
+ wrap.addEventListener('click',e=>{if(e.target===wrap)close()});
+ document.addEventListener('keydown',esc);
+ document.body.appendChild(wrap);
+ requestAnimationFrame(()=>wrap.classList.add('open'));
+ return wrap;
+}
 window.opsInfo=function(key){
  const item=OPS_HELP[key]||OPS_HELP[String(key).split('.')[0]]||['Información','Sin información adicional disponible.'];
- openOpsModal(item[0],`<div class="ops-help-copy">${h(item[1])}</div>`);
+ openOpsHelp(item[0],item[1]);
 };
 function askReason(title,message,actionLabel='Confirmar'){
  return new Promise(resolve=>{
@@ -118,7 +131,7 @@ function askReason(title,message,actionLabel='Confirmar'){
   setTimeout(()=>modal.querySelector('#ops_reason_text')?.focus(),0);
  });
 }
-function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}')">i</button>`}
+function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}')"><span aria-hidden="true">i</span></button>`}
 
 O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal,askReason};
 
