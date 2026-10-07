@@ -678,6 +678,65 @@ window.opsDeleteDocument=async function(id){
   await window.opsLoadData(true);await featureLoad(true);render();
  }catch(e){alert('No se pudo eliminar el documento: '+e.message)}
 };
+function taxPaymentsHtml(){
+ const rows=(O.taxPayments||[]).filter(x=>x.fiscal_year===O.year).sort((a,b)=>N(b.quarter)-N(a.quarter)||String(a.tax_type).localeCompare(String(b.tax_type)));
+ if(!manager())return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">Modelos registrados</div><h3>Pagos fiscales ${O.year}</h3></div></div>${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Modelo</th><th>Periodo</th><th>Fecha</th><th>Importe</th><th>Estado</th><th>Justificante</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${H(x.tax_type)}</b></td><td>${H(x.period_label||((x.quarter||'')+'T '+x.fiscal_year))}</td><td>${x.payment_date?reportDate(x.payment_date):'—'}</td><td class="num">${euro(x.amount)}</td><td>${statusBadge(x.status)}</td><td>${x.document_id?'<span class="badge ok">Adjunto</span>':'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay pagos fiscales registrados este año.</div>'}</div>`;
+ return `<div class="ops-grid">
+  <div class="ops-card">
+   <div class="section-head"><div><div class="eyebrow">Registrar</div><div class="ops-title-line"><h3>Pago / modelo fiscal</h3>${infoButton('fiscal.pagos','Cómo registrar modelos presentados')}</div><div class="small">Añade aquí los importes realmente presentados o pagados para que las previsiones resten lo ya satisfecho.</div></div><button class="primary" type="button" onclick="opsSaveTaxPayment()">Guardar</button></div>
+   <div class="ops-form">
+    <div><label>Modelo</label><select id="ops_tax_type" aria-label="Modelo fiscal"><option value="130">130 · IRPF autónomo</option><option value="111">111 · Retenciones trabajo/profesionales</option><option value="115">115 · Retenciones alquiler</option><option value="309">309 · IVA no periódico</option><option value="otro">Otro</option></select></div>
+    <div><label>Año</label><input id="ops_tax_year" aria-label="Año fiscal" inputmode="numeric" value="${O.year}"></div>
+    <div><label>Trimestre</label><select id="ops_tax_quarter" aria-label="Trimestre fiscal">${[1,2,3,4].map(q=>`<option value="${q}" ${q===O.quarter?'selected':''}>T${q}</option>`).join('')}</select></div>
+    <div><label>Fecha pago / presentación</label><input id="ops_tax_date" aria-label="Fecha pago o presentación" type="date" value="${today()}"></div>
+    <div><label>Importe</label><input id="ops_tax_amount" aria-label="Importe del modelo" inputmode="decimal" placeholder="0,00"></div>
+    <div><label>Estado</label><select id="ops_tax_status" aria-label="Estado del modelo"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>
+    <div class="span2"><label>Justificante</label><input id="ops_tax_file" aria-label="Justificante del modelo" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"></div>
+    <div class="span2"><label>Notas</label><textarea id="ops_tax_notes" aria-label="Notas del modelo"></textarea></div>
+   </div>
+  </div>
+  <div class="ops-card">
+   <div class="section-head"><div><div class="eyebrow">Histórico ${O.year}</div><h3>Modelos registrados</h3><div class="small">Importes reales utilizados para descontar pagos anteriores y controlar obligaciones.</div></div></div>
+   ${rows.length?`<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Modelo</th><th>Periodo</th><th>Fecha</th><th>Importe</th><th>Estado</th><th>Justificante</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${H(x.tax_type)}</b></td><td>${H(x.period_label||((x.quarter||'')+'T '+x.fiscal_year))}</td><td>${x.payment_date?reportDate(x.payment_date):'—'}</td><td class="num">${euro(x.amount)}</td><td>${statusBadge(x.status)}</td><td>${x.document_id?`<button class="ghost" type="button" onclick="opsPreviewDoc('${x.document_id}')">Ver</button>`:'—'}</td><td><div class="ops-actions">${admin()?`<button class="danger" type="button" onclick="opsDeleteTaxPayment('${x.id}')">Eliminar</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="ops-empty">No hay pagos fiscales registrados este año.</div>'}
+  </div>
+ </div>`;
+}
+window.opsSaveTaxPayment=async function(){
+ if(!manager())return;
+ const type=document.getElementById('ops_tax_type')?.value||'',year=parseInt(document.getElementById('ops_tax_year')?.value||'',10),quarter=parseInt(document.getElementById('ops_tax_quarter')?.value||'',10),date=document.getElementById('ops_tax_date')?.value||'',amount=N(document.getElementById('ops_tax_amount')?.value),status=document.getElementById('ops_tax_status')?.value||'pagado',notes=document.getElementById('ops_tax_notes')?.value?.trim()||'',file=document.getElementById('ops_tax_file')?.files?.[0]||null;
+ if(!type||!year||quarter<1||quarter>4)return alert('Modelo, año y trimestre son obligatorios.');
+ if(amount<0)return alert('El importe no puede ser negativo.');
+ if(status==='pagado'&&!date)return alert('Indica la fecha de pago o presentación.');
+ const dup=(O.taxPayments||[]).find(x=>x.tax_type===type&&N(x.fiscal_year)===year&&N(x.quarter)===quarter);
+ if(dup&&!confirm(`Ya existe el modelo ${type} del T${quarter} ${year}. ¿Guardar otro registro igualmente?`))return;
+ try{
+  const row={tax_type:type,fiscal_year:year,quarter,period_label:`${quarter}T ${year}`,payment_date:date||null,amount,status,notes,created_by:authSession?.user?.id||null};
+  const {data,error}=await sb.from('ops_tax_payments').insert(row).select().single();if(error)throw error;
+  if(file){
+   try{
+    window.__opsValidateDocumentFile(file);
+    const docId=await uploadDoc(file,{store_id:null,doc_type:'impuesto',document_date:date||today(),supplier_or_customer:'AEAT',tax_id:'',invoice_number:`Modelo ${type} · T${quarter} ${year}`,category_code:type,status:status==='pagado'?'archivada':'pendiente',notes},'tax_payment',data.id);
+    if(docId){const up=await sb.from('ops_tax_payments').update({document_id:docId}).eq('id',data.id);if(up.error)throw up.error}
+   }catch(fileErr){alert('El modelo se ha guardado, pero el justificante no pudo adjuntarse: '+fileErr.message)}
+  }
+  await audit('fiscal','modelo_registrar',data.id,{modelo:type,year,quarter,amount,status});
+  await window.opsLoadData(true);await featureLoad(true);render();
+ }catch(e){alert('No se pudo guardar el modelo: '+e.message)}
+};
+window.opsDeleteTaxPayment=async function(id){
+ if(!admin())return;
+ const x=(O.taxPayments||[]).find(t=>t.id===id);if(!x)return;
+ const reason=await askReason('Eliminar modelo registrado',`Se eliminará el modelo ${x.tax_type} · ${x.period_label||''} por ${euro(x.amount)}. El motivo quedará en el log.`,'Eliminar');
+ if(!reason)return;
+ try{
+  const doc=O.documents.find(d=>d.id===x.document_id);
+  const {error}=await sb.from('ops_tax_payments').delete().eq('id',id);if(error)throw error;
+  if(doc){const del=await sb.rpc('ops_delete_document_controlled',{p_document_id:doc.id,p_reason:'Eliminación del modelo fiscal asociado: '+reason});if(!del.error&&doc.storage_path)await sb.storage.from('business-documents').remove([doc.storage_path])}
+  await audit('fiscal','modelo_eliminar',id,{modelo:x.tax_type,periodo:x.period_label,motivo:reason});
+  await window.opsLoadData(true);await featureLoad(true);render();
+ }catch(e){alert('No se pudo eliminar el modelo: '+e.message)}
+};
+
 function fiscalProjectionHtml(){
  const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection(),g=spendingSignal(),actual=N(O.settings?.actual_reta_monthly||0);
  const retaDelta=r.bracket?actual-r.minQuota:0,people=O.personnel||[],activeFamily=people.filter(x=>x.active&&x.person_type==='family_collaborator');
@@ -706,7 +765,8 @@ function fiscalProjectionHtml(){
  </div>
  <div class="ops-grid">
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">Personal</div><h3>Costes laborales y colaboradores</h3></div></div><div class="ops-metric-line"><span>Empleados históricos registrados</span><b>${people.filter(x=>x.person_type==='employee').length}</b></div><div class="ops-metric-line"><span>Colaboradora familiar activa</span><b>${activeFamily.length?H(activeFamily.map(x=>x.full_name).join(', ')):'—'}</b></div><div class="small">Nóminas y Seguridad Social empresa se mantienen separadas del RETA titular y de la colaboradora familiar. La aportación a colaboradora solo se contabiliza cuando se registra realmente como gasto.</div></div>
- </div>`;
+ </div>
+ ${taxPaymentsHtml()}`;
 }
 function managerExpenseRows(from,to){
   const headers=['Orden','Fecha','Nº fra. recibida','Nº fra. proveedor','Rt','NIF/CIF','Razón social','Concepto','Base IVA','% IVA','Cuota IVA','Base R.E.','% R.E.','Cuota R.E.','Imputable a IRPF','Base retención','% retención','Cuota retenida','Total factura','Neto pagado'];
