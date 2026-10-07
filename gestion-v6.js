@@ -791,7 +791,8 @@ window.opsZipFilteredDocs=async function(){
  if(!window.JSZip){alert('ZIP no disponible.');return}
  const docs=O.documents.filter(docMatches);if(!docs.length){alert('No hay documentos con esos filtros.');return}
  const z=new JSZip();
- await zipDocs(docs,z,'DOCUMENTOS');
+ const done=await zipDocs(docs,z,'DOCUMENTOS');
+ if(done!==docs.length)return alert(`No se pudieron recuperar ${docs.length-done} documentos. No se ha generado un ZIP incompleto.`);
  dlBlob(await z.generateAsync({type:'blob'}),`documentos_filtrados_${isoToday()}.zip`);
 };
 window.opsZipReportDocs=async function(){
@@ -799,7 +800,8 @@ window.opsZipReportDocs=async function(){
  const docs=O.documents.filter(d=>inRange(d.document_date,O.reportFrom,O.reportTo));
  if(!docs.length)return alert('No hay documentos en esa franja.');
  const z=new JSZip();
- await zipDocs(docs,z,'DOCUMENTOS');
+ const done=await zipDocs(docs,z,'DOCUMENTOS');
+ if(done!==docs.length)return alert(`No se pudieron recuperar ${docs.length-done} documentos. No se ha generado un ZIP incompleto.`);
  dlBlob(await z.generateAsync({type:'blob'}),`documentos_${O.reportFrom}_${O.reportTo}.zip`);
 };
 window.opsSaveSettings=async function(){
@@ -824,7 +826,7 @@ window.opsSaveSettings=async function(){
  if(row.difficult_expense_annual_cap<0)return alert('El tope anual no puede ser negativo.');
  if(row.storage_limit_bytes<=0||row.document_max_bytes<=0)return alert('Los límites de almacenamiento deben ser mayores que cero.');
  if(row.document_max_bytes>row.storage_limit_bytes)return alert('El tamaño máximo por documento no puede superar el límite total de almacenamiento.');
- const {error}=await sb.from('ops_business_settings').update(row).eq('id',1);if(error){alert(error.message);return}
+ const settingsId=O.settings?.id??1;const {error}=await sb.from('ops_business_settings').update(row).eq('id',settingsId);if(error){alert(error.message);return}
  await audit('config','actualizar',null,{campos:Object.keys(row)});await load(true);render();alert('Configuración guardada.');
 };
 
