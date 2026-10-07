@@ -345,6 +345,13 @@ assert(Number(fixtures.ops_daily_closings[0].difference)===0,'El cierre guardado
 assert(fixtures.ops_daily_closing_drawers.length===2,'Hortimatic debe guardar sus dos cajas físicas');
 assert(fixtures.ops_daily_closing_drawers.some(x=>x.drawer_id===ids.drHv&&Number(x.card_sales)===200.31),'Caja vape no conservó su tarjeta');
 assert(fixtures.ops_daily_closing_drawers.some(x=>x.drawer_id===ids.drHh&&Number(x.card_sales)===133),'Caja head no conservó su tarjeta');
+let closingCsvPromise=page.waitForEvent('download');
+await page.getByRole('button',{name:'Exportar CSV',exact:true}).click();
+const closingCsv=await closingCsvPromise;
+const closingCsvText=await fs.readFile(await closingCsv.path(),'utf8');
+for(const col of ['Entrada extra a caja','Salida extra de caja','Total control','Diferencia','Estado']){
+  assert(closingCsvText.includes(col),'CSV de Cajas no incluye '+col);
+}
 
 // NewOldSmok debe tener una sola caja.
 await page.evaluate(()=>opsNewClosing());
