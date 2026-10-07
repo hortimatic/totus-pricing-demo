@@ -10,7 +10,9 @@ const qBounds=(y,q)=>{const sm=(q-1)*3+1,end=new Date(y,q*3,0);return{start:`${y
 const yearQEnd=(y,q)=>qBounds(y,q).end;
 const monthName=m=>['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'][m-1];
 const reportDate=v=>{const x=String(v||'');return /^\d{4}-\d{2}-\d{2}$/.test(x)?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):x};
-const REFERENCE_SEMESTER_2026_BYTES=43056409;
+const REFERENCE_SEMESTER_2026_BYTES=57360165;
+const REFERENCE_SEMESTER_2026_FILES=301;
+const REFERENCE_SEMESTER_2026_ARCHIVE_BYTES=43056409;
 const euro=v=>eur(Number(v)||0);
 async function featureLoad(force=false){
  if(E.loaded&&!force)return;
@@ -665,10 +667,11 @@ function configHtml(){
    </div>
    <div class="ops-card storage-estimate-card" style="margin-top:12px">
     <div class="section-head"><div><div class="eyebrow">Estimación con datos reales</div><h4>Capacidad documental aproximada</h4></div></div>
-    <div class="ops-metric-line"><span>Semestre 2026 aportado</span><b>${(REFERENCE_SEMESTER_2026_BYTES/1048576).toFixed(1).replace('.',',')} MB</b></div>
+    <div class="ops-metric-line"><span>Semestre 2026 · archivos reales</span><b>${(REFERENCE_SEMESTER_2026_BYTES/1048576).toFixed(1).replace('.',',')} MB · ${REFERENCE_SEMESTER_2026_FILES} archivos</b></div>
+    <div class="ops-metric-line"><span>RAR aportado (solo referencia comprimida)</span><b>${(REFERENCE_SEMESTER_2026_ARCHIVE_BYTES/1048576).toFixed(1).replace('.',',')} MB</b></div>
     <div class="ops-metric-line"><span>Semestres equivalentes con el límite actual</span><b>${refSemesters.toFixed(1).replace('.',',')}</b></div>
     <div class="ops-metric-line"><span>Equivalencia temporal aproximada</span><b>${refYears.toFixed(1).replace('.',',')} años</b></div>
-    <div class="small">Referencia calculada con el archivo real <b>Semestre 2026.rar</b> (43.056.409 bytes). Es una estimación: el tamaño futuro variará según cantidad y resolución de facturas/documentos. El “límite operativo” es el configurado en Totus, no una promesa del plan comercial de Supabase.</div>
+    <div class="small">Proyección calculada con los <b>57.360.165 bytes sin comprimir</b> de los 301 elementos contenidos en <b>Semestre 2026.rar</b>, porque Supabase almacenará los documentos individualmente y no como un RAR comprimido. Es una estimación conservadora: el tamaño futuro variará según cantidad y resolución. El “límite operativo” es el configurado en Totus, no una promesa del plan comercial de Supabase.</div>
    </div>
    <div class="ops-form" style="margin-top:12px">
     <div><label>Límite total MB</label><input id="ops_set_storage_mb" inputmode="numeric" value="${Math.round(limit/1048576)}" ${dis}></div>
