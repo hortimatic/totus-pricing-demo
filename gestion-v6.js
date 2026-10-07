@@ -92,6 +92,7 @@ const OPS_HELP={
  'documentos.estado':['Estado documental','Sirve para saber si un justificante está pendiente, revisado, preparado o ya entregado a gestoría. No modifica el gasto o factura original.'],
  'informes.gestor':['Paquete gestoría','Genera una estructura estable con ingresos, gastos, diarios, resumen y documentos. Los gastos internos quedan fuera.'],
  'fiscal.130':['Modelo 130','Estimación acumulada del pago fraccionado de IRPF. Parte de ingresos y gastos deducibles, aplica difícil justificación, resta pagos anteriores y retenciones soportadas. Es orientativa hasta contrastar con gestoría.'],
+ 'fiscal.pagos':['Modelos y pagos reales','Registra los modelos realmente presentados o pagados, junto con su justificante. Estos importes alimentan el histórico y permiten que la previsión descuente correctamente pagos anteriores.'],
  'fiscal.diff':['Difícil justificación','Porcentaje aplicado sobre el rendimiento previo, limitado por el máximo anual configurado. Totus lo muestra separado para que puedas ver su impacto.'],
  'fiscal.simulator':['Simulador fiscal','Permite probar un gasto deducible adicional sin guardarlo. Solo modifica temporalmente la estimación para ayudarte a decidir antes del cierre.'],
  'fiscal.reta':['RETA orientativo','Proyecta el rendimiento neto mensual y lo compara con los tramos/base configurados para el año. No sustituye la regularización oficial de Seguridad Social.'],
