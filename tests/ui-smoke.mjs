@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
-import * as XLSXNode from 'xlsx';
+import XLSXNode from 'xlsx';
 import JSZipNode from 'jszip';
 
 const base='http://127.0.0.1:4173';
