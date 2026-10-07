@@ -79,6 +79,29 @@ function deductibleExpenseTotal(from,to,store='all'){
  return exactGestorExpense(from,to)+currentExpense(from,to,'all');
 }
 function difficult(pre){return !O.settings?.difficult_expense_enabled||pre<=0?0:Math.min(pre*(N(O.settings.difficult_expense_pct||5)/100),N(O.settings.difficult_expense_annual_cap||2000));}
+function supportedTaxCosts(from,to){
+ let vat=0,re=0;
+ if(from<='2026-06-30'){
+   const legacyTo=to<'2026-07-01'?to:'2026-06-30';
+   if(legacyTo>=from){
+     const rows=E.gestorRows.filter(x=>inRange(x.expense_date,from,legacyTo));
+     vat+=sum(rows,x=>N(x.vat_amount));re+=sum(rows,x=>N(x.re_amount));
+   }
+ }
+ if(to>='2026-07-01'){
+   const modernFrom=from>'2026-07-01'?from:'2026-07-01';
+   const ids=new Set(O.expenses.filter(e=>!e.management_only&&inRange(e.expense_date,modernFrom,to)).map(e=>e.id));
+   vat+=sum(O.expenseLines.filter(l=>ids.has(l.expense_id)),l=>N(l.vat_amount));
+   re+=sum(O.expenseLines.filter(l=>ids.has(l.expense_id)),l=>N(l.re_amount));
+ }
+ return{vat,re,total:vat+re};
+}
+function storeOperatingRows(from,to){
+ return O.stores.filter(s=>s.active!==false).map(s=>{
+   const income=operationalIncomeTotal(from,to,s.id),expense=realExpense(from,to,s.id);
+   return{store:s,income,expense,result:income-expense,margin:income?((income-expense)/income*100):0};
+ });
+}
 function supportedRetention(from,to){return sum(O.fiscalAdjustments.filter(a=>a.kind==='retencion_soportada'&&inRange(a.adjustment_date,from,to)),a=>N(a.amount));}
 function retainedModel(model,from,to){
  const y=+from.slice(0,4);
@@ -767,6 +790,8 @@ function fiscalProjectionHtml(){
  const f=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection(),g=spendingSignal(),actual=N(O.settings?.actual_reta_monthly||0);
  const operationalYtd=operationalIncomeTotal(f.from,f.end,'all'),incomeGap=operationalYtd-f.income;
  const retaDelta=r.bracket?actual-r.minQuota:0,people=O.personnel||[],activeFamily=people.filter(x=>x.active&&x.person_type==='family_collaborator');
+ const storeRows=storeOperatingRows(f.qb.start,f.qb.end),storeIncome=sum(storeRows,x=>x.income),storeExpense=sum(storeRows,x=>x.expense),storeResult=storeIncome-storeExpense;
+ const taxQ=supportedTaxCosts(f.qb.start,f.qb.end),taxYtd=supportedTaxCosts(f.from,f.end);
  return `${importedStatusHtml()}
  <div class="ops-note" style="margin-top:14px"><b>Régimen configurado:</b> ${H(O.settings?.fiscal_regime||'recargo_equivalencia')} · ${H(O.settings?.estimation_method||'directa_simplificada')}. Control interno y previsión; las declaraciones oficiales se contrastan con gestoría.</div>
  <div class="ops-kpis" style="margin-top:14px">
