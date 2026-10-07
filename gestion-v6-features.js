@@ -991,12 +991,25 @@ function managerIncomeRows(from,to){
  const last=rows.length+1;
  return[headers,...rows,['','','','','','TOTAL ACUMULADO',`=SUM(G2:G${last})`,'',0,0,'',0,`=SUM(M2:M${last})`,0,'',0]];
 }
+function dailyColorGroup(desc=''){
+ const x=String(desc).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ if(!x.trim())return '';
+ if(/irpf|modelo\s*130|modelo\s*111|modelo\s*115/.test(x))return 'IRPF';
+ if(/nomina|seguridad social|autonom|horas extra|emplead/.test(x))return 'Personal';
+ if(/almacen/.test(x))return 'Interno';
+ if(/vaperalia|ecig|garden|mg vape|cold ?smok|shisha|capsula|only ?cbd|weedup|peninsula|1001|cachimba|mercader|producto/.test(x))return 'Pedidos';
+ if(/alquiler|gestor|pepe|iber|factoria|microsoft|office|prosegur|seguro|mantenimiento|comision|nacex|pepenergy|suministro|internet|telefono|luz/.test(x))return 'Fijos';
+ if(/^salida |^cash:/.test(x))return 'Nota';
+ return 'Otros';
+}
 function wbBlob(sheets){
  if(!window.XLSX)throw new Error('Excel no disponible');
  const wb=XLSX.utils.book_new();
- const palettes={GASTOS:['0F766E','D1FAE5'],INGRESOS:['1D4ED8','DBEAFE'],RESUMEN:['6D28D9','EDE9FE'],default:['334155','E2E8F0']};
+ const palettes={GASTOS:['4472C4','D9E2F3'],INGRESOS:['4472C4','D9E2F3'],RESUMEN:['17365D','D9E2F3'],default:['334155','E2E8F0']};
+ const dailyFills={Pedidos:'00B0F0',Fijos:'FFFF00',Personal:'FFC000',IRPF:'92D050',Interno:'0070C0',Otros:'00B050'};
  for(const [name,rows] of Object.entries(sheets)){
   const ws=XLSX.utils.aoa_to_sheet(rows),upper=name.toUpperCase();
+  const isDaily=rows?.[1]?.[0]==='Dia'&&rows?.[1]?.[1]==='Gastos';
   for(const addr of Object.keys(ws)){
    if(addr[0]==='!')continue;
    const cell=ws[addr];
@@ -1005,22 +1018,52 @@ function wbBlob(sheets){
   const palette=palettes[upper]||palettes[upper.includes('GAST')?'GASTOS':upper.includes('INGRES')?'INGRESOS':upper.includes('RESUM')?'RESUMEN':'default'];
   const ref=ws['!ref']?XLSX.utils.decode_range(ws['!ref']):{s:{r:0,c:0},e:{r:0,c:0}};
   const widthCount=Math.max(1,...rows.map(r=>r.length));
-  ws['!cols']=Array.from({length:widthCount},(_,i)=>{
+  if(isDaily){
+   ws['!merges']=[XLSX.utils.decode_range('A1:E1')];
+   ws['!cols']=[{wch:15},{wch:38},{wch:14},{wch:14},{wch:18}];
+   ws['!rows']=rows.map((_,i)=>({hpt:i===0?23:i===1?22:19}));
+   ws['!freeze']={xSplit:0,ySplit:2,topLeftCell:'A3',activePane:'bottomLeft',state:'frozen'};
+   ws['!autofilter']={ref:`A2:E${Math.max(2,rows.length)}`};
+   for(let r=ref.s.r;r<=ref.e.r;r++)for(let col=ref.s.c;col<=ref.e.c;col++){
+    const addr=XLSX.utils.encode_cell({r,c:col}),cell=ws[addr];if(!cell)continue;
+    const isTitle=r===0,isHeader=r===1,row=rows[r]||[],label=String(row[1]||''),group=dailyColorGroup(label);
+    const isSummary=['Otros','SS y nóminas','Pedidos','Gastos fijos','IRPF','TOTAL'].includes(label);
+    const zebra=r>=2&&!isSummary&&(r%2===0?'DCE6F1':'FFFFFF');
+    let fill=isTitle?'000000':isHeader?'4F81BD':zebra;
+    let fontColor=isTitle?'FFFF00':isHeader?'FFFFFF':'111111';
+    let bold=isTitle||isHeader||col===0||isSummary;
+    if(col===1&&group&&group!=='Nota'&&!isSummary){fill=dailyFills[group]||fill;fontColor=group==='Interno'?'FFFFFF':'111111'}
+    if(isSummary){
+      const sm={Otros:'00B050','SS y nóminas':'FFC000',Pedidos:'00B0F0','Gastos fijos':'FFFF00',IRPF:'92D050',TOTAL:'FF0000'};
+      if(col===1)fill=sm[label]||fill;
+      if(label==='TOTAL'&&col===1)fontColor='000000';
+    }
+    cell.s={
+      font:{name:'Calibri',sz:isTitle?11:10,bold,color:{rgb:fontColor}},
+      fill:{fgColor:{rgb:fill}},
+      alignment:{vertical:'center',horizontal:isTitle?'center':(isHeader?'center':(typeof cell.v==='number'?'right':'left')),wrapText:true},
+      border:{top:{style:'thin',color:{rgb:'8EA9DB'}},bottom:{style:'thin',color:{rgb:'8EA9DB'}},left:{style:'thin',color:{rgb:'D9E2F3'}},right:{style:'thin',color:{rgb:'D9E2F3'}}}
+    };
+    if(typeof cell.v==='number')cell.z='#,##0.00;[Red]-#,##0.00';
+   }
+  }else{
+   ws['!cols']=Array.from({length:widthCount},(_,i)=>{
     let max=10;for(const row of rows){const v=row[i];if(v!=null)max=Math.max(max,String(v).length+2)}
     const textHeavy=i===5||i===6||i===1;return{wch:Math.min(textHeavy?38:22,max)};
-  });
-  ws['!rows']=rows.map((_,i)=>({hpt:i===0?24:19}));
-  ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activePane:'bottomLeft',state:'frozen'};
-  if(rows.length&&rows[0].length)ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(0,rows.length-1),c:rows[0].length-1}})};
-  for(let r=ref.s.r;r<=ref.e.r;r++)for(let c=ref.s.c;c<=ref.e.c;c++){
-    const addr=XLSX.utils.encode_cell({r,c}),cell=ws[addr];if(!cell)continue;
-    cell.s={font:{name:'Aptos',sz:r===0?10:9,bold:r===0,color:{rgb:r===0?'FFFFFF':'1F2937'}},fill:{fgColor:{rgb:r===0?palette[0]:'FFFFFF'}},alignment:{vertical:'center',horizontal:r===0?'center':(typeof cell.v==='number'?'right':'left'),wrapText:true},border:{top:{style:'thin',color:{rgb:'D7DEE7'}},bottom:{style:'thin',color:{rgb:'D7DEE7'}},left:{style:'thin',color:{rgb:'E5E7EB'}},right:{style:'thin',color:{rgb:'E5E7EB'}}}};
+   });
+   ws['!rows']=rows.map((_,i)=>({hpt:i===0?24:19}));
+   ws['!freeze']={xSplit:0,ySplit:1,topLeftCell:'A2',activePane:'bottomLeft',state:'frozen'};
+   if(rows.length&&rows[0].length)ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(0,rows.length-1),c:rows[0].length-1}})};
+   for(let r=ref.s.r;r<=ref.e.r;r++)for(let col=ref.s.c;col<=ref.e.c;col++){
+    const addr=XLSX.utils.encode_cell({r,c:col}),cell=ws[addr];if(!cell)continue;
+    cell.s={font:{name:'Calibri',sz:r===0?10:9,bold:r===0,color:{rgb:r===0?'FFFFFF':'1F2937'}},fill:{fgColor:{rgb:r===0?palette[0]:'FFFFFF'}},alignment:{vertical:'center',horizontal:r===0?'center':(typeof cell.v==='number'?'right':'left'),wrapText:true},border:{top:{style:'thin',color:{rgb:'D7DEE7'}},bottom:{style:'thin',color:{rgb:'D7DEE7'}},left:{style:'thin',color:{rgb:'E5E7EB'}},right:{style:'thin',color:{rgb:'E5E7EB'}}}};
     if(typeof cell.v==='number')cell.z='#,##0.00;[Red]-#,##0.00';
     if(r>0&&rows[r]?.some(v=>String(v||'').toUpperCase().includes('TOTAL'))){
-      cell.s.font={name:'Aptos',sz:9,bold:true,color:{rgb:'111827'}};
+      cell.s.font={name:'Calibri',sz:9,bold:true,color:{rgb:'111827'}};
       cell.s.fill={fgColor:{rgb:palette[1]}};
       cell.s.border={top:{style:'medium',color:{rgb:palette[0]}},bottom:{style:'thin',color:{rgb:palette[0]}}};
     }
+   }
   }
   XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));
  }
@@ -1043,15 +1086,27 @@ function dailyWorkbook(storeId,year){
   O.closings.filter(c=>c.store_id===storeId&&inRange(c.business_date,first,last)&&(!maxLegacy||c.business_date>maxLegacy)).forEach(c=>{
     add(c.business_date,{desc:'',price:'',card:N(c.card_sales)||'',cash:N(c.cash_withdrawals)||'',source:'new'});
   });
-  const rows=[['Dia','Gastos','Precio','Tarjeta','Salida de caja']];
+  const rows=[[`${monthName(m)} ${year}`,'','','',''],['Dia','Gastos','Precio','Tarjeta','Salida de caja']];
+  const grouped={Otros:[],Personal:[],Pedidos:[],Fijos:[],IRPF:[]};
   [...byDate.keys()].sort().forEach(date=>{
-    const entries=byDate.get(date);
-    const d=new Date(date+'T12:00:00');
-    const label=`${Number(date.slice(8,10))} ${weekdays[d.getDay()]}`;
-    entries.forEach((r,i)=>rows.push([i===0?label:'',r.desc,r.price,r.card,r.cash]));
+    const entries=byDate.get(date),d=new Date(date+'T12:00:00'),label=`${Number(date.slice(8,10))} ${weekdays[d.getDay()]}`;
+    entries.forEach((r,i)=>{
+      rows.push([i===0?label:'',r.desc,r.price,r.card,r.cash]);
+      const g=dailyColorGroup(r.desc);if(r.price!==''&&N(r.price)!==0){
+        const key=g==='Personal'?'Personal':g==='Pedidos'?'Pedidos':g==='Fijos'||g==='Interno'?'Fijos':g==='IRPF'?'IRPF':'Otros';
+        grouped[key].push(rows.length);
+      }
+    });
   });
-  const firstData=2,lastData=Math.max(2,rows.length);
-  rows.push(['','TOTAL',`=SUM(C${firstData}:C${lastData})`,`=SUM(D${firstData}:D${lastData})`,`=SUM(E${firstData}:E${lastData})`]);
+  const dataEnd=rows.length;
+  const sumRefs=indexes=>indexes.length?`=SUM(${indexes.map(r=>'C'+r).join(',')})`:'=0';
+  rows.push(['','','','','']);
+  rows.push(['','Otros',sumRefs(grouped.Otros),'','']);
+  rows.push(['','SS y nóminas',sumRefs(grouped.Personal),'','']);
+  rows.push(['','Pedidos',sumRefs(grouped.Pedidos),'','']);
+  rows.push(['','Gastos fijos',sumRefs(grouped.Fijos),'','']);
+  rows.push(['','IRPF',sumRefs(grouped.IRPF),'','']);
+  rows.push(['','TOTAL',`=SUM(C3:C${dataEnd})`,`=SUM(D3:D${dataEnd})`,`=SUM(E3:E${dataEnd})`]);
   sheets[monthName(m)[0]+monthName(m).slice(1).toLowerCase()]=rows;
  }
  return wbBlob(sheets);
