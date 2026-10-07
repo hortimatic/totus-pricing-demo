@@ -1081,7 +1081,7 @@ window.opsRestoreBackupUpload=async function(){
     const blob=await zf.async('blob');const up=await sb.storage.from(item.bucket).upload(item.path,blob,{upsert:true});if(up.error)throw new Error(item.path+': '+up.error.message);
   }
   const tables={};for(const t of BACKUP_TABLES){tables[t]=JSON.parse(await zip.file('data/'+t+'.json').async('string'))}
-  const {data,error}=await sb.rpc('ops_restore_backup_data',{p_tables:tables,p_reason:reason});if(error)throw error;
+  const {data,error}=await sb.functions.invoke('ops-restore-backup',{body:{tables,reason}});if(error)throw error;if(data?.error)throw new Error(data.error);
   await window.opsLoadData(true);E.loaded=false;await featureLoad(true);render();
   openOpsModal('Restauración completada',`<div class="ops-help-copy"><span class="badge ok">Correcto</span><br>Se restauraron ${H(String(data?.tables||BACKUP_TABLES.length))} tablas. La copia automática PRE_RESTORE permanece guardada por seguridad.</div>`);
  }catch(e){alert('No se pudo restaurar: '+e.message)}
