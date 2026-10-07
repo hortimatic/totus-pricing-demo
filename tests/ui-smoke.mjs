@@ -221,14 +221,14 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
      return route.fulfill(out(wantsObject?made[0]:made));
    }
    if(method==='PATCH'){
-     const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
-     if(id&&Array.isArray(fixtures[table])){const row=fixtures[table].find(x=>String(x.id)===String(id));if(row)Object.assign(row,body)}
+     const eq=[...u.searchParams.entries()].find(([,v])=>/^eq\./.test(v)),field=eq?.[0],value=eq?.[1]?.replace(/^eq\./,'');
+     let row=null;if(field&&Array.isArray(fixtures[table])){row=fixtures[table].find(x=>String(x[field])===String(value));if(row)Object.assign(row,body)}
      const wantsObject=(req.headers()['accept']||'').includes('vnd.pgrst.object');
-     return route.fulfill(out(wantsObject?(fixtures[table]?.find(x=>String(x.id)===String(id))||body):[]));
+     return route.fulfill(out(wantsObject?(row||body):[]));
    }
    if(method==='DELETE'){
-     const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
-     if(id&&Array.isArray(fixtures[table])){const ix=fixtures[table].findIndex(x=>String(x.id)===String(id));if(ix>=0)fixtures[table].splice(ix,1)}
+     const eq=[...u.searchParams.entries()].find(([,v])=>/^eq\./.test(v)),field=eq?.[0],value=eq?.[1]?.replace(/^eq\./,'');
+     if(field&&Array.isArray(fixtures[table])){const ix=fixtures[table].findIndex(x=>String(x[field])===String(value));if(ix>=0)fixtures[table].splice(ix,1)}
      return route.fulfill(out([]));
    }
    return route.fulfill(out({}));
