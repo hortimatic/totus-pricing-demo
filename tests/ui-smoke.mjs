@@ -244,18 +244,19 @@ async function xlsxXmlStyle(path,sheetNo=1,ref='A1'){
  const buf=await fs.readFile(path),zip=await JSZipNode.loadAsync(buf);
  const sheet=await zip.file(`xl/worksheets/sheet${sheetNo}.xml`).async('string');
  const styles=await zip.file('xl/styles.xml').async('string');
- const tag=(sheet.match(new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*>'))||[])[0]||'';
- const styleId=Number((tag.match(/\\bs="(\\d+)"/)||[])[1]||0);
- const xfsBlock=(styles.match(/<cellXfs\\b[^>]*>([\\s\\S]*?)<\\/cellXfs>/)||[])[1]||'';
- const xfs=[...xfsBlock.matchAll(/<xf\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/xf>)/g)].map(m=>m[0]);
+ const cellRe=new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*>');
+ const tag=(sheet.match(cellRe)||[])[0]||'';
+ const styleId=Number(((tag.match(new RegExp('\\bs="(\\d+)"')))||[])[1]||0);
+ const block=(xml,name)=>((xml.match(new RegExp('<'+name+'\\b[^>]*>([\\s\\S]*?)</'+name+'>')))||[])[1]||'';
+ const xfs=[...block(styles,'cellXfs').matchAll(new RegExp('<xf\\b[^>]*(?:/>|>[\\s\\S]*?</xf>)','g'))].map(m=>m[0]);
  const xf=xfs[styleId]||'';
- const fontId=Number((xf.match(/\\bfontId="(\\d+)"/)||[])[1]||0),fillId=Number((xf.match(/\\bfillId="(\\d+)"/)||[])[1]||0);
- const fontsBlock=(styles.match(/<fonts\\b[^>]*>([\\s\\S]*?)<\\/fonts>/)||[])[1]||'';
- const fillsBlock=(styles.match(/<fills\\b[^>]*>([\\s\\S]*?)<\\/fills>/)||[])[1]||'';
- const fonts=[...fontsBlock.matchAll(/<font>[\\s\\S]*?<\\/font>/g)].map(m=>m[0]);
- const fills=[...fillsBlock.matchAll(/<fill>[\\s\\S]*?<\\/fill>/g)].map(m=>m[0]);
+ const fontId=Number(((xf.match(new RegExp('\\bfontId="(\\d+)"')))||[])[1]||0);
+ const fillId=Number(((xf.match(new RegExp('\\bfillId="(\\d+)"')))||[])[1]||0);
+ const fonts=[...block(styles,'fonts').matchAll(new RegExp('<font>[\\s\\S]*?</font>','g'))].map(m=>m[0]);
+ const fills=[...block(styles,'fills').matchAll(new RegExp('<fill>[\\s\\S]*?</fill>','g'))].map(m=>m[0]);
  const font=fonts[fontId]||'',fill=fills[fillId]||'';
- return {styleId,fontId,fillId,fontRgb:rgb6((font.match(/<color\\b[^>]*\\brgb="([^"]+)"/)||[])[1]),fillRgb:rgb6((fill.match(/<fgColor\\b[^>]*\\brgb="([^"]+)"/)||[])[1])};
+ const rgb=(xml,tagName)=>(((xml.match(new RegExp('<'+tagName+'\\b[^>]*\\brgb="([^"]+)"')))||[])[1]||'');
+ return {styleId,fontId,fillId,fontRgb:rgb6(rgb(font,'color')),fillRgb:rgb6(rgb(fill,'fgColor'))};
 }
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
