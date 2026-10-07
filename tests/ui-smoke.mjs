@@ -323,17 +323,23 @@ await page.locator('.home-widget').first().waitFor();
 await auditCurrentUi('Inicio');
 assert(await page.locator('.home-zone').count()===4,'Inicio debe estar organizado en 4 contenedores funcionales');
 assert(await page.locator('.home-widget').count()===8,'Inicio debe exponer 8 widgets de trabajo');
-for(const name of ['Abrir Pricing','Ver cajas','Registrar gasto','Nueva factura','Subir / buscar','Abrir previsión fiscal','Preparar informe','Usuarios']){
+for(const name of ['Ampliar estudio','Ver cajas','Nuevo gasto','Nueva factura','Subir / buscar','Abrir previsión fiscal','Informe T2','Backup']){
   assert(await page.getByRole('button',{name,exact:true}).count()===1,'Inicio no expone la acción rápida: '+name);
 }
 await page.locator('#portal_q_cost').fill('3,20');
 await page.locator('#portal_q_pvp').fill('5,70');
+await page.locator('#portal_q_comp').fill('6,00');
+await page.locator('#portal_q_disc').fill('10');
 assert((await page.locator('#portal_q_real').innerText()).includes('4,04'),'Inicio no calcula el coste real en el widget de Pricing');
-assert((await page.locator('#portal_q_margin').innerText()).includes('1,66'),'Inicio no calcula el margen rápido');
+assert((await page.locator('#portal_q_sale').innerText()).includes('5,13'),'Inicio no calcula la venta final con descuento');
+assert((await page.locator('#portal_q_margin').innerText()).includes('1,09'),'Inicio no calcula el margen rápido con descuento');
+assert((await page.locator('#portal_q_compdiff').innerText()).includes('-14,50'),'Inicio no compara contra competencia');
 await page.locator('#portal_q_query').fill('Consulta rápida Inicio QA');
 await page.getByRole('button',{name:'Guardar consulta',exact:true}).click();
 await page.waitForTimeout(180);
-assert(fixtures.consultations.some(x=>x.query==='Consulta rápida Inicio QA'),'Inicio no guarda consultas rápidas sin obligar a entrar en Pricing');
+const homeConsultation=fixtures.consultations.find(x=>x.query==='Consulta rápida Inicio QA');
+assert(homeConsultation,'Inicio no guarda consultas rápidas sin obligar a entrar en Pricing');
+assert(Number(homeConsultation.competitor)===6&&Number(homeConsultation.discount)===10,'Inicio no conserva competencia/descuento en la consulta rápida');
 await page.locator('.home-widget').first().waitFor();
 
 // Pricing and decimal-focus regression.
@@ -446,6 +452,11 @@ await page.getByRole('combobox',{name:/Tratamiento IRPF/}).selectOption('partial
 await page.waitForTimeout(80);
 await page.getByRole('textbox',{name:/Porcentaje deducible/}).fill('50');
 await page.locator('#ops_exp_file').setInputFiles({name:'factura-proveedor-qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nFACTURA QA\n%%EOF')});
+await page.getByRole('button',{name:'Vista previa seleccionada',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Factura de aprovisionamiento seleccionada no abre vista previa interna');
+assert(await page.getByRole('dialog').getByRole('button',{name:'Descargar',exact:true}).count()===1,'Vista previa de aprovisionamiento no ofrece descarga opcional');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
 await page.waitForTimeout(250);
 const savedExpense=fixtures.ops_expenses.find(x=>x.invoice_number==='PROV-QA-001');
@@ -674,6 +685,10 @@ await field('Cliente / razón social').fill('Cliente Externo QA');
 await field('Descripción').fill('Venta externa QA');
 await field('Precio base').fill('80');
 await page.locator('#ops_external_doc_file').setInputFiles({name:'factura-externa-qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nEXTERNA QA\n%%EOF')});
+await page.getByRole('button',{name:'Vista previa seleccionada',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Factura externa seleccionada no abre vista previa interna');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 const beforeExternalUpload=storageUploads;
 await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
 await page.waitForTimeout(250);
@@ -713,6 +728,10 @@ await page.locator('#ops_doc_party').fill('Proveedor QA');
 await field('Nº documento').fill('QA-2026-001');
 await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
 assert((await page.locator('#ops_doc_file').inputValue()).includes('qa.pdf'),'Selector documental no cargó archivo');
+await page.getByRole('button',{name:'Vista previa seleccionada',exact:true}).click();
+await page.getByRole('dialog').waitFor();
+assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'Documento seleccionado no abre vista previa antes de subir');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
 const docsBeforeStandalone=fixtures.ops_documents.length;
 await page.getByRole('button',{name:'Subir',exact:true}).click();
 await page.waitForTimeout(250);
