@@ -696,7 +696,7 @@ fixtures.ops_tax_payments.push(
  {id:'tax-130-q2',tax_type:'130',fiscal_year:2026,quarter:2,amount:2175.69,status:'pagado',payment_date:'2026-07-20',period_label:'2T 2026'}
 );
 fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'El listado de gestoría difiere de las ventas reconstruidas.',resolution:'Conservar el listado como discrepancia; la base fiscal validada usa 87.692,06 € confirmados por el modelo 130.',amount_difference:11762.07,active:true});
-await page.evaluate(async()=>{window.TotusGestion.quarter=2;window.TotusGestionFeatures&&await window.TotusGestionFeatures.load(true)});
+await page.evaluate(async()=>{window.TotusGestion.quarter=2;if(typeof window.opsLoadData==='function')await window.opsLoadData(true);window.TotusGestionFeatures&&await window.TotusGestionFeatures.load(true)});
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
 await page.getByRole('heading',{name:'¿Gastar más o menos?',exact:true}).waitFor();
 await page.getByRole('heading',{name:'Cuota según rendimiento',exact:true}).waitFor();
