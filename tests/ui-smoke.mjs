@@ -800,7 +800,8 @@ assert(fixtures.ops_backup_archives.length===1,'Backup no registró histórico')
 await page.getByLabel('Archivo de copia .totusbackup').setInputFiles(await backupFile.path());
 await page.getByRole('button',{name:'Validar',exact:true}).click();
 await page.getByRole('dialog').getByText('Estructura completa y restaurable',{exact:false}).waitFor();
-await page.getByRole('dialog').getByRole('button',{name:/Cerrar|Aceptar|×/}).click().catch(()=>{});
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+await page.getByRole('dialog').waitFor({state:'detached'});
 await page.getByRole('button',{name:'Restaurar',exact:true}).click();
 await page.getByRole('dialog').getByLabel('Motivo obligatorio').fill('QA restauración completa');
 await page.getByRole('dialog').getByRole('button',{name:'Restaurar',exact:true}).click();
