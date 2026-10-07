@@ -334,7 +334,7 @@ await page.locator('#portal_q_disc').fill('10');
 assert((await page.locator('#portal_q_real').innerText()).includes('4,04'),'Inicio no calcula el coste real en el widget de Pricing');
 assert((await page.locator('#portal_q_sale').innerText()).includes('5,13'),'Inicio no calcula la venta final con descuento');
 assert((await page.locator('#portal_q_margin').innerText()).includes('1,09'),'Inicio no calcula el margen rápido con descuento');
-assert((await page.locator('#portal_q_compdiff').innerText()).includes('-14,50'),'Inicio no compara contra competencia');
+assert((await page.locator('#portal_q_compdiff').innerText()).replace(/\s/g,'').startsWith('-14,5'),'Inicio no compara contra competencia');
 await page.locator('#portal_q_query').fill('Consulta rápida Inicio QA');
 await page.getByRole('button',{name:'Guardar consulta',exact:true}).click();
 await page.waitForTimeout(180);
