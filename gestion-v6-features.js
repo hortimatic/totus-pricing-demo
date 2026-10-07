@@ -918,9 +918,9 @@ function fiscalProjectionHtml(){
  </div>
  <div class="ops-card">
   <div class="section-head"><div><div class="eyebrow">T${O.quarter} · visión de negocio</div><div class="ops-title-line"><h3>Resultado operativo por tienda</h3>${infoButton('fiscal.tiendas','Cómo leer el resultado por tienda')}</div><div class="small">Ventas y gastos registrados en vuestra operativa. Sirve para comparar establecimientos; no reparte artificialmente los gastos fiscales comunes.</div></div></div>
-  <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Establecimiento</th><th>Ventas</th><th>Gastos registrados</th><th>Resultado</th><th>Margen</th></tr></thead><tbody>
-   ${storeRows.map(x=>`<tr><td><b>${H(x.store.name)}</b></td><td class="num">${euro(x.income)}</td><td class="num">${euro(x.expense)}</td><td class="num"><b>${euro(x.result)}</b></td><td class="num">${x.margin.toFixed(2).replace('.',',')} %</td></tr>`).join('')}
-   <tr class="total-row"><td><b>TOTAL NEGOCIO</b></td><td class="num"><b>${euro(storeIncome)}</b></td><td class="num"><b>${euro(storeExpense)}</b></td><td class="num"><b>${euro(storeResult)}</b></td><td class="num"><b>${storeIncome?(storeResult/storeIncome*100).toFixed(2).replace('.',','):'0,00'} %</b></td></tr>
+  <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Establecimiento</th><th>Ventas</th><th>Gastos</th><th>Resultado</th><th>Margen</th><th>Fuente gasto</th></tr></thead><tbody>
+   ${storeRows.map(x=>`<tr><td><b>${H(x.store.name)}</b></td><td class="num">${euro(x.income)}</td><td class="num">${euro(x.expense)}</td><td class="num"><b>${euro(x.result)}</b></td><td class="num">${x.margin.toFixed(2).replace('.',',')} %</td><td><span class="badge ${x.expenseSource==='Informe final verificado'?'ok':'warnb'}">${H(x.expenseSource)}</span></td></tr>`).join('')}
+   <tr class="total-row"><td><b>TOTAL NEGOCIO</b></td><td class="num"><b>${euro(storeIncome)}</b></td><td class="num"><b>${euro(storeExpense)}</b></td><td class="num"><b>${euro(storeResult)}</b></td><td class="num"><b>${storeIncome?(storeResult/storeIncome*100).toFixed(2).replace('.',','):'0,00'} %</b></td><td>Consolidado</td></tr>
   </tbody></table></div>
   <div class="ops-note" style="margin-top:10px">La fiscalidad exacta se calcula consolidada porque los libros del gestor no asignan de forma fiable todos los gastos a una tienda. Totus no inventa ese reparto.</div>
  </div>
