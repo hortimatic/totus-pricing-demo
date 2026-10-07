@@ -330,6 +330,11 @@ await page.locator('#portal_q_cost').fill('3,20');
 await page.locator('#portal_q_pvp').fill('5,70');
 assert((await page.locator('#portal_q_real').innerText()).includes('4,04'),'Inicio no calcula el coste real en el widget de Pricing');
 assert((await page.locator('#portal_q_margin').innerText()).includes('1,66'),'Inicio no calcula el margen rápido');
+await page.locator('#portal_q_query').fill('Consulta rápida Inicio QA');
+await page.getByRole('button',{name:'Guardar consulta',exact:true}).click();
+await page.waitForTimeout(180);
+assert(fixtures.consultations.some(x=>x.query==='Consulta rápida Inicio QA'),'Inicio no guarda consultas rápidas sin obligar a entrar en Pricing');
+await page.locator('.home-widget').first().waitFor();
 
 // Pricing and decimal-focus regression.
 await page.getByRole('button',{name:'Pricing',exact:true}).first().click();
