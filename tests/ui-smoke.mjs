@@ -767,7 +767,7 @@ assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes(
 const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
 assert(expensesRows[0].length===20&&expensesRows[0][5]==='NIF/CIF'&&expensesRows[0][6]==='Razón social'&&expensesRows[0][7]==='Concepto'&&expensesRows[0][18]==='Total factura'&&expensesRows[0][19]==='Neto pagado'&&expensesRows.at(-1)[7]==='TOTAL ACUMULADO','Contenido/orden del XLSX de gastos incorrecto');
 assert(expensesWb.Sheets.GASTOS.A1.s&&expensesWb.Sheets.GASTOS.T1.s,'El XLSX de gastos no conserva estilo completo de cabecera');
-assert(rgb6(expensesWb.Sheets.GASTOS.A1.s?.fill?.fgColor?.rgb)==='4472C4','La cabecera GASTOS no conserva el azul de referencia');
+assert(rgb6(expensesWb.Sheets.GASTOS.A1.s?.fill?.fgColor?.rgb)==='4472C4','La cabecera GASTOS no conserva el azul de referencia · estilo='+JSON.stringify(expensesWb.Sheets.GASTOS.A1.s||null));
 assert(expensesWb.Sheets.GASTOS['I'+expensesRows.length].f,'El total de Base IVA no es una fórmula real de Excel');
 assert(expensesWb.Sheets.GASTOS['S'+expensesRows.length].f&&expensesWb.Sheets.GASTOS['T'+expensesRows.length].f,'Los totales de factura/neto no son fórmulas reales de Excel');
 const conceptRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets['DESGLOSE CONCEPTOS'],{header:1,raw:false});
