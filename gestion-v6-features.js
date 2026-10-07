@@ -1166,7 +1166,7 @@ async function readBackupFile(file){
 }
 window.opsValidateBackupUpload=async function(){
  const file=document.getElementById('ops_backup_file')?.files?.[0];if(!file)return alert('Selecciona una copia .totusbackup.');
- try{const {manifest,missing}=await readBackupFile(file);openOpsModal('Copia validada',`<div class="ops-help-copy"><b>${H(file.name)}</b><br>Creada: ${H(manifest.created_at||'—')}<br>Tablas: ${Object.keys(manifest.tables||{}).length}<br>Archivos: ${(manifest.files||[]).length}<br>${missing.length?'<span class="badge warnb">Faltan tablas: '+H(missing.join(', '))+'</span>':'<span class="badge ok">Estructura completa y restaurable</span>'}</div>`)}catch(e){alert('Copia no válida: '+e.message)}
+ try{const {manifest,missing}=await readBackupFile(file);const m=openOpsModal('Copia validada',`<div class="ops-help-copy"><b>${H(file.name)}</b><br>Creada: ${H(manifest.created_at||'—')}<br>Tablas: ${Object.keys(manifest.tables||{}).length}<br>Archivos: ${(manifest.files||[]).length}<br>${missing.length?'<span class="badge warnb">Faltan tablas: '+H(missing.join(', '))+'</span>':'<span class="badge ok">Estructura completa y restaurable</span>'}</div><div class="ops-preview-actions"><button type="button" class="primary" id="ops_backup_validation_close">Cerrar</button></div>`);m.querySelector('#ops_backup_validation_close').onclick=closeOpsModal}catch(e){alert('Copia no válida: '+e.message)}
 };
 window.opsRestoreBackupUpload=async function(){
  if(!admin())return;
