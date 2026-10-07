@@ -469,7 +469,7 @@ function expensesHtml(){
  <div class="invoice-section-title">2 · Pago</div>
  <div class="ops-form">
   <div><label>Forma de pago</label><select aria-label="Forma de pago del gasto" oninput="opsExpenseField('payment',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.payment===x?'selected':''}>${x}</option>`).join('')}</select></div>
-  <div><label>Estado</label><select aria-label="Estado de pago del gasto" oninput="opsExpenseField('paidStatus',this.value)">${['pagado','pendiente','parcial'].map(x=>`<option ${d.paidStatus===x?'selected':''}>${x}</option>`).join('')}</select></div>
+  <div><label>Estado</label><select aria-label="Estado de pago del gasto" onchange="opsExpenseField('paidStatus',this.value,true)">${[['pagado','Pagado'],['pendiente','Pendiente'],['parcial','Pago parcial']].map(x=>`<option value="${x[0]}" ${d.paidStatus===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select></div>
   <div><label>Fecha pago</label><input type="date" value="${h(d.paidDate)}" oninput="opsExpenseField('paidDate',this.value)" ${d.paidStatus==='pendiente'?'disabled':''}></div>
   <div><label>Importe realmente pagado</label><input inputmode="decimal" placeholder="${String(t.payable.toFixed(2)).replace('.',',')}" value="${h(d.amountPaid)}" oninput="opsExpenseField('amountPaid',this.value)" ${d.paidStatus==='pendiente'?'disabled':''}></div>
   ${importedNeedsReview?`<div class="span2 ops-note warn"><div class="checkline"><input id="ops_fiscal_reviewed" type="checkbox" ${d.fiscalReviewed?'checked':''} onchange="opsExpenseField('fiscalReviewed',this.checked)"><label for="ops_fiscal_reviewed">Importación revisada y válida para fiscalidad</label></div><div class="small">Solo aparece en registros importados del Excel diario que necesitan confirmación antes de entrar en el cálculo fiscal.</div></div>`:''}
@@ -584,7 +584,15 @@ window.opsDeleteSelectedExpenses=async function(){
  O.expenseSelected=[];await load(true);render();
 };
 
-window.opsExpenseField=(k,v,rer=false)=>{O.expenseDraft[k]=v;if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}if(rer)render();};
+window.opsExpenseField=(k,v,rer=false)=>{
+ const d=O.expenseDraft;if(!d)return;d[k]=v;
+ if(k==='managementOnly'&&v){O.expenseDraftLines.forEach(l=>{l.deductible=false;l.vat='0';l.re='0';l.withholding='0';l.model=''})}
+ if(k==='paidStatus'){
+  if(v==='pendiente'){d.amountPaid='';d.paidDate=''}
+  else if(!d.paidDate)d.paidDate=d.date||isoToday();
+ }
+ if(rer)render();
+};
 window.opsExpenseLineField=function(i,k,v,recalc=false){
  const l=O.expenseDraftLines[i]; if(!l)return;l[k]=v;
  if(k==='categoryId'){
@@ -681,8 +689,22 @@ window.opsRemoveExpenseDocument=async function(docId){
 };
 
 window.opsSaveExpense=async function(){
- if(O.saving)return;const d=O.expenseDraft;if(!d.date||!d.supplier){alert('Fecha y proveedor son obligatorios.');return}
+ if(O.saving)return;const d=O.expenseDraft;if(!d.date||!d.supplier.trim()){alert('Fecha y proveedor son obligatorios.');return}
+ if(['factura','rectificativa'].includes(d.documentKind)&&!d.invoice.trim()){alert('Indica el número de la '+(d.documentKind==='rectificativa'?'rectificativa / abono':'factura')+'.');return}
  if(!O.expenseDraftLines.length||O.expenseDraftLines.every(l=>String(l.base).trim()==='')){alert('Añade al menos una línea con base.');return}
+ for(const [i,l] of O.expenseDraftLines.entries()){
+  if(String(l.base).trim()==='')continue;
+  const base=n(l.base),rates=[['IVA',n(l.vat)],['RE',n(l.re)],['Retención',n(l.withholding)]];
+  if(d.documentKind!=='rectificativa'&&base<=0){alert('La base de la línea '+(i+1)+' debe ser mayor que cero. Para abonos usa tipo Rectificativa / abono.');return}
+  if(d.documentKind==='rectificativa'&&base===0){alert('La base de la línea '+(i+1)+' no puede ser cero.');return}
+  const bad=rates.find(([,v])=>v<0||v>100);if(bad){alert(bad[0]+' de la línea '+(i+1)+' debe estar entre 0 y 100 %.');return}
+ }
+ const previewTotals=draftExpenseTotals(),paid=d.amountPaid===''?null:n(d.amountPaid);
+ if(d.documentKind!=='rectificativa'){
+  if(d.paidStatus==='pendiente'&&paid!=null&&Math.abs(paid)>.001){alert('Un gasto pendiente no puede tener importe pagado.');return}
+  if(d.paidStatus==='parcial'&&(paid==null||paid<=0||paid>=previewTotals.payable)){alert('En pago parcial, el importe pagado debe ser mayor que 0 y menor que el total a pagar.');return}
+  if(d.paidStatus==='pagado'&&paid!=null&&paid<0){alert('El importe pagado no puede ser negativo.');return}
+ }
  if(d.invoice){
   const dup=O.expenses.find(e=>e.id!==d.id&&e.supplier_name.trim().toLowerCase()===d.supplier.trim().toLowerCase()&&e.invoice_number.trim().toLowerCase()===d.invoice.trim().toLowerCase());
   if(dup&&!confirm('Ya existe una factura con ese proveedor y número ('+dmy(dup.expense_date)+'). ¿Continuar de todos modos?'))return;
@@ -692,7 +714,7 @@ window.opsSaveExpense=async function(){
    const file=document.getElementById('ops_exp_file')?.files?.[0];
    validateDocFile(file);
    const totals=draftExpenseTotals();
-   const payload={id:d.id||null,store_id:d.storeId||null,supplier_id:d.supplierId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.amountPaid!==''?n(d.amountPaid):totals.payable,notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
+   const payload={id:d.id||null,store_id:d.storeId||null,supplier_id:d.supplierId||null,expense_date:d.date,supplier_name:d.supplier.trim(),supplier_tax_id:d.taxId.trim(),invoice_number:d.invoice.trim(),description:O.expenseDraftLines.map(l=>l.description).filter(Boolean).join(' · '),payment_method:d.payment,paid_status:d.paidStatus,paid_date:d.paidStatus==='pendiente'?null:(d.paidDate||d.date),amount_paid:d.paidStatus==='pendiente'?0:(d.amountPaid!==''?n(d.amountPaid):totals.payable),notes:d.notes||'',document_kind:d.documentKind,fiscal_reviewed:d.managementOnly?false:!!d.fiscalReviewed,management_only:!!d.managementOnly};
    const lines=O.expenseDraftLines.map((l,i)=>({sort_order:(i+1)*10,category_id:l.categoryId||null,description:l.description||category(l.categoryId)?.name||'',base_amount:n(l.base),vat_rate:n(l.vat),re_rate:n(l.re),withholding_rate:n(l.withholding),withholding_model:d.managementOnly?null:(l.model||null),deductible_irpf:d.managementOnly?false:l.deductible!==false,deductible_pct:d.managementOnly?0:Math.min(100,Math.max(0,n(l.deductiblePct??100))),fixed_asset:!!l.fixed,notes:''}));
    const {data:id,error}=await sb.rpc('ops_save_expense',{p_expense:payload,p_lines:lines});if(error)throw error;
    if(file){
