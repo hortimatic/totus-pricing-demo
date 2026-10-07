@@ -75,6 +75,7 @@ const OPS_HELP={
  facturas:['Facturación','Crea facturas, rectificativas y proformas. La numeración se asigna al emitir. Plantillas, logo, clientes y series pertenecen a este módulo.'],
  documentos:['Documentos','Archivo digital de justificantes. Puedes filtrar, revisar, descargar y preparar ZIP. Los documentos ligados a facturación quedan protegidos.'],
  fiscal:['Fiscalidad','Previsión de IRPF, retenciones y RETA. Es una herramienta de control y planificación; no sustituye la liquidación de la gestoría.'],
+ 'fiscal.conciliacion':['Conciliación de fuentes','Muestra diferencias detectadas entre Excel diarios, documentos de gestoría y trimestre natural. Totus conserva la fuente original y deja escrito qué criterio se aplicó; no corrige importes históricos a escondidas.'],
  informes:['Informes','Exporta gastos, ingresos, diarios, resumen fiscal y paquete de gestoría con la estructura documental acordada.'],
  config:['Configuración','Solo parámetros generales de empresa, fiscalidad, RETA y almacenamiento. Facturación, plantillas, logo, clientes y series se gestionan dentro de Facturación para evitar duplicidades.'],
  'config.empresa':['Datos generales de empresa','Nombre, NIF/CIF, dirección, email y teléfono usados en informes y documentos. La imagen corporativa no se configura aquí.'],
