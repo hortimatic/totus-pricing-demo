@@ -825,6 +825,7 @@ await page.getByRole('heading',{name:/Previsión IRPF/}).waitFor();
 await page.getByRole('heading',{name:'Resultado operativo por tienda',exact:true}).waitFor();
 await page.getByRole('heading',{name:'IVA y recargo de equivalencia',exact:true}).waitFor();
 await page.getByRole('heading',{name:'Números usados para impuestos',exact:true}).waitFor();
+assert(await page.getByText('Informe final verificado',{exact:true}).count()===2,'Fiscalidad no identifica las dos referencias verificadas por tienda');
 await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
