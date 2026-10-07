@@ -781,6 +781,7 @@ assert(fixtures.ops_backup_archives.length===1,'Backup no registró histórico')
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
 await page.evaluate(()=>opsNewExpense());
 await page.locator('input[placeholder="Nombre del proveedor"]').fill('Gasto eliminable QA');
+await field('Nº factura / ticket').fill('QA-DELETE-001');
 await field('Base').fill('12');
 await page.getByRole('button',{name:'Guardar gasto',exact:true}).click();
 await page.waitForTimeout(180);
