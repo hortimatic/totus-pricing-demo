@@ -766,6 +766,7 @@ assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes(
 const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
 assert(expensesRows[0].length===20&&expensesRows[0][5]==='NIF/CIF'&&expensesRows[0][6]==='Razón social'&&expensesRows[0][7]==='Concepto'&&expensesRows[0][18]==='Total factura'&&expensesRows[0][19]==='Neto pagado'&&expensesRows.at(-1)[7]==='TOTAL ACUMULADO','Contenido/orden del XLSX de gastos incorrecto');
 assert(expensesWb.Sheets.GASTOS.A1.s&&expensesWb.Sheets.GASTOS.T1.s,'El XLSX de gastos no conserva estilo completo de cabecera');
+assert(expensesWb.Sheets.GASTOS.A1.s?.fill?.fgColor?.rgb==='4472C4','La cabecera GASTOS no conserva el azul de referencia');
 assert(expensesWb.Sheets.GASTOS['I'+expensesRows.length].f,'El total de Base IVA no es una fórmula real de Excel');
 assert(expensesWb.Sheets.GASTOS['S'+expensesRows.length].f&&expensesWb.Sheets.GASTOS['T'+expensesRows.length].f,'Los totales de factura/neto no son fórmulas reales de Excel');
 const conceptRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets['DESGLOSE CONCEPTOS'],{header:1,raw:false});
@@ -778,16 +779,22 @@ assert(incomeWb.SheetNames.join('|')==='INGRESOS','Libro de ingresos debe tener 
 const incomeRows=XLSXNode.utils.sheet_to_json(incomeWb.Sheets.INGRESOS,{header:1,raw:false});
 assert(incomeRows[0][0]==='Orden'&&incomeRows[0][5]==='Concepto'&&incomeRows.at(-1)[5]==='TOTAL ACUMULADO','Contenido del XLSX de ingresos incorrecto');
 assert(incomeWb.Sheets.INGRESOS.A1.s,'El XLSX de ingresos no conserva estilo de cabecera');
+assert(incomeWb.Sheets.INGRESOS.A1.s?.fill?.fgColor?.rgb==='4472C4','La cabecera INGRESOS no conserva el azul de referencia');
 assert(incomeWb.Sheets.INGRESOS['G'+incomeRows.length].f,'El total de ingresos no es una fórmula real de Excel');
 
 for(const idx of [2,3]){
  downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(idx).click();const daily=await downloadPromise;
  const wb=XLSXNode.readFile(await daily.path(),{cellStyles:true});
  assert(wb.SheetNames.length===12,'El diario no contiene 12 hojas mensuales');
- const firstRows=XLSXNode.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false});
- assert(firstRows[0].join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
+ const firstSheet=wb.Sheets[wb.SheetNames[0]],firstRows=XLSXNode.utils.sheet_to_json(firstSheet,{header:1,raw:false});
+ assert(/^Enero 2026$/.test(String(firstRows[0][0])),'El diario no conserva el título mensual');
+ assert(firstRows[1].slice(0,5).join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
- const totalRow=firstRows.length;assert(wb.Sheets[wb.SheetNames[0]]['C'+totalRow].f,'El total mensual del diario no es una fórmula real');
+ const totalRow=firstRows.length;assert(firstSheet['C'+totalRow].f&&firstSheet['D'+totalRow].f&&firstSheet['E'+totalRow].f,'Los totales mensuales del diario no son fórmulas reales');
+ assert(firstSheet.A1.s?.fill?.fgColor?.rgb==='000000'&&firstSheet.A1.s?.font?.color?.rgb==='FFFF00','El título mensual no conserva negro/amarillo del Excel original');
+ assert(firstSheet.A2.s?.fill?.fgColor?.rgb==='4F81BD','La cabecera diaria no conserva el azul del Excel original');
+ const summaryLabels=firstRows.slice(-6).map(r=>r[1]);
+ assert(summaryLabels.join('|')==='Otros|SS y nóminas|Pedidos|Gastos fijos|IRPF|TOTAL','Falta el resumen por colores/categorías del diario');
 }
 
 downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(4).click();const fullXlsx=await downloadPromise;
