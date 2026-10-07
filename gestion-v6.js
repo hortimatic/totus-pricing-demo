@@ -769,7 +769,7 @@ window.opsDownloadDoc=async function(id){
 };
 window.opsSetDocStatus=async function(id,status){const {error}=await sb.from('ops_documents').update({status}).eq('id',id);if(error){alert(error.message);return}const d=O.documents.find(x=>x.id===id);if(d)d.status=status;await audit('documentos','estado',id,{status});};
 
-window.opsPlannedSpend=function(v){O.plannedSpend=v;clearTimeout(window.__opsPlanTimer);window.__opsPlanTimer=setTimeout(render,150)};
+window.opsPlannedSpend=function(v){O.plannedSpend=v;if(typeof window.__opsUpdateFiscalSimulation==='function')window.__opsUpdateFiscalSimulation()};
 function docArchiveFolder(d,root='04_DOCUMENTOS'){
  const dt=d.document_date||'sin_fecha',year=dt.slice(0,4)||'SIN_ANO',month=dt.slice(5,7)||'SIN_MES';
  const q=dt&&dt.length>=7?'T'+qtrFromDate(dt):'SIN_TRIMESTRE';
