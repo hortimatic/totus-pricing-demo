@@ -327,7 +327,7 @@ function closingsHtml(){
    </div>
    <div class="ops-note" style="margin-top:10px">El total de tienda es la suma de todas las cajas. En cada caja: efectivo vendido = metálico final + retiradas + gastos pagados desde caja − apertura.</div>
    <div class="invoice-section-title">4 · Observaciones</div>
-   <textarea oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea>
+   <textarea aria-label="Observaciones del cierre" oninput="opsCloseField('notes',this.value)" ${dis}>${h(d.notes)}</textarea>
   </div>
 
   <div class="ops-card"><div class="section-head"><div><div class="eyebrow">T${O.quarter}</div><h3>Histórico de cierres</h3><div class="small">Totales diarios de tienda, obtenidos de la suma de sus cajas.</div></div><button class="secondary" onclick="opsExportClosings()">Exportar CSV</button></div>
