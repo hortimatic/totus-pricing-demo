@@ -240,7 +240,7 @@ function portalHtml(){
  const stores=ready?(O.stores||[]):[],todayClosings=ready?(O.closings||[]).filter(x=>x.business_date===today):[];
  const expenseRows=ready?(O.expenses||[]).filter(x=>x.expense_date?.startsWith(String(O.year))):[],quarterExpenses=expenseRows.filter(x=>Math.floor((Number(x.expense_date.slice(5,7))-1)/3)+1===q);
  const invoices=ready?(O.invoices||[]):[],pending=invoices.filter(x=>x.document_type==='factura'&&x.status==='emitida'&&x.paid_status!=='pagada');
- const docs=ready?(O.documents||[]).slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,3);
+ const docs=ready?(O.documents||[]).slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))).slice(0,3):[];
  const tax130=ready?(O.taxPayments||[]).filter(x=>x.fiscal_year===O.year&&x.quarter===q&&x.tax_type==='130').reduce((a,x)=>a+Number(x.amount||0),0):0;
  const storage=ready?Number(O.features?.storageUsage?.total_bytes||0):0,lastBackup=ready?(O.features?.backupRows||[])[0]:null;
  const widget=(icon,title,body,actions='')=>`<article class="home-widget"><div class="home-widget-head"><span class="home-widget-icon">${icon}</span><div><div class="home-widget-title">${esc(title)}</div></div></div><div class="home-widget-body">${body}</div>${actions?'<div class="home-widget-actions">'+actions+'</div>':''}</article>`;
