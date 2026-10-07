@@ -240,6 +240,23 @@ function assert(cond,msg){if(!cond)throw new Error(msg)}
 function rgb6(v){return String(v||'').toUpperCase().replace(/^FF(?=[0-9A-F]{6}$)/,'').slice(-6)}
 function fillRgb(cell){return rgb6(cell?.s?.fill?.fgColor?.rgb||cell?.s?.fgColor?.rgb)}
 function fontRgb(cell){return rgb6(cell?.s?.font?.color?.rgb||cell?.s?.color?.rgb)}
+async function xlsxXmlStyle(path,sheetNo=1,ref='A1'){
+ const buf=await fs.readFile(path),zip=await JSZipNode.loadAsync(buf);
+ const sheet=await zip.file(`xl/worksheets/sheet${sheetNo}.xml`).async('string');
+ const styles=await zip.file('xl/styles.xml').async('string');
+ const tag=(sheet.match(new RegExp('<c\\b[^>]*\\br="'+ref+'"[^>]*>'))||[])[0]||'';
+ const styleId=Number((tag.match(/\\bs="(\\d+)"/)||[])[1]||0);
+ const xfsBlock=(styles.match(/<cellXfs\\b[^>]*>([\\s\\S]*?)<\\/cellXfs>/)||[])[1]||'';
+ const xfs=[...xfsBlock.matchAll(/<xf\\b[^>]*(?:\\/>|>[\\s\\S]*?<\\/xf>)/g)].map(m=>m[0]);
+ const xf=xfs[styleId]||'';
+ const fontId=Number((xf.match(/\\bfontId="(\\d+)"/)||[])[1]||0),fillId=Number((xf.match(/\\bfillId="(\\d+)"/)||[])[1]||0);
+ const fontsBlock=(styles.match(/<fonts\\b[^>]*>([\\s\\S]*?)<\\/fonts>/)||[])[1]||'';
+ const fillsBlock=(styles.match(/<fills\\b[^>]*>([\\s\\S]*?)<\\/fills>/)||[])[1]||'';
+ const fonts=[...fontsBlock.matchAll(/<font>[\\s\\S]*?<\\/font>/g)].map(m=>m[0]);
+ const fills=[...fillsBlock.matchAll(/<fill>[\\s\\S]*?<\\/fill>/g)].map(m=>m[0]);
+ const font=fonts[fontId]||'',fill=fills[fillId]||'';
+ return {styleId,fontId,fillId,fontRgb:rgb6((font.match(/<color\\b[^>]*\\brgb="([^"]+)"/)||[])[1]),fillRgb:rgb6((fill.match(/<fgColor\\b[^>]*\\brgb="([^"]+)"/)||[])[1])};
+}
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
 async function auditCurrentUi(section){
@@ -787,14 +804,15 @@ assert(incomeWb.Sheets.INGRESOS['G'+incomeRows.length].f,'El total de ingresos n
 
 for(const idx of [2,3]){
  downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(idx).click();const daily=await downloadPromise;
- const wb=XLSXNode.readFile(await daily.path(),{cellStyles:true});
+ const dailyPath=await daily.path(),wb=XLSXNode.readFile(dailyPath,{cellStyles:true});
  assert(wb.SheetNames.length===12,'El diario no contiene 12 hojas mensuales');
  const firstSheet=wb.Sheets[wb.SheetNames[0]],firstRows=XLSXNode.utils.sheet_to_json(firstSheet,{header:1,raw:false});
  assert(/^ENERO 2026$/.test(String(firstRows[0]?.[0]||'')),'El diario no conserva el título mensual de referencia · hoja='+wb.SheetNames[0]+' · fila0='+JSON.stringify(firstRows[0]||null)+' · A1='+JSON.stringify(firstSheet.A1||null));
  assert(firstRows[1].slice(0,5).join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
  const totalRow=firstRows.length;assert(firstSheet['C'+totalRow].f&&firstSheet['D'+totalRow].f&&firstSheet['E'+totalRow].f,'Los totales mensuales del diario no son fórmulas reales');
- assert(fillRgb(firstSheet.A1)==='000000'&&fontRgb(firstSheet.A1)==='FFFF00','El título mensual no conserva negro/amarillo del Excel original');
+ const titleXmlStyle=await xlsxXmlStyle(dailyPath,1,'A1');
+ assert(titleXmlStyle.fillRgb==='000000'&&titleXmlStyle.fontRgb==='FFFF00','El título mensual no conserva negro/amarillo del Excel original · '+JSON.stringify(titleXmlStyle));
  assert(fillRgb(firstSheet.A2)==='4F81BD','La cabecera diaria no conserva el azul del Excel original');
  const summaryLabels=firstRows.slice(-6).map(r=>r[1]);
  assert(summaryLabels.join('|')==='Otros|SS y nóminas|Pedidos|Gastos fijos|IRPF|TOTAL','Falta el resumen por colores/categorías del diario');
