@@ -37,6 +37,10 @@ function dlBlob(blob,name){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1200);
 }
+function downloadCsvRows(name,rows){
+  const csv=(rows||[]).map(row=>(row||[]).map(v=>{const s=String(v??'');return /[;"\n\r]/.test(s)?'"'+s.replaceAll('"','""')+'"':s}).join(';')).join('\r\n');
+  dlBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),name);
+}
 function statusBadge(v){
   const good=['pagado','pagada','entregada_gestor','archivada','emitida','cerrado','revisada','aceptada','convertida'];
   const bad=['anulada','rechazada','fallido'];
@@ -205,7 +209,7 @@ function closingCsvRows(from,to){
 }
 window.opsExportClosings=function(){
  const p=periodBounds(O.year,O.quarter,false);
- csvDownload(`cierres_${p.start}_${p.end}.csv`,closingCsvRows(p.start,p.end));
+ downloadCsvRows(`cierres_${p.start}_${p.end}.csv`,closingCsvRows(p.start,p.end));
 };
 function expenseCsvRows(from,to){
  const lineMap=new Map();O.expenseLines.forEach(l=>{if(!lineMap.has(l.expense_id))lineMap.set(l.expense_id,[]);lineMap.get(l.expense_id).push(l)});
@@ -219,7 +223,7 @@ function expenseCsvRows(from,to){
 }
 window.opsExportExpenses=function(){
  const p=periodBounds(O.year,O.quarter,false);
- csvDownload(`gastos_${p.start}_${p.end}.csv`,expenseCsvRows(p.start,p.end));
+ downloadCsvRows(`gastos_${p.start}_${p.end}.csv`,expenseCsvRows(p.start,p.end));
 };
 
 function sectionMeta(tab=O.tab){
