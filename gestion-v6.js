@@ -241,7 +241,7 @@ function managementHtml(){
 
 function newClosingDraft(){
   const sid=O.storeId!=='all'?O.storeId:(O.stores[0]?.id||'');
-  return {id:null,storeId:sid,date:isoToday(),notes:'',status:'cerrado',drawers:{},legacyAllocation:false};
+  return {id:null,storeId:sid,date:isoToday(),notes:'',status:'cerrado',controlTotal:'',drawers:{},legacyAllocation:false};
 }
 function closingDrawerState(draft,drawer){
   if(draft.drawers[drawer.id])return draft.drawers[drawer.id];
@@ -253,21 +253,23 @@ function closingDrawerState(draft,drawer){
   }
   return draft.drawers[drawer.id]={
     opening:String(opening||''),closing:'',
-    card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:''
+    card:'',bizum:'',online:'',other:'',withdrawals:'',cashExpenses:'',extraIn:'',extraOut:''
   };
 }
 function drawerCalc(draft,drawer){
   const x=closingDrawerState(draft,drawer);
-  const opening=n(x.opening),closing=n(x.closing),withdrawals=n(x.withdrawals),cashExpenses=n(x.cashExpenses);
-  const cashSales=closing+withdrawals+cashExpenses-opening;
+  const opening=n(x.opening),closing=n(x.closing),withdrawals=n(x.withdrawals),cashExpenses=n(x.cashExpenses),extraIn=n(x.extraIn),extraOut=n(x.extraOut);
+  const cashSales=closing+withdrawals+cashExpenses+extraOut-opening-extraIn;
   const card=n(x.card),bizum=n(x.bizum),online=n(x.online),other=n(x.other);
   const total=cashSales+card+bizum+online+other;
-  return {opening,closing,withdrawals,cashExpenses,cashSales,card,bizum,online,other,total};
+  return {opening,closing,withdrawals,cashExpenses,extraIn,extraOut,cashSales,card,bizum,online,other,total};
 }
 function closeCalc(){
   const d=O.closeDraft||newClosingDraft(),ds=O.drawers.filter(x=>x.store_id===d.storeId);
-  const t={opening:0,closing:0,withdrawals:0,cashExpenses:0,cashSales:0,card:0,bizum:0,online:0,other:0,total:0};
+  const t={opening:0,closing:0,withdrawals:0,cashExpenses:0,extraIn:0,extraOut:0,cashSales:0,card:0,bizum:0,online:0,other:0,total:0};
   ds.forEach(dr=>{const x=drawerCalc(d,dr);Object.keys(t).forEach(k=>t[k]+=n(x[k]))});
+  t.control=String(d.controlTotal??'').trim()===''?null:n(d.controlTotal);
+  t.diff=t.control==null?null:Math.round((t.total-t.control)*100)/100;
   return t;
 }
 function drawerClosingHtml(d,dr,dis){
