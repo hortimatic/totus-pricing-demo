@@ -153,15 +153,17 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    }
    if(fn==='ops_save_closing'){
      const p=body.p_closing||{},drawers=body.p_drawers||[];let id=p.id||crypto.randomUUID();
-     const opening=drawers.reduce((a,x)=>a+Number(x.opening_cash||0),0),closing=drawers.reduce((a,x)=>a+Number(x.closing_cash||0),0);
-     const quick=(p.entry_mode||'quick')==='quick';
-     const cash=quick?Number(p.reported_total_sales||0)-Number(p.card_sales||0)-Number(p.bizum_sales||0)-Number(p.online_sales||0)-Number(p.other_income||0):closing+Number(p.cash_withdrawals||0)+Number(p.cash_expenses_declared||0)-opening;
-     const total=quick?Number(p.reported_total_sales||0):cash+Number(p.card_sales||0)+Number(p.bizum_sales||0)+Number(p.online_sales||0)+Number(p.other_income||0);
+     const sum=k=>drawers.reduce((a,x)=>a+Number(x[k]||0),0);
+     const opening=sum('opening_cash'),closing=sum('closing_cash'),card=sum('card_sales'),bizum=sum('bizum_sales'),online=sum('online_sales'),other=sum('other_income'),withdrawals=sum('cash_withdrawals'),cashExpenses=sum('cash_expenses_declared'),extraIn=sum('cash_extra_in'),extraOut=sum('cash_extra_out');
+     const quick=(p.entry_mode||'physical')==='quick';
+     const cash=quick?Number(p.reported_total_sales||0)-Number(p.card_sales||0)-Number(p.bizum_sales||0)-Number(p.online_sales||0)-Number(p.other_income||0):closing+withdrawals+cashExpenses+extraOut-opening-extraIn;
+     const total=quick?Number(p.reported_total_sales||0):cash+card+bizum+online+other;
+     const control=p.reported_total_sales==null?total:Number(p.reported_total_sales),difference=Math.round((total-control)*100)/100;
      let row=fixtures.ops_daily_closings.find(x=>x.id===id);
-     const data={id,store_id:p.store_id,business_date:p.business_date,opening_cash:opening,cash_sales:cash,card_sales:Number(p.card_sales||0),bizum_sales:Number(p.bizum_sales||0),online_sales:Number(p.online_sales||0),other_income:Number(p.other_income||0),cash_withdrawals:Number(p.cash_withdrawals||0),cash_expenses_declared:Number(p.cash_expenses_declared||0),expected_cash:closing,actual_cash:closing,difference:0,notes:p.notes||'',status:p.status||'cerrado',source:'manual',legacy_cash_method:false,include_in_income:true,reported_total_sales:total,entry_mode:p.entry_mode||'quick'};
+     const data={id,store_id:p.store_id,business_date:p.business_date,opening_cash:opening,cash_sales:cash,card_sales:card,bizum_sales:bizum,online_sales:online,other_income:other,cash_withdrawals:withdrawals,cash_expenses_declared:cashExpenses,cash_extra_in:extraIn,cash_extra_out:extraOut,expected_cash:closing,actual_cash:closing,difference,notes:p.notes||'',status:p.status||'cerrado',source:'manual',legacy_cash_method:false,include_in_income:true,reported_total_sales:control,entry_mode:p.entry_mode||'physical'};
      if(row)Object.assign(row,data);else fixtures.ops_daily_closings.push(data);
      fixtures.ops_daily_closing_drawers=fixtures.ops_daily_closing_drawers.filter(x=>x.closing_id!==id);
-     fixtures.ops_daily_closing_drawers.push(...drawers.map(x=>({id:crypto.randomUUID(),closing_id:id,drawer_id:x.drawer_id,opening_cash:Number(x.opening_cash||0),closing_cash:Number(x.closing_cash||0),notes:x.notes||''})));
+     fixtures.ops_daily_closing_drawers.push(...drawers.map(x=>({id:crypto.randomUUID(),closing_id:id,drawer_id:x.drawer_id,opening_cash:Number(x.opening_cash||0),closing_cash:Number(x.closing_cash||0),card_sales:Number(x.card_sales||0),bizum_sales:Number(x.bizum_sales||0),online_sales:Number(x.online_sales||0),other_income:Number(x.other_income||0),cash_withdrawals:Number(x.cash_withdrawals||0),cash_expenses_declared:Number(x.cash_expenses_declared||0),cash_extra_in:Number(x.cash_extra_in||0),cash_extra_out:Number(x.cash_extra_out||0),notes:x.notes||''})));
      return route.fulfill(out(id));
    }
    if(fn==='ops_save_expense'){
