@@ -3,6 +3,16 @@ name: Totus Central QA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [desarrollo-v6]
+    paths:
+      - 'index.html'
+      - 'gestion-v6.js'
+      - 'gestion-v6-features.js'
+      - 'gestion-v6.css'
+      - 'app-shell-v6.css'
+      - 'tests/ui-smoke.mjs'
+      - '.github/workflows/totus-central-qa.yml'
 
 
 
