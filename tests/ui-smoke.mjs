@@ -821,8 +821,13 @@ for(const idx of [2,3]){
 }
 
 downloadPromise=page.waitForEvent('download');await xlsxButtons.nth(4).click();const fullXlsx=await downloadPromise;
-const fullWb=XLSXNode.readFile(await fullXlsx.path());
-for(const name of ['Resumen','Cierres','Gastos','Facturas'])assert(fullWb.SheetNames.includes(name),'Libro completo no contiene hoja '+name);
+const fullWb=XLSXNode.readFile(await fullXlsx.path(),{cellStyles:true});
+for(const name of ['Resumen','Cierres','Gastos','Desglose conceptos','Facturas'])assert(fullWb.SheetNames.includes(name),'Libro completo no contiene hoja '+name);
+for(const name of ['Resumen','Cierres','Gastos','Facturas'])assert(fullWb.Sheets[name]?.A1?.s,'Libro completo deja sin formato la hoja '+name);
+const closingRows=XLSXNode.utils.sheet_to_json(fullWb.Sheets.Cierres,{header:1,raw:false});
+for(const col of ['Entrada extra a caja','Salida extra de caja','Total control','Diferencia','Estado'])assert(closingRows[0].includes(col),'Libro completo · Cierres no incluye '+col);
+const fullExpenseRows=XLSXNode.utils.sheet_to_json(fullWb.Sheets.Gastos,{header:1,raw:false});
+assert(fullWb.Sheets.Gastos['S'+fullExpenseRows.length]?.f&&fullWb.Sheets.Gastos['T'+fullExpenseRows.length]?.f,'Libro completo pierde fórmulas de total en Gastos');
 
 downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Descargar PDF'}).click();const fiscalPdf=await downloadPromise;
 const pdfBytes=await fs.readFile(await fiscalPdf.path());
