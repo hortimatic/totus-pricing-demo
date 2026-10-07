@@ -1198,7 +1198,7 @@ window.opsRestoreBackupUpload=async function(){
   const tables={};for(const t of BACKUP_TABLES){tables[t]=JSON.parse(await zip.file('data/'+t+'.json').async('string'))}
   const {data,error}=await sb.functions.invoke('ops-restore-backup',{body:{tables,reason}});if(error)throw error;if(data?.error)throw new Error(data.error);
   await window.opsLoadData(true);E.loaded=false;await featureLoad(true);render();
-  openOpsModal('Restauración completada',`<div class="ops-help-copy"><span class="badge ok">Correcto</span><br>Se restauraron ${H(String(data?.tables||BACKUP_TABLES.length))} tablas. La copia automática PRE_RESTORE permanece guardada por seguridad.</div>`);
+  const done=openOpsModal('Restauración completada',`<div class="ops-help-copy"><span class="badge ok">Correcto</span><br>Se restauraron ${H(String(data?.tables||BACKUP_TABLES.length))} tablas. La copia automática PRE_RESTORE permanece guardada por seguridad.</div><div class="ops-preview-actions"><button type="button" class="primary" id="ops_backup_restore_close">Cerrar</button></div>`);done.querySelector('#ops_backup_restore_close').onclick=closeOpsModal;
  }catch(e){alert('No se pudo restaurar: '+e.message)}
 };
 function adminBackupHtml(){
