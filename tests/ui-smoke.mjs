@@ -238,6 +238,8 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
 
 function assert(cond,msg){if(!cond)throw new Error(msg)}
 function rgb6(v){return String(v||'').toUpperCase().replace(/^FF(?=[0-9A-F]{6}$)/,'').slice(-6)}
+function fillRgb(cell){return rgb6(cell?.s?.fill?.fgColor?.rgb||cell?.s?.fgColor?.rgb)}
+function fontRgb(cell){return rgb6(cell?.s?.font?.color?.rgb||cell?.s?.color?.rgb)}
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
 function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
 async function auditCurrentUi(section){
@@ -767,7 +769,7 @@ assert(expensesWb.SheetNames.includes('GASTOS')&&expensesWb.SheetNames.includes(
 const expensesRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets.GASTOS,{header:1,raw:false});
 assert(expensesRows[0].length===20&&expensesRows[0][5]==='NIF/CIF'&&expensesRows[0][6]==='Razón social'&&expensesRows[0][7]==='Concepto'&&expensesRows[0][18]==='Total factura'&&expensesRows[0][19]==='Neto pagado'&&expensesRows.at(-1)[7]==='TOTAL ACUMULADO','Contenido/orden del XLSX de gastos incorrecto');
 assert(expensesWb.Sheets.GASTOS.A1.s&&expensesWb.Sheets.GASTOS.T1.s,'El XLSX de gastos no conserva estilo completo de cabecera');
-assert(rgb6(expensesWb.Sheets.GASTOS.A1.s?.fill?.fgColor?.rgb)==='4472C4','La cabecera GASTOS no conserva el azul de referencia · estilo='+JSON.stringify(expensesWb.Sheets.GASTOS.A1.s||null));
+assert(fillRgb(expensesWb.Sheets.GASTOS.A1)==='4472C4','La cabecera GASTOS no conserva el azul de referencia · estilo='+JSON.stringify(expensesWb.Sheets.GASTOS.A1.s||null));
 assert(expensesWb.Sheets.GASTOS['I'+expensesRows.length].f,'El total de Base IVA no es una fórmula real de Excel');
 assert(expensesWb.Sheets.GASTOS['S'+expensesRows.length].f&&expensesWb.Sheets.GASTOS['T'+expensesRows.length].f,'Los totales de factura/neto no son fórmulas reales de Excel');
 const conceptRows=XLSXNode.utils.sheet_to_json(expensesWb.Sheets['DESGLOSE CONCEPTOS'],{header:1,raw:false});
@@ -780,7 +782,7 @@ assert(incomeWb.SheetNames.join('|')==='INGRESOS','Libro de ingresos debe tener 
 const incomeRows=XLSXNode.utils.sheet_to_json(incomeWb.Sheets.INGRESOS,{header:1,raw:false});
 assert(incomeRows[0][0]==='Orden'&&incomeRows[0][5]==='Concepto'&&incomeRows.at(-1)[5]==='TOTAL ACUMULADO','Contenido del XLSX de ingresos incorrecto');
 assert(incomeWb.Sheets.INGRESOS.A1.s,'El XLSX de ingresos no conserva estilo de cabecera');
-assert(rgb6(incomeWb.Sheets.INGRESOS.A1.s?.fill?.fgColor?.rgb)==='4472C4','La cabecera INGRESOS no conserva el azul de referencia');
+assert(fillRgb(incomeWb.Sheets.INGRESOS.A1)==='4472C4','La cabecera INGRESOS no conserva el azul de referencia');
 assert(incomeWb.Sheets.INGRESOS['G'+incomeRows.length].f,'El total de ingresos no es una fórmula real de Excel');
 
 for(const idx of [2,3]){
@@ -792,8 +794,8 @@ for(const idx of [2,3]){
  assert(firstRows[1].slice(0,5).join('|')==='Dia|Gastos|Precio|Tarjeta|Salida de caja','Cabecera del diario no coincide con el formato esperado');
  assert(firstRows.at(-1)[1]==='TOTAL','El diario no termina con fila TOTAL');
  const totalRow=firstRows.length;assert(firstSheet['C'+totalRow].f&&firstSheet['D'+totalRow].f&&firstSheet['E'+totalRow].f,'Los totales mensuales del diario no son fórmulas reales');
- assert(rgb6(firstSheet.A1.s?.fill?.fgColor?.rgb)==='000000'&&rgb6(firstSheet.A1.s?.font?.color?.rgb)==='FFFF00','El título mensual no conserva negro/amarillo del Excel original');
- assert(rgb6(firstSheet.A2.s?.fill?.fgColor?.rgb)==='4F81BD','La cabecera diaria no conserva el azul del Excel original');
+ assert(fillRgb(firstSheet.A1)==='000000'&&fontRgb(firstSheet.A1)==='FFFF00','El título mensual no conserva negro/amarillo del Excel original');
+ assert(fillRgb(firstSheet.A2)==='4F81BD','La cabecera diaria no conserva el azul del Excel original');
  const summaryLabels=firstRows.slice(-6).map(r=>r[1]);
  assert(summaryLabels.join('|')==='Otros|SS y nóminas|Pedidos|Gastos fijos|IRPF|TOTAL','Falta el resumen por colores/categorías del diario');
 }
