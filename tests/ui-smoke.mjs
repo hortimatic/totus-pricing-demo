@@ -837,6 +837,24 @@ assert(zipNames.some(n=>n.endsWith('/00_LEEME.txt')),'Paquete gestor sin LEEME')
 
 // Administración: configuración, Log y Backup separados.
 await page.getByRole('button',{name:'Administración',exact:true}).click();await heading('Usuarios');await auditCurrentUi('Administración');
+assert(await page.getByText('QA Admin',{exact:true}).count()>=1,'Usuarios no muestra el miembro actual');
+await page.getByRole('button',{name:'Editar',exact:true}).first().click();
+await page.getByText('Ficha de empleado',{exact:true}).waitFor();
+await auditCurrentUi('Administración · ficha usuario');
+await field('Puesto / cargo').fill('Administrador QA');
+await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();
+await page.waitForTimeout(120);
+assert(fixtures.team_members[0].job_title==='Administrador QA','Usuarios no guardó la ficha laboral');
+await page.getByRole('button',{name:'Nuevo usuario',exact:true}).click();
+await page.getByRole('heading',{name:'Nuevo usuario',exact:true}).waitFor();
+await field('Nombre completo').fill('Usuario Nuevo QA');
+await field('Email').fill('nuevo@qa.test');
+const teamBeforeInvalid=fixtures.team_members.length;
+await page.getByRole('button',{name:'Crear usuario',exact:true}).click();
+await page.waitForTimeout(40);
+assert(fixtures.team_members.length===teamBeforeInvalid,'Usuarios creó una cuenta sin contraseña válida');
+assert(dialogs.some(x=>/contraseña de al menos 8/i.test(x)),'Usuarios no valida la contraseña mínima');
+await page.getByRole('button',{name:'Cerrar',exact:true}).first().click();
 await page.getByRole('button',{name:'Configuración',exact:true}).click();await heading('Configuración');await auditCurrentUi('Configuración');
 await page.getByRole('heading',{name:'Configuración general',exact:true}).waitFor();
 await page.getByRole('heading',{name:'Identidad fiscal y contacto',exact:true}).waitFor();
