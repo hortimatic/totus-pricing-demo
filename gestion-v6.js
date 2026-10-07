@@ -275,14 +275,14 @@ function drawerClosingHtml(d,dr,dis){
   return `<div class="ops-drawer-card">
    <div class="section-head"><div><div class="eyebrow">Caja física</div><h4>${h(dr.name)}</h4></div><div class="ops-drawer-total"><small>Total caja</small><b id="ops_drawer_total_${dr.id}">${eur(c.total)}</b></div></div>
    <div class="ops-form">
-    <div><label>Apertura</label><input inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div>
-    <div><label>Queda en caja</label><input inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>
-    <div><label>Tarjeta</label><input inputmode="decimal" value="${h(x.card)}" oninput="opsDrawerField('${dr.id}','card',this.value)" ${dis}></div>
-    <div><label>Bizum</label><input inputmode="decimal" value="${h(x.bizum)}" oninput="opsDrawerField('${dr.id}','bizum',this.value)" ${dis}></div>
-    <div><label>Pedidos online</label><input inputmode="decimal" value="${h(x.online)}" oninput="opsDrawerField('${dr.id}','online',this.value)" ${dis}></div>
-    <div><label>Otros pagos / entradas</label><input inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
-    <div><label>Salida / retirada</label><input inputmode="decimal" value="${h(x.withdrawals)}" oninput="opsDrawerField('${dr.id}','withdrawals',this.value)" ${dis}></div>
-    <div><label>Gastos pagados desde caja</label><input inputmode="decimal" value="${h(x.cashExpenses)}" oninput="opsDrawerField('${dr.id}','cashExpenses',this.value)" ${dis}></div>
+    <div><label>Apertura</label><input aria-label="Apertura" inputmode="decimal" value="${h(x.opening)}" oninput="opsDrawerField('${dr.id}','opening',this.value)" ${dis}></div>
+    <div><label>Queda en caja</label><input aria-label="Queda en caja" inputmode="decimal" value="${h(x.closing)}" oninput="opsDrawerField('${dr.id}','closing',this.value)" ${dis}></div>
+    <div><label>Tarjeta</label><input aria-label="Tarjeta" inputmode="decimal" value="${h(x.card)}" oninput="opsDrawerField('${dr.id}','card',this.value)" ${dis}></div>
+    <div><label>Bizum</label><input aria-label="Bizum" inputmode="decimal" value="${h(x.bizum)}" oninput="opsDrawerField('${dr.id}','bizum',this.value)" ${dis}></div>
+    <div><label>Pedidos online</label><input aria-label="Pedidos online" inputmode="decimal" value="${h(x.online)}" oninput="opsDrawerField('${dr.id}','online',this.value)" ${dis}></div>
+    <div><label>Otros pagos / entradas</label><input aria-label="Otros pagos / entradas" inputmode="decimal" value="${h(x.other)}" oninput="opsDrawerField('${dr.id}','other',this.value)" ${dis}></div>
+    <div><label>Salida / retirada</label><input aria-label="Salida / retirada" inputmode="decimal" value="${h(x.withdrawals)}" oninput="opsDrawerField('${dr.id}','withdrawals',this.value)" ${dis}></div>
+    <div><label>Gastos pagados desde caja</label><input aria-label="Gastos pagados desde caja" inputmode="decimal" value="${h(x.cashExpenses)}" oninput="opsDrawerField('${dr.id}','cashExpenses',this.value)" ${dis}></div>
    </div>
    <div class="ops-close-summary compact">
     <div><small>Efectivo vendido</small><b id="ops_drawer_cash_${dr.id}">${eur(c.cashSales)}</b></div>
@@ -305,7 +305,7 @@ function closingsHtml(){
    <div class="invoice-section-title">1 · Día y establecimiento</div>
    <div class="ops-form">
     <div><label>Establecimiento</label><select aria-label="Establecimiento del cierre" onchange="opsCloseField('storeId',this.value,true)" ${dis}>${O.stores.map(st=>`<option value="${st.id}" ${d.storeId===st.id?'selected':''}>${h(st.name)}</option>`).join('')}</select></div>
-    <div><label>Fecha</label><input type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
+    <div><label>Fecha</label><input aria-label="Fecha del cierre" type="date" value="${h(d.date)}" onchange="opsCloseField('date',this.value,true)" ${dis}></div>
    </div>
 
    <div class="invoice-section-title">2 · Cajas físicas</div>
