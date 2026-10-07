@@ -655,6 +655,19 @@ await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 assert(await page.getByText('Colaboradora familiar activa',{exact:true}).count()===1,'Fiscalidad no separa colaboradora familiar');
+await page.getByRole('heading',{name:'Pago / modelo fiscal',exact:true}).waitFor();
+await page.getByRole('combobox',{name:'Modelo fiscal'}).selectOption('130');
+await page.getByLabel('Año fiscal').fill('2026');
+await page.getByRole('combobox',{name:'Trimestre fiscal'}).selectOption('3');
+await page.getByLabel('Fecha pago o presentación').fill('2026-10-20');
+await page.getByLabel('Importe del modelo').fill('1234,56');
+await page.getByLabel('Justificante del modelo').setInputFiles({name:'modelo130-t3.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nMODELO130\n%%EOF')});
+await page.getByRole('button',{name:'Guardar',exact:true}).click();
+await page.waitForTimeout(220);
+const tax130=fixtures.ops_tax_payments.find(x=>x.tax_type==='130'&&Number(x.quarter)===3&&Number(x.fiscal_year)===2026);
+assert(tax130&&Math.abs(Number(tax130.amount)-1234.56)<0.01,'Fiscalidad no guardó el modelo 130 registrado');
+assert(tax130.document_id,'El modelo fiscal no quedó vinculado a su justificante');
+assert(fixtures.ops_documents.some(x=>x.id===tax130.document_id&&x.linked_entity_type==='tax_payment'),'El justificante fiscal no quedó archivado correctamente');
 
 // Informes: estructura gestoría + XLSX, PDF and ZIP generators.
 const reportQa=await page.evaluate(()=>{
