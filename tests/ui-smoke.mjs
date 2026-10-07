@@ -318,10 +318,18 @@ async function auditCurrentUi(section){
 }
 
 await page.goto(base,{waitUntil:'networkidle'});
-await heading('Totus Central');await auditCurrentUi('Inicio');
-for(const name of ['Abrir Pricing','Abrir Cajas','Abrir Gastos','Abrir Facturación','Abrir Documentos','Abrir Fiscalidad','Abrir Informes','Abrir Administración']){
-  assert(await page.getByRole('button',{name,exact:true}).count()===1,'Inicio no expone como botón real: '+name);
+await heading('Totus Central');
+await page.locator('.home-widget').first().waitFor();
+await auditCurrentUi('Inicio');
+assert(await page.locator('.home-zone').count()===4,'Inicio debe estar organizado en 4 contenedores funcionales');
+assert(await page.locator('.home-widget').count()===8,'Inicio debe exponer 8 widgets de trabajo');
+for(const name of ['Abrir Pricing','Ver cajas','Registrar gasto','Nueva factura','Subir / buscar','Abrir previsión fiscal','Preparar informe','Usuarios']){
+  assert(await page.getByRole('button',{name,exact:true}).count()===1,'Inicio no expone la acción rápida: '+name);
 }
+await page.locator('#portal_q_cost').fill('3,20');
+await page.locator('#portal_q_pvp').fill('5,70');
+assert((await page.locator('#portal_q_real').innerText()).includes('4,04'),'Inicio no calcula el coste real en el widget de Pricing');
+assert((await page.locator('#portal_q_margin').innerText()).includes('1,66'),'Inicio no calcula el margen rápido');
 
 // Pricing and decimal-focus regression.
 await page.getByRole('button',{name:'Pricing',exact:true}).first().click();
@@ -444,8 +452,9 @@ assert(Math.abs(Number(savedLine.irpf_imputable)-63.10)<0.02,'La deducibilidad p
 
 // Abrir gasto y comprobar gestión directa del adjunto.
 let savedExpenseRow=page.locator('tr').filter({hasText:'PROV-QA-001'}).first();
-await savedExpenseRow.getByRole('button',{name:'Abrir',exact:true}).click();
-assert(await page.getByRole('button',{name:'Ver factura',exact:true}).count()===1,'La ficha del gasto no permite ver la factura adjunta');
+assert(await savedExpenseRow.getByRole('button',{name:'Vista previa',exact:true}).count()===1,'La lista de gastos no ofrece vista previa directa');
+await savedExpenseRow.getByRole('button',{name:'Editar',exact:true}).click();
+assert(await page.getByRole('button',{name:'Vista previa',exact:true}).count()>=1,'La ficha del gasto no permite previsualizar la factura adjunta');
 assert(await page.getByRole('button',{name:'Quitar factura',exact:true}).count()===1,'La ficha del gasto no permite quitar el adjunto');
 
 // Maestro: crear un proveedor nuevo desde la propia ficha.
