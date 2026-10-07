@@ -563,7 +563,7 @@ assert(validationQa.ok.length===7,'No se aceptan todos los formatos documentales
 assert(validationQa.badExt&&validationQa.badMime&&validationQa.big&&validationQa.empty,'Validación documental no bloquea extensión, MIME, tamaño o vacío');
 
 // Documentos: UI completo subir -> recargar -> descargar.
-await page.getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
+await page.locator('.app-nav').getByRole('button',{name:'Documentos',exact:true}).click();await heading('Documentos');await auditCurrentUi('Documentos');
 await page.locator('#ops_doc_party').fill('Proveedor QA');
 await field('Nº documento').fill('QA-2026-001');
 await page.locator('#ops_doc_file').setInputFiles({name:'qa.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nQA\n%%EOF')});
