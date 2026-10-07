@@ -665,24 +665,29 @@ assert(!fixtures.ops_documents.some(x=>x.id===qaDoc.id),'Eliminar documento no q
 
 // Fiscalidad: origen de datos, señal de gasto y RETA.
 fixtures.ops_historical_income_periods.push(
- {id:'hist-h-apr',store_id:ids.h,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:14294.96,cash_income:5380,other_income:0,total_income:19674.96,official_total_income:18379.97,source:'gestoria',verified_by_gestor:true,notes:'QA separación operativo/fiscal'},
- {id:'hist-n-apr',store_id:ids.n,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:7705.16,cash_income:3650,other_income:0,total_income:11355.16,official_total_income:7374.98,source:'gestoria',verified_by_gestor:true,notes:'QA separación operativo/fiscal'}
+ {id:'hist-h-apr',store_id:ids.h,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:14294.96,cash_income:5380,other_income:0,total_income:19674.96,official_total_income:18379.97,gestor_reported_income:18379.97,fiscal_basis_income:19674.96,source:'gestoria',verified_by_gestor:true,notes:'QA base fiscal separada del listado gestor'},
+ {id:'hist-n-apr',store_id:ids.n,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:7705.16,cash_income:3650,other_income:0,total_income:11355.16,official_total_income:7374.98,gestor_reported_income:7374.98,fiscal_basis_income:11355.16,source:'gestoria',verified_by_gestor:true,notes:'QA base fiscal separada del listado gestor'}
 );
-fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'La reconstrucción operativa difiere del listado fiscal oficial.',resolution:'Conservar ambas magnitudes y usar la oficial solo en fiscalidad.',amount_difference:5275.17,active:true});
+fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'El listado de gestoría difiere de las ventas reconstruidas.',resolution:'Conservar el listado como discrepancia; la base fiscal validada usa las ventas reconstruidas confirmadas por el modelo 130.',amount_difference:5275.17,active:true});
 await page.evaluate(async()=>{window.TotusGestion.quarter=2;window.TotusGestionFeatures&&await window.TotusGestionFeatures.load(true)});
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
 await page.getByRole('heading',{name:'¿Gastar más o menos?',exact:true}).waitFor();
 await page.getByRole('heading',{name:'Cuota según rendimiento',exact:true}).waitFor();
 await page.getByText('Cuota actual',{exact:true}).waitFor();
 await page.getByRole('heading',{name:/Previsión IRPF/}).waitFor();
+await page.getByRole('heading',{name:'Resultado operativo por tienda',exact:true}).waitFor();
+await page.getByRole('heading',{name:'IVA y recargo de equivalencia',exact:true}).waitFor();
+await page.getByRole('heading',{name:'Números usados para impuestos',exact:true}).waitFor();
 await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 assert(await page.getByText('Colaboradora familiar activa',{exact:true}).count()===1,'Fiscalidad no separa colaboradora familiar');
 const incomeSplit=await page.evaluate(()=>({fiscal:window.__TotusOpsTest.incomeTotal('2026-04-01','2026-04-30','all'),operational:window.__TotusOpsTest.operationalIncomeTotal('2026-04-01','2026-04-30','all')}));
-assert(Math.abs(incomeSplit.fiscal-25754.95)<0.01,'Fiscalidad no respeta el ingreso oficial de gestoría');
+assert(Math.abs(incomeSplit.fiscal-31030.12)<0.01,'Fiscalidad no usa la base de ventas validada');
 assert(Math.abs(incomeSplit.operational-31030.12)<0.01,'Gestión no conserva el ingreso operativo real');
-assert(Math.abs(incomeSplit.operational-incomeSplit.fiscal-5275.17)<0.01,'La separación operativo/fiscal no cuadra');
+const gestorReported=await page.evaluate(()=>window.TotusGestion.features.historicalIncome.reduce((a,x)=>a+Number(x.gestor_reported_income||0),0));
+assert(Math.abs(gestorReported-25754.95)<0.01,'No se conserva por separado la cifra reportada por INGRESOS(1).pdf');
+assert(Math.abs(incomeSplit.fiscal-gestorReported-5275.17)<0.01,'La conciliación entre base fiscal y listado gestor no cuadra');
 await page.getByRole('heading',{name:'Conciliaciones documentadas',exact:true}).waitFor();
 assert(await page.getByText('INGRESOS(1).pdf',{exact:true}).count()===1,'Fiscalidad no muestra la fuente de conciliación');
 await page.getByRole('heading',{name:'Pago / modelo fiscal',exact:true}).waitFor();
