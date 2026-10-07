@@ -807,6 +807,8 @@ await page.getByRole('dialog').getByLabel('Motivo obligatorio').fill('QA restaur
 await page.getByRole('dialog').getByRole('button',{name:'Restaurar',exact:true}).click();
 await page.waitForTimeout(250);
 assert(dialogs.every(x=>!/No se pudo restaurar/i.test(x)),'Restauración de backup falló en QA');
+await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
+await page.getByRole('dialog').waitFor({state:'detached'});
 
 // Eliminar gasto manual: doble confirmación y cascada de líneas.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
