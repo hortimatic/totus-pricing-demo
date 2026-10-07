@@ -129,6 +129,14 @@ window.__opsUpdateFiscalSimulation=function(){
  if(b)b.textContent=euro(sim.reserve);
  if(d)d.textContent=euro(actual.payable-sim.payable);
 };
+window.__opsHomeFiscalSnapshot=function(){
+ const f=fiscalProjection(O.year,O.quarter,0),b=qBounds(O.year,O.quarter);
+ const stores=(O.stores||[]).map(s=>{
+   const income=operationalIncomeTotal(b.start,b.end,s.id),expense=realExpense(b.start,b.end,s.id);
+   return {id:s.id,name:s.name,income,expense,result:income-expense};
+ });
+ return {year:O.year,quarter:O.quarter,payable130:f.payable,model111:f.m111,model115:f.m115,reserve:f.reserve,qIncome:f.qIncome,qExpense:f.qExpense,result:f.qIncome-f.qExpense,stores};
+};
 function retaProjection(){
  const cutoff=(O.year===new Date().getFullYear())?today():`${O.year}-12-31`,from=`${O.year}-01-01`;const net=Math.max(0,incomeTotal(from,cutoff)-deductibleExpenseTotal(from,cutoff,'all'));const days=Math.max(1,Math.round((new Date(cutoff)-new Date(from))/86400000)+1),annual=net/(days/365),monthly=annual/12*(1-N(O.settings?.reta_generic_deduction_pct||7)/100);const b=O.retaBrackets.find(x=>(x.min_net_monthly==null||monthly>N(x.min_net_monthly)||(x.min_inclusive&&monthly===N(x.min_net_monthly)))&&(x.max_net_monthly==null||monthly<N(x.max_net_monthly)||(x.max_inclusive&&monthly===N(x.max_net_monthly))));const rate=N(O.settings?.reta_total_rate||31.5)/100;return{monthly,annual,bracket:b,minQuota:b?N(b.min_base)*rate:0,maxQuota:b?N(b.max_base)*rate:0};
 }
