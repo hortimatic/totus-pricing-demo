@@ -453,7 +453,8 @@ function expensesHtml(){
  if(!O.expenseDraft){O.expenseDraft=newExpenseDraft();O.expenseDraftLines=[defaultExpenseLine()]}
  const d=O.expenseDraft,t=draftExpenseTotals(),pb=periodBounds(O.year,O.quarter,false);
  const rows=O.expenses.filter(e=>inRange(e.expense_date,pb.start,pb.end)&&(O.storeId==='all'||e.store_id===O.storeId)).slice(0,120);
- const attached=d.id?O.expenses.find(x=>x.id===d.id)?.document_id:null;
+ const currentRecord=d.id?O.expenses.find(x=>x.id===d.id):null,attached=currentRecord?.document_id||null;
+ const importedNeedsReview=currentRecord?.source==='importacion_excel'&&!d.managementOnly;
  return `<div class="ops-card"><div class="section-head"><div><div class="eyebrow">${d.id?'Editar':'Registrar'} gasto</div><div class="ops-title-line"><h3>Compra, suministro o gasto</h3>${infoButton('gastos','Cómo registrar correctamente un gasto')}</div><div class="small">Separa proveedor, pago, documento y desglose fiscal para que el registro sea fácil de revisar.</div></div><div class="ops-actions">${d.id?'<button class="ghost" onclick="opsNewExpense()">Nuevo gasto</button>':''}<button class="primary" onclick="opsSaveExpense()">Guardar gasto</button></div></div>
  <div class="invoice-section-title">1 · Proveedor y documento</div>
  <div class="ops-form">
@@ -469,9 +470,9 @@ function expensesHtml(){
  <div class="ops-form">
   <div><label>Forma de pago</label><select aria-label="Forma de pago del gasto" oninput="opsExpenseField('payment',this.value)">${['efectivo','tarjeta','transferencia','bizum','domiciliado','otro'].map(x=>`<option ${d.payment===x?'selected':''}>${x}</option>`).join('')}</select></div>
   <div><label>Estado</label><select aria-label="Estado de pago del gasto" oninput="opsExpenseField('paidStatus',this.value)">${['pagado','pendiente','parcial'].map(x=>`<option ${d.paidStatus===x?'selected':''}>${x}</option>`).join('')}</select></div>
-  <div><label>Fecha pago</label><input type="date" value="${h(d.paidDate)}" oninput="opsExpenseField('paidDate',this.value)"></div>
-  <div><label>Importe realmente pagado</label><input inputmode="decimal" placeholder="${String(t.payable.toFixed(2)).replace('.',',')}" value="${h(d.amountPaid)}" oninput="opsExpenseField('amountPaid',this.value)"></div>
-  <div class="checkline"><input id="ops_fiscal_reviewed" type="checkbox" ${d.fiscalReviewed?'checked':''} onchange="opsExpenseField('fiscalReviewed',this.checked)"><label for="ops_fiscal_reviewed">Revisado fiscalmente</label></div>
+  <div><label>Fecha pago</label><input type="date" value="${h(d.paidDate)}" oninput="opsExpenseField('paidDate',this.value)" ${d.paidStatus==='pendiente'?'disabled':''}></div>
+  <div><label>Importe realmente pagado</label><input inputmode="decimal" placeholder="${String(t.payable.toFixed(2)).replace('.',',')}" value="${h(d.amountPaid)}" oninput="opsExpenseField('amountPaid',this.value)" ${d.paidStatus==='pendiente'?'disabled':''}></div>
+  ${importedNeedsReview?`<div class="span2 ops-note warn"><div class="checkline"><input id="ops_fiscal_reviewed" type="checkbox" ${d.fiscalReviewed?'checked':''} onchange="opsExpenseField('fiscalReviewed',this.checked)"><label for="ops_fiscal_reviewed">Importación revisada y válida para fiscalidad</label></div><div class="small">Solo aparece en registros importados del Excel diario que necesitan confirmación antes de entrar en el cálculo fiscal.</div></div>`:''}
  </div>
  <div class="invoice-section-title">3 · Tratamiento y desglose ${infoButton('gastos.internal','Diferencia entre gasto fiscal e interno')}</div>
  <div class="ops-form"><div class="span4 ops-checkline"><input id="ops_management_only" type="checkbox" ${d.managementOnly?'checked':''} onchange="opsExpenseField('managementOnly',this.checked,true)"><label for="ops_management_only">Solo control interno · no incluir en gestoría ni cálculo fiscal.</label></div></div>
