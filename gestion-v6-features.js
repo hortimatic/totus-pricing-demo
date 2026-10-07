@@ -322,7 +322,7 @@ function miniPreview(d,t){const tpl=E.templates.find(x=>x.id===d.templateId)||{}
 window.opsDocField=function(k,v,rer=false){const d=ensureDraft();d[k]=v;
  if(k==='storeId'&&rer){const s=seriesFor(d).find(x=>x.store_id===v)||seriesFor(d)[0];d.seriesId=s?.id||''}
  if(k==='paidStatus'){if(v==='pendiente')d.paidDate='';else if(!d.paidDate)d.paidDate=today();rer=true}
- if(rer)render()};
+ if(rer)render();else updateInvoiceDraftSummary()};
 function updateInvoiceDraftSummary(){
  const d=ensureDraft(),tot=draftTotals();
  O.invoiceDraftLines.forEach((l,i)=>{
