@@ -106,22 +106,33 @@ function openOpsModal(title,html,{wide=false}={}){
  document.body.appendChild(wrap);__opsModal=wrap;return wrap;
 }
 window.opsCloseModal=closeOpsModal;
-function openOpsHelp(title,copy){
- const old=document.querySelector('.ops-help-layer');if(old)old.remove();
- const wrap=document.createElement('div');wrap.className='ops-help-layer';
- wrap.innerHTML=`<aside class="ops-help-panel" role="dialog" aria-modal="false" aria-labelledby="ops_help_title"><div class="ops-help-head"><div><div class="eyebrow">Información</div><h3 id="ops_help_title">${h(title)}</h3></div><button type="button" class="ops-help-close" aria-label="Cerrar información">×</button></div><div class="ops-help-body">${h(copy)}</div></aside>`;
- const close=()=>{document.removeEventListener('keydown',esc);wrap.remove()};
- const esc=e=>{if(e.key==='Escape')close()};
- wrap.querySelector('.ops-help-close').onclick=close;
- wrap.addEventListener('click',e=>{if(e.target===wrap)close()});
- document.addEventListener('keydown',esc);
- document.body.appendChild(wrap);
- requestAnimationFrame(()=>wrap.classList.add('open'));
- return wrap;
+function closeOpsHelp(){
+ const p=document.querySelector('.ops-help-popover');if(p)p.remove();
+ if(window.__opsHelpOutside){document.removeEventListener('pointerdown',window.__opsHelpOutside,true);window.__opsHelpOutside=null}
+ if(window.__opsHelpEsc){document.removeEventListener('keydown',window.__opsHelpEsc);window.__opsHelpEsc=null}
 }
-window.opsInfo=function(key){
+function openOpsHelp(title,copy,anchor){
+ closeOpsHelp();
+ const p=document.createElement('aside');p.className='ops-help-popover';p.setAttribute('role','dialog');p.setAttribute('aria-modal','false');p.setAttribute('aria-labelledby','ops_help_title');
+ p.innerHTML=`<div class="ops-help-head"><div><div class="eyebrow">Información</div><h3 id="ops_help_title">${h(title)}</h3></div><button type="button" class="ops-help-close" aria-label="Cerrar información">×</button></div><div class="ops-help-body">${h(copy)}</div>`;
+ document.body.appendChild(p);
+ const r=anchor?.getBoundingClientRect?.(),gap=8,margin=10,w=Math.min(390,window.innerWidth-margin*2);
+ let left=r?Math.min(window.innerWidth-w-margin,Math.max(margin,r.right-w)):window.innerWidth-w-margin;
+ let top=r?Math.min(window.innerHeight-p.offsetHeight-margin,Math.max(margin,r.bottom+gap)):78;
+ if(r&&top<r.bottom&&r.top-p.offsetHeight-gap>=margin)top=r.top-p.offsetHeight-gap;
+ p.style.width=w+'px';p.style.left=left+'px';p.style.top=Math.max(margin,top)+'px';
+ p.querySelector('.ops-help-close').onclick=closeOpsHelp;
+ setTimeout(()=>{
+  window.__opsHelpOutside=e=>{if(!p.contains(e.target)&&e.target!==anchor)closeOpsHelp()};
+  window.__opsHelpEsc=e=>{if(e.key==='Escape')closeOpsHelp()};
+  document.addEventListener('pointerdown',window.__opsHelpOutside,true);
+  document.addEventListener('keydown',window.__opsHelpEsc);
+ },0);
+ return p;
+}
+window.opsInfo=function(key,anchor){
  const item=OPS_HELP[key]||OPS_HELP[String(key).split('.')[0]]||['Información','Sin información adicional disponible.'];
- openOpsHelp(item[0],item[1]);
+ openOpsHelp(item[0],item[1],anchor);
 };
 function askReason(title,message,actionLabel='Confirmar'){
  return new Promise(resolve=>{
@@ -132,7 +143,7 @@ function askReason(title,message,actionLabel='Confirmar'){
   setTimeout(()=>modal.querySelector('#ops_reason_text')?.focus(),0);
  });
 }
-function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}')"><span aria-hidden="true">i</span></button>`}
+function infoButton(key,label='Más información'){return `<button type="button" class="ops-info-btn" aria-label="${h(label)}" title="${h(label)}" onclick="opsInfo('${h(key)}',this)"><span aria-hidden="true">i</span></button>`}
 
 O.core={n,h,isoToday,dmy,periodBounds,inRange,storeName,category,sum,dlBlob,statusBadge,selectAll,audit,manager,adminOnly,infoButton,openOpsModal,closeOpsModal,askReason};
 
