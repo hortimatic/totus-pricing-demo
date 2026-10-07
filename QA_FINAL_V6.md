@@ -1,9 +1,9 @@
 # TOTUS CENTRAL · QA DE DESARROLLO
 
-Fecha: 2026-10-06
+Fecha: 2026-10-07
 Rama probada: `desarrollo-v6`
 Commit UI QA de referencia: `2feb390a56344d757c753a1e5837f4cabf055431`
-HEAD documentado: `13a8dc56c9cad0785db419d2ccafee93b80c8965`
+HEAD documentado: `29b544f4120313c1256f397d77daf636329c110c`
 Producción: `main` NO modificada.
 
 ## Navegación
@@ -224,3 +224,25 @@ La rama `main` sigue siendo la versión de producción anterior. No mezclar/prom
   - gastos: columnas fiscales, fecha `DD/MM/AAAA`, fila separada de IVA/RE, total acumulado y desglose por conceptos;
   - ingresos: agrupación mensual por establecimiento, columnas equivalentes y total acumulado;
   - diarios: 12 hojas y estructura `Día | Gastos | Precio | Tarjeta | Salida de caja`.
+
+
+## Revisión integral · 2026-10-07
+
+Revisión pestaña por pestaña ampliada y saneada:
+- **Gastos:** validación de factura/abono, importes pagados, bases, tipos fiscales y borrado controlado.
+- **Facturación:** ficha maestra completa de clientes, validación de fechas, líneas, precios negativos y documentos externos.
+- **Documentos:** vista previa dentro de Totus para PDF/imágenes, selección múltiple coherente y bloqueo de ZIP incompletos si falta algún archivo físico.
+- **Fiscalidad:** registro de modelos 130/111/115/309 con importe real, estado y justificante enlazado al archivo documental.
+- **Informes:** Excel con fórmulas reales, estilos, códigos contables, totales acumulados y estructura de gestoría; libro global ampliado con conciliación de cierres.
+- **Configuración:** marca/logo concentrados en Facturación → Plantillas; guardado único de parámetros generales.
+- **Responsive:** comprobación móvil de todos los módulos operativos, no solo Inicio.
+- **Base de datos:** índices de claves foráneas versionados en `2026-10-07_management_fk_indexes_v12.sql`.
+
+Validación final:
+- GitHub Actions · **Totus Central QA · run 151: SUCCESS**
+- Commit funcional probado: `29b544f4120313c1256f397d77daf636329c110c`
+- Módulos recorridos: Pricing, Cajas, Gastos, Facturación, Documentos, Fiscalidad, Informes y Administración.
+- Integridad Supabase posterior: **0** líneas huérfanas de gastos/facturas, **0** cierres duplicados, **0** documentos emitidos rotos, **0** documentos sin ruta y **0** gastos sin importe contable.
+- Security Advisor: queda el aviso conocido de protección de contraseñas filtradas y un aviso sobre la RPC de restauración de backup `ops_restore_backup_data`; esta RPC mantiene control interno de administrador y existe precisamente para la restauración completa. No se oculta el aviso.
+
+El workflow vuelve a quedar en **ejecución manual** para no generar carreras/cancelaciones por cada commit. Producción `main` sigue sin tocarse.
