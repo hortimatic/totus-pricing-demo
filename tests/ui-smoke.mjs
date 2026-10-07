@@ -88,6 +88,10 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    if(body.action==='audit_log') return route.fulfill(out({actions:[]}));
    return route.fulfill(out({ok:true}));
  }
+ if(u.pathname==='/functions/v1/ops-restore-backup'){
+   let body={};try{body=req.postDataJSON()}catch{}
+   return route.fulfill(out({ok:true,tables:Object.keys(body.tables||{}).length}));
+ }
  if(u.pathname.startsWith('/storage/v1/object/')){
    const key=u.pathname.replace('/storage/v1/object/','');
    if(method==='GET'){storageDownloads++;const body=storageFiles.get(key)||Buffer.from('%PDF-1.4\nQA\n%%EOF');return route.fulfill({status:200,contentType:'application/octet-stream',body});}
@@ -660,6 +664,12 @@ await page.waitForTimeout(150);
 assert(!fixtures.ops_documents.some(x=>x.id===qaDoc.id),'Eliminar documento no quitó el registro');
 
 // Fiscalidad: origen de datos, señal de gasto y RETA.
+fixtures.ops_historical_income_periods.push(
+ {id:'hist-h-apr',store_id:ids.h,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:14294.96,cash_income:5380,other_income:0,total_income:19674.96,official_total_income:18379.97,source:'gestoria',verified_by_gestor:true,notes:'QA separación operativo/fiscal'},
+ {id:'hist-n-apr',store_id:ids.n,period_start:'2026-04-01',period_end:'2026-04-30',card_sales:7705.16,cash_income:3650,other_income:0,total_income:11355.16,official_total_income:7374.98,source:'gestoria',verified_by_gestor:true,notes:'QA separación operativo/fiscal'}
+);
+fixtures.ops_reconciliation_notes.push({id:'rec-q2',created_at:'2026-10-06T17:57:56Z',fiscal_year:2026,quarter:2,source_name:'INGRESOS(1).pdf',issue_type:'ingresos_excel_vs_gestoria',detail:'La reconstrucción operativa difiere del listado fiscal oficial.',resolution:'Conservar ambas magnitudes y usar la oficial solo en fiscalidad.',amount_difference:5275.17,active:true});
+await page.evaluate(async()=>{window.TotusGestion.quarter=2;window.TotusGestionFeatures&&await window.TotusGestionFeatures.load(true)});
 await page.getByRole('button',{name:'Fiscalidad',exact:true}).click();await heading('Fiscalidad');await auditCurrentUi('Fiscalidad');
 await page.getByRole('heading',{name:'¿Gastar más o menos?',exact:true}).waitFor();
 await page.getByRole('heading',{name:'Cuota según rendimiento',exact:true}).waitFor();
@@ -669,6 +679,12 @@ await field('Gasto deducible adicional').fill('500');
 await page.waitForTimeout(250);
 assert(await page.getByText('Reserva fiscal',{exact:false}).count()>0,'No aparece reserva fiscal');
 assert(await page.getByText('Colaboradora familiar activa',{exact:true}).count()===1,'Fiscalidad no separa colaboradora familiar');
+const incomeSplit=await page.evaluate(()=>({fiscal:window.__TotusOpsTest.incomeTotal('2026-04-01','2026-04-30','all'),operational:window.__TotusOpsTest.operationalIncomeTotal('2026-04-01','2026-04-30','all')}));
+assert(Math.abs(incomeSplit.fiscal-25754.95)<0.01,'Fiscalidad no respeta el ingreso oficial de gestoría');
+assert(Math.abs(incomeSplit.operational-31030.12)<0.01,'Gestión no conserva el ingreso operativo real');
+assert(Math.abs(incomeSplit.operational-incomeSplit.fiscal-5275.17)<0.01,'La separación operativo/fiscal no cuadra');
+await page.getByRole('heading',{name:'Conciliaciones documentadas',exact:true}).waitFor();
+assert(await page.getByText('INGRESOS(1).pdf',{exact:true}).count()===1,'Fiscalidad no muestra la fuente de conciliación');
 await page.getByRole('heading',{name:'Pago / modelo fiscal',exact:true}).waitFor();
 await page.getByRole('combobox',{name:'Modelo fiscal'}).selectOption('130');
 await page.getByLabel('Año fiscal').fill('2026');
@@ -776,6 +792,15 @@ const backupFile=await backupDl;
 assert((await backupFile.suggestedFilename()).endsWith('.totusbackup'),'Backup no descarga .totusbackup');
 await page.waitForTimeout(180);
 assert(fixtures.ops_backup_archives.length===1,'Backup no registró histórico');
+await page.getByLabel('Archivo de copia .totusbackup').setInputFiles(await backupFile.path());
+await page.getByRole('button',{name:'Validar',exact:true}).click();
+await page.getByRole('dialog').getByText('Estructura completa y restaurable',{exact:false}).waitFor();
+await page.getByRole('dialog').getByRole('button',{name:/Cerrar|Aceptar|×/}).click().catch(()=>{});
+await page.getByRole('button',{name:'Restaurar',exact:true}).click();
+await page.getByRole('dialog').getByLabel('Motivo obligatorio').fill('QA restauración completa');
+await page.getByRole('dialog').getByRole('button',{name:'Restaurar',exact:true}).click();
+await page.waitForTimeout(250);
+assert(dialogs.every(x=>!/No se pudo restaurar/i.test(x)),'Restauración de backup falló en QA');
 
 // Eliminar gasto manual: doble confirmación y cascada de líneas.
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');
