@@ -403,9 +403,23 @@ await page.getByRole('button',{name:'+ Nuevo',exact:true}).click();
 await page.getByRole('dialog').waitFor();
 await page.getByRole('dialog').getByLabel('Nombre / razón social').fill('Distribuidor Nuevo QA');
 await page.getByRole('dialog').getByLabel('NIF/CIF').fill('B87654321');
+await page.getByRole('dialog').getByLabel('Ciudad').fill('Alcalá de Henares');
+await page.getByRole('dialog').getByLabel('Código postal').fill('28801');
+await page.getByRole('dialog').getByLabel('Forma de pago habitual').selectOption({label:'domiciliado'});
+await page.getByRole('dialog').getByLabel('Documento habitual').selectOption('factura');
+await page.getByRole('dialog').getByLabel('Categoría habitual').selectOption(ids.merch);
+await page.getByRole('dialog').getByLabel('RE habitual %').fill('5,2');
 await page.getByRole('dialog').getByRole('button',{name:'Guardar proveedor'}).click();
 await page.waitForTimeout(180);
-assert(fixtures.ops_suppliers.some(x=>x.name==='Distribuidor Nuevo QA'),'No se creó el proveedor maestro desde Gastos');
+const createdSupplier=fixtures.ops_suppliers.find(x=>x.name==='Distribuidor Nuevo QA');
+assert(createdSupplier,'No se creó el proveedor maestro desde Gastos');
+assert(createdSupplier.city==='Alcalá de Henares'&&createdSupplier.postal_code==='28801','El maestro no conserva dirección estructurada');
+assert(createdSupplier.default_payment_method==='domiciliado'&&Number(createdSupplier.default_re_rate)===5.2,'El maestro no conserva valores reutilizables');
+await page.evaluate(()=>opsNewExpense());await page.waitForTimeout(40);
+await page.getByRole('combobox',{name:'Proveedor del gasto'}).selectOption(createdSupplier.id);
+await page.waitForTimeout(60);
+assert(await page.getByRole('combobox',{name:'Forma de pago del gasto'}).inputValue()==='domiciliado','El proveedor nuevo no reutiliza forma de pago');
+assert(await page.getByLabel('RE %').first().inputValue()==='5,2','El proveedor nuevo no reutiliza el RE habitual');
 
 // Bulk download: seleccionar el gasto con factura y obtener ZIP.
 await page.evaluate(()=>opsNewExpense());await page.waitForTimeout(50);
