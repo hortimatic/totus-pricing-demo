@@ -493,7 +493,7 @@ await field('Notas internas').fill('Cliente de prueba reutilizable');
 await page.getByRole('button',{name:'Crear cliente',exact:true}).click();
 await page.waitForTimeout(160);
 const masterCustomer=fixtures.ops_customers.find(x=>x.name==='Cliente Maestro QA');
-assert(masterCustomer,'No se creó la ficha maestra de cliente');
+assert(masterCustomer,'No se creó la ficha maestra de cliente · customers='+JSON.stringify(fixtures.ops_customers)+' · dialogs='+dialogs.slice(-8).join(' | '));
 assert(masterCustomer.city==='Alcalá de Henares'&&masterCustomer.postal_code==='28801'&&masterCustomer.phone==='600000000','La ficha de cliente no conserva dirección/contacto completos');
 assert(masterCustomer.default_payment_method==='domiciliado','La ficha de cliente no conserva forma de pago');
 
