@@ -340,7 +340,7 @@ window.opsMoveDocLine=(i,dir)=>{const j=i+dir;if(i<0||j<0||i>=O.invoiceDraftLine
 window.opsRemoveDocLine=i=>{if(O.invoiceDraftLines.length>1){O.invoiceDraftLines.splice(i,1);render()}};
 window.opsSelectCustomer=function(id){const d=ensureDraft();d.customerId=id;const c=E.customers.find(x=>x.id===id);if(c){d.customer=c.name;d.taxId=c.tax_id||'';d.email=c.email||'';d.address=[c.address,c.postal_code,c.city,c.province,c.country].filter(Boolean).join(', ');d.payment=c.default_payment_method||'transferencia'}render()};
 window.opsSaveCustomerFromDraft=async function(){if(!manager())return alert('Facturación en modo consulta.');const d=ensureDraft();if(!d.customer.trim())return alert('Indica el nombre del cliente.');let row={name:d.customer.trim(),tax_id:d.taxId.trim(),email:d.email.trim(),address:d.address.trim(),default_payment_method:d.payment,active:true,updated_at:new Date().toISOString()};let res;if(d.customerId)res=await sb.from('ops_customers').update(row).eq('id',d.customerId).select().single();else res=await sb.from('ops_customers').insert(row).select().single();if(res.error)return alert(res.error.message);await featureLoad(true);d.customerId=res.data.id;render()};
-window.opsSaveDocument=async function(){if(!manager())return alert('Facturación en modo consulta.');
+async function persistDocumentDraft({keepOpen=true}={}){if(!manager())return alert('Facturación en modo consulta.');
  const d=ensureDraft();
  if(!d.seriesId||!d.date||!d.customer.trim())return alert('Serie, fecha y cliente son obligatorios.');
  if(d.dueDate&&d.dueDate<d.date)return alert('El vencimiento no puede ser anterior a la fecha del documento.');
@@ -369,8 +369,19 @@ window.opsSaveDocument=async function(){if(!manager())return alert('Facturación
     const er=await sb.rpc('ops_register_external_document',{p_document_id:id,p_number:num});if(er.error)throw er.error;
   }
   await audit('facturas',d.id?'actualizar_borrador':external?'registrar_externa':'crear_borrador',id,{tipo:d.documentType,cliente:d.customer,total:draftTotals().total});
-  await window.opsLoadData(true);await featureLoad(true);opsNewDocument(d.documentType);
- }catch(e){alert('No se pudo guardar: '+e.message)}
+  await window.opsLoadData(true);await featureLoad(true);
+  if(external){O.invoiceDraft=null;render()}
+  else if(keepOpen)window.opsEditDocument(id);
+  else window.opsNewDocument(d.documentType);
+  return id;
+ }catch(e){alert('No se pudo guardar: '+e.message);return null}
+}
+window.opsSaveDocument=function(){return persistDocumentDraft({keepOpen:true})};
+window.opsSaveAndFinalizeDocument=async function(){
+ const d=ensureDraft();
+ if(d.origin==='externa')return persistDocumentDraft({keepOpen:false});
+ const id=await persistDocumentDraft({keepOpen:true});if(!id)return;
+ await window.opsFinalizeDocument(id);
 };
 window.opsEditDocument=function(id){if(!manager())return alert('Facturación en modo consulta.');E.billingPanel='documents';const row=O.invoices.find(x=>x.id===id);if(!row||row.status!=='borrador')return;E.invoiceMode=row.document_type==='proforma'?'proforma':(row.invoice_kind==='rectifying'?'rectificativa':'factura');O.invoiceDraft={id:row.id,mode:E.invoiceMode,documentType:row.document_type||'factura',invoiceKind:row.invoice_kind||'invoice',origin:row.origin||'totus',seriesId:row.series_id,storeId:row.store_id||'',date:row.issue_date,dueDate:row.due_date||'',operationDate:row.operation_date||'',externalNumber:row.external_number_text||'',customerId:row.customer_id||'',customer:row.customer_name||'',taxId:row.customer_tax_id||'',address:row.customer_address||'',email:row.customer_email||'',concept:row.concept||'',payment:row.payment_method||'transferencia',paidStatus:row.paid_status||'pendiente',paidDate:row.paid_date||'',includeIncome:!!row.include_in_income,notes:row.notes||'',terms:row.terms_text||'',footer:row.footer_text||'',poRef:row.purchase_order_ref||'',templateId:row.template_id||''};O.invoiceDraftLines=O.invoiceLines.filter(l=>l.invoice_id===id).sort((a,b)=>a.sort_order-b.sort_order).map(l=>({description:l.description,qty:String(l.quantity),unit:String(l.unit_price_base),discount:String(l.discount_pct),vat:String(l.vat_rate)}));render();window.scrollTo({top:0,behavior:'smooth'})};
 window.opsFinalizeDocument=async function(id){if(!manager())return alert('Facturación en modo consulta.');const row=O.invoices.find(x=>x.id===id);if(!row)return;if(!confirm(`¿Emitir ${documentLabel(row.document_type||'factura',row.invoice_kind||'invoice').toLowerCase()}? Se asignará número definitivo y quedará bloqueado.`))return;try{const {error}=await sb.rpc('ops_finalize_document',{p_document_id:id});if(error)throw error;await audit('facturas','emitir',id,{tipo:row.document_type});await window.opsLoadData(true);await featureLoad(true);render();setTimeout(()=>opsDocumentPdf(id,true),100)}catch(e){alert('No se pudo emitir: '+e.message)}};
