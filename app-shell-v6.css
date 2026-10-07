@@ -18,19 +18,6 @@
 
 .portal-head{margin-bottom:18px}
 .portal-head h1{margin-bottom:6px}
-.portal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.portal-grid-modules{grid-template-columns:repeat(4,minmax(0,1fr))}
-.portal-grid-modules .portal-card{min-height:190px}
-.portal-card{appearance:none;width:100%;position:relative;overflow:hidden;min-height:220px;padding:22px;border:1px solid var(--line);border-radius:19px;background:linear-gradient(180deg,rgba(8,27,40,.90),rgba(5,19,29,.90));box-shadow:var(--shadow);cursor:pointer;transition:.18s ease;text-align:left;color:var(--text);font:inherit}
-.portal-card:hover{transform:translateY(-2px);border-color:rgba(75,217,255,.30)}
-.portal-card:focus-visible{outline:2px solid rgba(75,217,255,.55);outline-offset:3px}
-.portal-card-copy{display:block}
-.portal-title{display:block;font-size:24px;line-height:1.15;margin:8px 0}
-.portal-text{display:block;max-width:560px;color:var(--muted);line-height:1.55}
-.portal-card .portal-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;font-size:22px;font-weight:950;background:rgba(75,217,255,.10);border:1px solid rgba(75,217,255,.18)}
-.portal-card.management .portal-icon{background:rgba(243,102,255,.09);border-color:rgba(243,102,255,.18)}
-.portal-card .portal-go{position:absolute;right:20px;bottom:18px;font-size:12px;font-weight:950;color:#baf5ff}
-.portal-card.management .portal-go{color:#f1c4ff}
 .portal-user-card{margin-top:16px;padding:14px 16px;border:1px solid var(--line);border-radius:15px;background:rgba(5,19,29,.72);display:flex;align-items:center;justify-content:space-between;gap:12px}
 .portal-user-card .small{margin-top:3px}
 
@@ -39,7 +26,6 @@
 
 @media(max-width:1380px){
  .app-nav{max-width:64vw}
- .portal-grid-modules{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 
 @media(max-width:1050px){
@@ -50,7 +36,6 @@
  .top .userpill{grid-column:3;grid-row:1;position:relative;z-index:3}
  .top .spacer{display:none}
  .app-nav{grid-column:1/-1;grid-row:2;order:initial;position:relative;z-index:1;max-width:100%;width:100%}
- .portal-grid-modules{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 @media(max-width:800px){
@@ -59,8 +44,6 @@
  .module-strip{align-items:flex-start;flex-direction:column}
  .module-tabs{width:100%;overflow:auto;flex-wrap:nowrap;padding-bottom:2px}
  .module-tabs button{flex:0 0 auto}
- .portal-grid{grid-template-columns:1fr}
- .portal-card{min-height:190px}
 }
 
 @media(max-width:650px){
@@ -72,7 +55,6 @@
  .top .userpill>div:nth-child(2){display:none}
  .top .search{grid-column:1/-1;grid-row:2}
  .app-nav{grid-column:1/-1;grid-row:3;margin-top:4px}
- .portal-grid-modules{grid-template-columns:1fr}
 }
 
 
