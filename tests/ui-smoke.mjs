@@ -218,13 +218,13 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
    }
    if(method==='PATCH'){
      const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
-     if(id&&Array.isArray(fixtures[table])){const row=fixtures[table].find(x=>x.id===id);if(row)Object.assign(row,body)}
+     if(id&&Array.isArray(fixtures[table])){const row=fixtures[table].find(x=>String(x.id)===String(id));if(row)Object.assign(row,body)}
      const wantsObject=(req.headers()['accept']||'').includes('vnd.pgrst.object');
-     return route.fulfill(out(wantsObject?(fixtures[table]?.find(x=>x.id===id)||body):[]));
+     return route.fulfill(out(wantsObject?(fixtures[table]?.find(x=>String(x.id)===String(id))||body):[]));
    }
    if(method==='DELETE'){
      const m=(u.searchParams.get('id')||'').match(/^eq\.(.+)$/),id=m?.[1];
-     if(id&&Array.isArray(fixtures[table])){const ix=fixtures[table].findIndex(x=>x.id===id);if(ix>=0)fixtures[table].splice(ix,1)}
+     if(id&&Array.isArray(fixtures[table])){const ix=fixtures[table].findIndex(x=>String(x.id)===String(id));if(ix>=0)fixtures[table].splice(ix,1)}
      return route.fulfill(out([]));
    }
    return route.fulfill(out({}));
