@@ -757,21 +757,30 @@ async function tabularDocumentPreview(blob,name){
  const body=shown.map((r,ri)=>'<tr>'+Array.from({length:maxCols},(_,ci)=>`<${ri===0?'th':'td'}>${H(r[ci]??'')}</${ri===0?'th':'td'}>`).join('')+'</tr>').join('');
  return `<div class="ops-tabular-preview"><div class="small">${H(name)} · hoja ${H(sheetName||'1')}${rows.length>100?' · mostrando 100 de '+rows.length+' filas':''}</div><div class="ops-table-wrap"><table class="ops-table">${body}</table></div></div>`;
 }
+async function openDocumentBlobPreview(blob,name,mime=''){
+ const type=String(mime||blob?.type||'').toLowerCase(),filename=String(name||'documento'),ext=filename.toLowerCase().split('.').pop();
+ const isPdf=type==='application/pdf'||ext==='pdf',isImage=['image/jpeg','image/png','image/webp'].includes(type)||['jpg','jpeg','png','webp'].includes(ext),isTable=['xlsx','xls','csv'].includes(ext)||/spreadsheet|excel|csv/.test(type),isText=type.startsWith('text/')||['txt','md'].includes(ext);
+ let html='',url='';
+ if(isPdf){url=URL.createObjectURL(blob);html=`<iframe class="ops-pdf-frame" title="${H(filename)}"></iframe>`}
+ else if(isImage){url=URL.createObjectURL(blob);html=`<div class="ops-image-preview"><img alt="${H(filename)}"></div>`}
+ else if(isTable){html=await tabularDocumentPreview(blob,filename)}
+ else if(isText){const txt=await blob.text();html=`<div class="ops-text-preview"><pre>${H(txt.slice(0,120000))}</pre></div>`}
+ else html=`<div class="ops-empty"><b>Vista previa no disponible para este formato.</b><div class="small">El archivo no se ha descargado automáticamente. Puedes descargarlo desde esta misma ventana si lo necesitas.</div></div>`;
+ const modal=openOpsModal('Vista previa · '+filename,html+`<div class="ops-preview-actions"><button type="button" class="secondary" id="ops_doc_preview_download">Descargar</button><button type="button" class="ghost" id="ops_doc_preview_close">Cerrar</button></div>`,{wide:true});
+ if(url){modal.dataset.objectUrl=url;if(isPdf)modal.querySelector('iframe').src=url;else modal.querySelector('img').src=url}
+ modal.querySelector('#ops_doc_preview_download').onclick=()=>dlBlob(blob,filename);
+ modal.querySelector('#ops_doc_preview_close').onclick=closeOpsModal;
+ return modal;
+}
+window.opsPreviewSelectedFile=async function(inputId){
+ const file=document.getElementById(inputId)?.files?.[0];if(!file)return alert('Selecciona primero un archivo.');
+ try{await openDocumentBlobPreview(file,file.name,file.type)}catch(e){alert('No se pudo abrir la vista previa: '+e.message)}
+};
 window.opsPreviewDoc=async function(id){
  const d=O.documents.find(x=>x.id===id);if(!d)return;
  try{
   const {data,error}=await sb.storage.from('business-documents').download(d.storage_path);if(error)throw error;
-  const mime=(d.mime_type||'').toLowerCase(),name=String(d.original_name||'documento'),ext=name.toLowerCase().split('.').pop();
-  const isPdf=mime==='application/pdf'||ext==='pdf',isImage=['image/jpeg','image/png','image/webp'].includes(mime)||['jpg','jpeg','png','webp'].includes(ext),isTable=['xlsx','xls','csv'].includes(ext)||/spreadsheet|excel|csv/.test(mime);
-  let html='',url='';
-  if(isPdf){url=URL.createObjectURL(data);html=`<iframe class="ops-pdf-frame" title="${H(name)}"></iframe>`}
-  else if(isImage){url=URL.createObjectURL(data);html=`<div class="ops-image-preview"><img alt="${H(name)}"></div>`}
-  else if(isTable){html=await tabularDocumentPreview(data,name)}
-  else html=`<div class="ops-empty"><b>Vista previa no disponible para este formato.</b><div class="small">Puedes descargar el archivo desde esta misma ventana.</div></div>`;
-  const modal=openOpsModal(name,html+`<div class="ops-preview-actions"><button type="button" class="secondary" id="ops_doc_preview_download">Descargar</button><button type="button" class="ghost" id="ops_doc_preview_close">Cerrar</button></div>`,{wide:true});
-  if(url){modal.dataset.objectUrl=url;if(isPdf)modal.querySelector('iframe').src=url;else modal.querySelector('img').src=url}
-  modal.querySelector('#ops_doc_preview_download').onclick=()=>dlBlob(data,name);
-  modal.querySelector('#ops_doc_preview_close').onclick=closeOpsModal;
+  await openDocumentBlobPreview(data,d.original_name||'documento',d.mime_type||'');
  }catch(e){alert('No se pudo abrir el documento: '+e.message)}
 };
 function docPartyOptions(){
