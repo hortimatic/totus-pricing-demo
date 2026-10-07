@@ -234,7 +234,7 @@ await page.route('https://zwkpmjjuurgjygcrejiw.supabase.co/**',async route=>{
 
 function assert(cond,msg){if(!cond)throw new Error(msg)}
 async function heading(text){await page.getByRole('heading',{name:text,exact:true}).first().waitFor({timeout:10000})}
-function field(label){return page.locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
+function field(label){return page.locator('#main').locator('label').filter({hasText:label}).first().locator('..').locator('input,select,textarea').first()}
 async function auditCurrentUi(section){
  const a=await page.evaluate(()=>{
   const ids=[...document.querySelectorAll('[id]')].map(x=>x.id).filter(Boolean);
