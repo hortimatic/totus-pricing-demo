@@ -64,7 +64,8 @@ function adminOnly(){ return currentRole()==='admin'; }
 
 const OPS_HELP={
  resumen:['Resumen','Vista general del negocio: ingresos, gastos, resultado, previsión fiscal y almacenamiento. Los importes internos se muestran separados de los fiscales.'],
- cajas:['Cajas','Registra cada cierre diario por tienda y caja. La apertura se arrastra del último cierre y el efectivo vendido se calcula con apertura, caja final, retiradas y gastos de caja.'],
+ cajas:['Cajas','Cada caja física se abre y cierra por separado. La apertura se arrastra del último cierre de esa caja. Totus reconstruye el efectivo vendido con apertura, metálico final, retiradas, gastos y movimientos extraordinarios, y después suma tarjeta, Bizum, online y otros cobros.'],
+ 'cajas.cuadre':['Comprobación del cierre','Introduce el total de ventas que te da el TPV o el cierre diario. Totus lo compara con la suma reconstruida de todas las cajas. Si no coincide, el día no se puede cerrar: revisa efectivo, tarjeta y movimientos extraordinarios. Puedes guardar un borrador y continuar después.'],
  gastos:['Gastos','Registra facturas y pagos, incluido IVA, recargo, retenciones y justificantes. Los gastos de control interno no pasan a fiscalidad ni al paquete de gestoría.'],
  facturas:['Facturación','Crea facturas, rectificativas y proformas. La numeración se asigna al emitir. Plantillas, logo, clientes y series pertenecen a este módulo.'],
  documentos:['Documentos','Archivo digital de justificantes. Puedes filtrar, revisar, descargar y preparar ZIP. Los documentos ligados a facturación quedan protegidos.'],
