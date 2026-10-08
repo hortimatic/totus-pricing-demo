@@ -922,6 +922,34 @@ window.opsDeleteTaxPayment=async function(id){
  }catch(e){alert('No se pudo eliminar el modelo: '+e.message)}
 };
 
+function closedFiscalPeriodsHtml(){
+ const paid=(O.taxPayments||[]).filter(t=>t.tax_type==='130'&&t.fiscal_year===O.year&&t.status==='pagado').sort((a,b)=>N(a.quarter)-N(b.quarter));
+ if(!paid.length)return '';
+ const rows=paid.map(t=>{
+  const q=N(t.quarter),b=qBounds(O.year,q);
+  const operational=operationalIncomeTotal(b.start,b.end,'all');
+  const fiscal=incomeTotal(b.start,b.end,'all');
+  const gestorIncome=sum(E.historicalIncome.filter(x=>x.period_start>=b.start&&x.period_end<=b.end),x=>N(x.gestor_reported_income??x.fiscal_basis_income??x.total_income));
+  const expense=deductibleExpenseTotal(b.start,b.end,'all');
+  const before= fiscal-expense,gdj=difficult(Math.max(0,before)),theoretical=Math.max(0,(before-gdj)*N(O.settings?.irpf_prepayment_rate||20)/100);
+  const issues=(E.reconciliationNotes||[]).filter(x=>x.active!==false&&x.fiscal_year===O.year&&N(x.quarter)===q);
+  const incomeIssue=issues.find(x=>x.issue_type==='ingresos_excel_vs_gestoria');
+  const diff=Math.abs(theoretical-N(t.amount));
+  return `<tr>
+   <td><b>T${q}</b><div class="ops-tiny">${H(t.period_label||'')}</div></td>
+   <td class="num"><b>${euro(fiscal)}</b><div class="ops-tiny">operativa ${euro(operational)}</div></td>
+   <td class="num">${Math.abs(gestorIncome-fiscal)>.01?`<span class="badge warnb">${euro(gestorIncome)}</span><div class="ops-tiny">diferencia ${euro(fiscal-gestorIncome)}</div>`:`<span class="badge ok">${euro(gestorIncome)}</span>`}</td>
+   <td class="num"><b>${euro(expense)}</b></td>
+   <td class="num">${euro(before)}</td>
+   <td class="num"><b>${euro(t.amount)}</b><div class="ops-tiny">cálculo ${euro(theoretical)}</div></td>
+   <td>${diff<=.02?'<span class="badge ok">VERIFICADO</span>':'<span class="badge warnb">REVISAR</span>'}${incomeIssue?`<div class="ops-tiny">Anomalía documental explicada</div>`:''}</td>
+  </tr>`;
+ }).join('');
+ return `<div class="ops-card fiscal-verified-card">
+  <div class="section-head"><div><div class="eyebrow">Trimestres presentados</div><div class="ops-title-line"><h3>Cierre fiscal verificado</h3>${infoButton('fiscal.verificado','Cómo se verifican los trimestres presentados')}</div><div class="small">Distingue la venta real usada para el modelo 130 del listado auxiliar de ingresos de gestoría. Si una fuente discrepa, se conserva y se explica: no sustituye silenciosamente el dato validado.</div></div></div>
+  <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Periodo</th><th>Ventas base 130</th><th>Listado gestoría</th><th>Gastos fiscales</th><th>Resultado antes 5 %</th><th>Modelo 130 pagado</th><th>Cuadre</th></tr></thead><tbody>${rows}</tbody></table></div>
+ </div>`;
+}
 function fiscalProjectionHtml(){
  const f=fiscalProjection(O.year,O.quarter,0),sim=fiscalProjection(O.year,O.quarter,N(O.plannedSpend)),r=retaProjection(),g=spendingSignal(),actual=N(O.settings?.actual_reta_monthly||0);
  const operationalYtd=operationalIncomeTotal(f.from,f.end,'all'),incomeGap=operationalYtd-f.income;
@@ -929,6 +957,7 @@ function fiscalProjectionHtml(){
  const storeRows=storeOperatingRows(f.qb.start,f.qb.end),storeIncome=sum(storeRows,x=>x.income),storeExpense=sum(storeRows,x=>x.expense),storeResult=storeIncome-storeExpense;
  const taxQ=supportedTaxCosts(f.qb.start,f.qb.end),taxYtd=supportedTaxCosts(f.from,f.end);
  return `${importedStatusHtml()}
+ ${closedFiscalPeriodsHtml()}
  <div class="ops-note" style="margin-top:14px"><b>Régimen configurado:</b> ${H(O.settings?.fiscal_regime||'recargo_equivalencia')} · ${H(O.settings?.estimation_method||'directa_simplificada')}. Control interno y previsión; las declaraciones oficiales se contrastan con gestoría.</div>
  <div class="ops-kpis" style="margin-top:14px">
   <div class="ops-kpi"><small>Ingresos fiscales acumulados</small><strong>${euro(f.income)}</strong><div class="sub">Base usada para previsión fiscal</div></div>
