@@ -45,3 +45,11 @@ jobs:
           exit 1
       - name: Run UI smoke test
         run: node tests/ui-smoke.mjs
+      - name: Upload visual QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: totus-visual-qa
+          path: qa-screenshots
+          if-no-files-found: ignore
+          retention-days: 3

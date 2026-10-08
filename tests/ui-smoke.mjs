@@ -1039,25 +1039,41 @@ assert(await page.getByRole('button',{name:'Proformas',exact:true}).count()===1,
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');assert(await page.getByRole('button',{name:'Cerrar día',exact:true}).count()===1,'El encargado debe poder cerrar caja');
 await page.getByRole('button',{name:'Gastos',exact:true}).click();await heading('Gastos');assert(await page.getByRole('button',{name:'Guardar gasto',exact:true}).count()===1,'El encargado debe poder registrar gastos');
 
-// Responsive smoke: no basta con Inicio, revisar todos los módulos operativos.
+// Pasada visual: restaurar Admin y capturar cada módulo en escritorio y móvil.
+fixtures.team_members[0].role='admin';
+fixtures.profiles[0].role='admin';
+await page.reload({waitUntil:'networkidle'});
+await fs.mkdir('qa-screenshots',{recursive:true});
+const visualModules=[
+  ['inicio',null,'Totus Central'],
+  ['pricing','Pricing','Precio rápido'],
+  ['cajas','Cajas','Cajas'],
+  ['gastos','Gastos','Gastos'],
+  ['facturacion','Facturación','Facturación'],
+  ['documentos','Documentos','Documentos'],
+  ['fiscalidad','Fiscalidad','Fiscalidad'],
+  ['informes','Informes','Informes'],
+  ['administracion','Administración','Usuarios']
+];
+await page.setViewportSize({width:1440,height:1000});
+await page.locator('.app-home-logo').click();await heading('Totus Central');
+for(const [slug,button,head] of visualModules){
+  if(button)await page.locator('.app-nav').getByRole('button',{name:button,exact:true}).click();
+  await heading(head);await page.waitForTimeout(80);
+  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
+  assert(overflow<=8,slug+' provoca desbordamiento global escritorio: '+overflow+'px');
+  await page.screenshot({path:'qa-screenshots/desktop-'+slug+'.png',fullPage:true});
+}
+
+// Responsive: revisar y capturar los mismos módulos, no solo Inicio.
 await page.setViewportSize({width:390,height:844});
 await page.locator('.app-home-logo').click();await heading('Totus Central');
-for(const item of [
-  ['Inicio',null,'Totus Central'],
-  ['Pricing','Pricing','Precio rápido'],
-  ['Cajas','Cajas','Cajas'],
-  ['Gastos','Gastos','Gastos'],
-  ['Facturación','Facturación','Facturación'],
-  ['Documentos','Documentos','Documentos'],
-  ['Fiscalidad','Fiscalidad','Fiscalidad'],
-  ['Informes','Informes','Informes']
-]){
-  const [label,button,head]=item;
-  if(button)await page.getByRole('button',{name:button,exact:true}).first().click();
-  await heading(head);
-  await page.waitForTimeout(40);
+for(const [slug,button,head] of visualModules){
+  if(button)await page.locator('.app-nav').getByRole('button',{name:button,exact:true}).click();
+  await heading(head);await page.waitForTimeout(60);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);
-  assert(overflow<=8,label+' provoca desbordamiento global móvil: '+overflow+'px');
+  assert(overflow<=8,slug+' provoca desbordamiento global móvil: '+overflow+'px');
+  await page.screenshot({path:'qa-screenshots/mobile-'+slug+'.png',fullPage:true});
 }
 
 // No unexpected JS dialogs/errors should have fired during non-destructive smoke.
