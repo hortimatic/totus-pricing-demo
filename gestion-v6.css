@@ -203,3 +203,12 @@
 .ops-text-preview{flex:1;min-height:55vh;overflow:auto;background:#08111b;border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,.06)}
 .ops-text-preview pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:#d9e5eb}
 @media(max-width:720px){.invoice-toolbar{position:static}.invoice-work-actions{display:grid!important;grid-template-columns:1fr 1fr}.invoice-work-actions button{width:100%}}
+
+.invoice-row-actions{align-items:center;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap}
+.ops-row-menu{position:relative}
+.ops-row-menu>summary{list-style:none;cursor:pointer;min-height:34px;display:flex;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.035);font-size:12px;font-weight:800;color:var(--text)}
+.ops-row-menu>summary::-webkit-details-marker{display:none}
+.ops-row-menu[open]>summary{border-color:rgba(75,217,255,.28);background:rgba(75,217,255,.08)}
+.ops-row-menu-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:190px;padding:8px;display:grid;gap:6px;border:1px solid var(--line);border-radius:11px;background:rgba(7,18,27,.99);box-shadow:0 16px 36px rgba(0,0,0,.35)}
+.ops-row-menu-panel button{width:100%;justify-content:flex-start}
+@media(max-width:720px){.invoice-row-actions{flex-wrap:wrap;justify-content:flex-start}.ops-row-menu-panel{left:0;right:auto}}
