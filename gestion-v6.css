@@ -212,3 +212,36 @@
 .ops-row-menu-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:190px;padding:8px;display:grid;gap:6px;border:1px solid var(--line);border-radius:11px;background:rgba(7,18,27,.99);box-shadow:0 16px 36px rgba(0,0,0,.35)}
 .ops-row-menu-panel button{width:100%;justify-content:flex-start}
 @media(max-width:720px){.invoice-row-actions{flex-wrap:wrap;justify-content:flex-start}.ops-row-menu-panel{left:0;right:auto}}
+
+/* Refinado visual tras QA renderizada */
+.document-upload-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,.45fr);gap:14px;align-items:start}
+.document-storage-card{align-self:start}
+.document-storage-card .ops-metric-line{padding:7px 0}
+.ops-file-box{padding:12px;border:1px dashed rgba(75,217,255,.22);border-radius:12px;background:rgba(75,217,255,.025)}
+.ops-card input[type=file]{padding:5px;background:rgba(3,13,21,.58);border:1px solid var(--line);border-radius:10px}
+.ops-card input[type=file]::file-selector-button{border:0;border-radius:7px;padding:8px 11px;margin-right:9px;background:rgba(75,217,255,.14);color:var(--text);font-weight:850;cursor:pointer}
+.ops-card input[type=file]::file-selector-button:hover{background:rgba(75,217,255,.22)}
+.expense-lines .ops-line{grid-template-columns:minmax(260px,2.25fr) minmax(85px,.65fr) minmax(72px,.55fr) minmax(72px,.55fr) minmax(105px,.78fr) minmax(165px,1.2fr) 38px;align-items:start}
+.expense-lines .ops-line>div{min-width:0}
+.expense-lines .ops-line>button{align-self:end;margin-bottom:1px}
+.closing-history-table{min-width:1040px}
+.closing-history-table .ops-tiny{margin-top:3px;white-space:nowrap}
+.good-text{color:#8ef0c0!important}.bad-text{color:#ffb0b0!important}
+.invoice-save-customer-wrap{display:flex;align-items:end}
+.invoice-save-customer-wrap button{width:100%;min-height:42px}
+@media(max-width:1050px){
+ .document-upload-layout{grid-template-columns:1fr}
+ .document-storage-card{display:grid;grid-template-columns:1fr;min-height:0}
+ .expense-lines .ops-line{grid-template-columns:minmax(220px,2fr) repeat(3,minmax(80px,.65fr))}
+ .expense-lines .ops-line>*:nth-child(5),.expense-lines .ops-line>*:nth-child(6),.expense-lines .ops-line>*:nth-child(7){grid-column:auto}
+}
+@media(max-width:720px){
+ .expense-lines .ops-line{grid-template-columns:1fr 1fr}
+ .expense-lines .ops-line>div:first-child{grid-column:1/-1}
+ .expense-lines .ops-line>div:nth-child(6){grid-column:1/-1}
+ .closing-history-table{min-width:760px}
+}
+@media(max-width:440px){
+ .document-upload-layout{grid-template-columns:1fr}
+ .closing-history-wrap{border-radius:10px}
+}
