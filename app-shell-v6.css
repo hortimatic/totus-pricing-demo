@@ -61,22 +61,22 @@
 /* Inicio operativo: 4 contenedores, 2 widgets útiles por bloque */
 .home-dashboard-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
 .home-dashboard-head .portal-user-card{margin:0;min-width:220px}
-.home-dashboard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-.home-zone{border:1px solid var(--line);border-radius:20px;padding:16px;background:linear-gradient(180deg,rgba(7,24,36,.88),rgba(5,18,27,.82));box-shadow:var(--shadow);min-width:0}
+.home-dashboard{display:grid;grid-template-columns:1fr;gap:14px}
+.home-zone{border:1px solid var(--line);border-radius:18px;padding:14px 16px;background:linear-gradient(180deg,rgba(7,24,36,.86),rgba(5,18,27,.80));box-shadow:var(--shadow);min-width:0}
 .home-zone-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
 .home-zone-head h2{margin:2px 0 4px;font-size:18px}
 .home-zone-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.home-widget{display:flex;flex-direction:column;min-width:0;min-height:240px;padding:15px;border:1px solid rgba(255,255,255,.08);border-radius:16px;background:rgba(255,255,255,.025)}
+.home-widget{display:flex;flex-direction:column;min-width:0;min-height:190px;padding:14px;border:1px solid rgba(255,255,255,.075);border-radius:14px;background:rgba(255,255,255,.022)}
 .home-widget-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .home-widget-icon{width:34px;height:34px;display:grid;place-items:center;flex:0 0 auto;border:1px solid rgba(75,217,255,.22);border-radius:11px;background:rgba(75,217,255,.08);font-weight:950}
-.home-widget-title{font-weight:950;font-size:14px}
+.home-widget-title{font-weight:900;font-size:14px;letter-spacing:-.01em}
 .home-widget-body{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
 .home-widget-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
 .home-widget-actions button{flex:1 1 auto}
 .home-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.065)}
 .home-row.compact{grid-template-columns:minmax(0,1fr) auto}
 .home-row:last-child{border-bottom:0}
-.home-big-number{font-size:30px;line-height:1;font-weight:950;letter-spacing:-.03em}
+.home-big-number{font-size:26px;line-height:1;font-weight:950;letter-spacing:-.03em}
 .home-inline-note{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.035);font-size:11px;color:var(--muted)}
 .home-quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .home-quick-grid input:first-child{grid-column:1/-1}
@@ -102,3 +102,5 @@
 @media(max-width:1380px){.home-metrics.five{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:650px){.home-metrics.five{grid-template-columns:1fr 1fr}.home-fiscal-main{grid-template-columns:1fr}.home-metric-row{grid-template-columns:minmax(0,1fr) auto}.home-metric-row small{grid-column:1/-1}.home-date{display:none}}
 
+
+@media(max-width:900px){.home-zone-grid{grid-template-columns:1fr}.home-widget{min-height:0}}
