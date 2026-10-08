@@ -319,6 +319,8 @@ async function auditCurrentUi(section){
 
 await page.goto(base,{waitUntil:'networkidle'});
 await heading('Totus Central');
+assert(await page.locator('.home-zone').count()===4,'Inicio no está organizado en cuatro zonas');
+assert(await page.locator('.home-widget').count()===8,'Inicio no conserva dos widgets útiles por zona');
 await page.locator('.home-widget').first().waitFor();
 await auditCurrentUi('Inicio');
 assert(await page.locator('.home-zone').count()===4,'Inicio debe estar organizado en 4 contenedores funcionales');
@@ -619,10 +621,12 @@ assert(savedProforma.display_number,'La proforma emitida no recibió numeración
 
 // Proforma: aceptar y convertir a factura borrador.
 let proRow=page.locator('tr').filter({hasText:'Cliente QA'}).first();
-await proRow.getByRole('button',{name:'Aceptar',exact:true}).click();
+await proRow.getByText('Más',{exact:true}).click();
+await proRow.getByRole('button',{name:'Aceptar proforma',exact:true}).click();
 await page.waitForTimeout(160);
 assert(savedProforma.status==='aceptada','Aceptar proforma no actualizó el estado');
 proRow=page.locator('tr').filter({hasText:'Cliente QA'}).first();
+await proRow.getByText('Más',{exact:true}).click();
 await proRow.getByRole('button',{name:'Convertir a factura',exact:true}).click();
 await page.waitForTimeout(200);
 assert(savedProforma.status==='convertida'&&savedProforma.converted_invoice_id,'La proforma no quedó convertida');
@@ -665,11 +669,12 @@ await invoiceRow.getByRole('button',{name:'Vista previa',exact:true}).click();
 await page.getByRole('dialog').waitFor();
 assert(await page.getByRole('dialog').locator('iframe.ops-pdf-frame').count()===1,'La vista previa de factura emitida no se abre dentro de Totus');
 await page.getByRole('dialog').getByRole('button',{name:'Cerrar',exact:true}).click();
-await invoiceRow.getByRole('button',{name:'Marcar cobrada',exact:true}).click();
+await invoiceRow.getByRole('button',{name:'Cobrar',exact:true}).click();
 await page.waitForTimeout(160);
 assert(normalInvoice.paid_status==='pagada','Marcar cobrada no persistió');
 invoiceRow=page.locator('tr').filter({hasText:'Cliente Factura QA'}).first();
-await invoiceRow.getByRole('button',{name:'Rectificar',exact:true}).click();
+await invoiceRow.getByText('Más',{exact:true}).click();
+await invoiceRow.getByRole('button',{name:'Crear rectificativa',exact:true}).click();
 await page.getByRole('heading',{name:'Factura rectificativa',exact:true}).waitFor();
 assert(Number(await field('Precio base').inputValue())<0,'La rectificativa no propone importe negativo');
 await page.getByRole('button',{name:'Guardar borrador',exact:true}).click();
