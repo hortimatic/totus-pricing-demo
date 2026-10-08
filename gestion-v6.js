@@ -867,6 +867,15 @@ window.goOps=async function(tab='resumen'){
 
 if(state.page==='portal')setTimeout(()=>window.opsEnsurePortalData?.(),0);
 
+function enhanceResponsiveTables(root=document){
+ root.querySelectorAll('.ops-table').forEach(table=>{
+   table.classList.add('ops-responsive-table');
+   const headers=[...table.querySelectorAll('thead th')].map((th,i)=>th.textContent.trim()||(i===0?'Seleccionar':''));
+   table.querySelectorAll('tbody tr').forEach(tr=>{
+     [...tr.children].forEach((td,i)=>{if(!td.dataset.label)td.dataset.label=headers[i]||''});
+   });
+ });
+}
 const pricingRender=render;
 render=function(){
  if(state.page==='management'){
@@ -876,10 +885,11 @@ render=function(){
    });
    document.querySelector('.search')?.classList.add('hidden');
    document.getElementById('savebar')?.classList.add('hidden');
-   const m=document.getElementById('main');if(m)m.innerHTML=managementHtml();
+   const m=document.getElementById('main');if(m){m.innerHTML=managementHtml();enhanceResponsiveTables(m)}
    return;
  }
  pricingRender();
+ const m=document.getElementById('main');if(m)enhanceResponsiveTables(m);
 };
 
 })();
