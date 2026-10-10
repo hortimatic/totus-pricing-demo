@@ -359,7 +359,13 @@ assert((await page.locator('#q_out_sale').innerText()).includes('5,13'),'Cálcul
 
 // Cajas: cada caja física se abre/cierra por separado y la tienda suma sus cifras.
 await page.getByRole('button',{name:'Cajas',exact:true}).click();await heading('Cajas');await auditCurrentUi('Cajas');
+assert(await page.locator('.ops-closing-step').count()===5,'Cajas debe presentar el cierre en cinco pasos claros');
+assert(await page.locator('.ops-drawer-section-title').filter({hasText:'Efectivo'}).count()>=1,'Cajas no separa visualmente el efectivo');
+assert(await page.locator('.ops-drawer-section-title').filter({hasText:'Cobros no efectivos'}).count()>=1,'Cajas no separa visualmente los cobros no efectivos');
+assert(await page.getByLabel('Fecha del cierre').getAttribute('max'),'La fecha de cierre no bloquea visualmente días futuros');
 const infoBtn=page.locator('.ops-info-btn').first();
+const infoShape=await infoBtn.evaluate(el=>{const s=getComputedStyle(el);return {w:s.width,h:s.height,r:s.borderRadius}});
+assert(infoShape.w===infoShape.h&&infoShape.r==='50%','Los botones de información deben ser círculos reales');
 if(await infoBtn.count()){
   await infoBtn.click();
   assert(await page.locator('.ops-help-popover').count()===1,'La ayuda contextual no usa el panel flotante');
