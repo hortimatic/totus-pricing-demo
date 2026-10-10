@@ -364,8 +364,9 @@ assert(await page.locator('.ops-drawer-section-title').filter({hasText:'Efectivo
 assert(await page.locator('.ops-drawer-section-title').filter({hasText:'Cobros no efectivos'}).count()>=1,'Cajas no separa visualmente los cobros no efectivos');
 assert(await page.getByLabel('Fecha del cierre').getAttribute('max'),'La fecha de cierre no bloquea visualmente días futuros');
 const infoBtn=page.locator('.ops-info-btn').first();
-const infoShape=await infoBtn.evaluate(el=>{const s=getComputedStyle(el);return {w:parseFloat(s.width),h:parseFloat(s.height),r:parseFloat(s.borderRadius)}});
-assert(Math.abs(infoShape.w-infoShape.h)<.1&&Math.abs(infoShape.r-infoShape.w/2)<.6,'Los botones de información deben ser círculos reales');
+const infoShape=await infoBtn.evaluate(el=>{const s=getComputedStyle(el);return {w:parseFloat(s.width),h:parseFloat(s.height),r:s.borderRadius}});
+const infoRadiusOk=infoShape.r.includes('%')?parseFloat(infoShape.r)>=49:Math.abs(parseFloat(infoShape.r)-infoShape.w/2)<.6;
+assert(Math.abs(infoShape.w-infoShape.h)<.1&&infoRadiusOk,'Los botones de información deben ser círculos reales: '+JSON.stringify(infoShape));
 if(await infoBtn.count()){
   await infoBtn.click();
   assert(await page.locator('.ops-help-popover').count()===1,'La ayuda contextual no usa el panel flotante');
